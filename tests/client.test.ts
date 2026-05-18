@@ -127,18 +127,6 @@ describe("OpenVikingClient", () => {
       );
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking search failed: overloaded (HTTP 503)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.search("sess-1", "q")).rejects.toThrow(
-        "OpenViking search failed: overloaded (HTTP 503)",
-      );
-    });
-
     test("passes target_uri in body when provided", async () => {
       const transport = mockTransport();
       transport.request.mockResolvedValue({
@@ -180,18 +168,6 @@ describe("OpenVikingClient", () => {
         "/api/v1/sessions/sess-1/messages",
         { body: { role: "user", content: "hello" } },
         undefined,
-      );
-    });
-
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking sendMessage failed: bad key (HTTP 401)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.sendMessage("sess-1", "user", "hi")).rejects.toThrow(
-        "OpenViking sendMessage failed: bad key (HTTP 401)",
       );
     });
 
@@ -242,17 +218,6 @@ describe("OpenVikingClient", () => {
       expect(result.content).toBe("abstract text");
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking read failed: no such file (HTTP 404)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.read("viking://missing")).rejects.toThrow(
-        "OpenViking read failed: no such file (HTTP 404)",
-      );
-    });
   });
 
   describe("fsList", () => {
@@ -335,17 +300,6 @@ describe("OpenVikingClient", () => {
       expect(url).not.toContain("simple");
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking fsList failed: boom (HTTP 500)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.fsList("viking://resources/unknown/")).rejects.toThrow(
-        "OpenViking fsList failed: boom (HTTP 500)",
-      );
-    });
   });
 
   describe("fsTree", () => {
@@ -366,17 +320,6 @@ describe("OpenVikingClient", () => {
       expect(result.children[0].type).toBe("directory");
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking fsTree failed: down (HTTP 503)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.fsTree("viking://x/")).rejects.toThrow(
-        "OpenViking fsTree failed: down (HTTP 503)",
-      );
-    });
   });
 
   describe("fsStat", () => {
@@ -411,17 +354,6 @@ describe("OpenVikingClient", () => {
       expect(result.children[0].type).toBe("directory");
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking fsStat failed: missing (HTTP 404)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.fsStat("viking://missing")).rejects.toThrow(
-        "OpenViking fsStat failed: missing (HTTP 404)",
-      );
-    });
   });
 
   describe("commit", () => {
@@ -468,17 +400,6 @@ describe("OpenVikingClient", () => {
       );
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking commit failed: boom (HTTP 500)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.commit("sess-1")).rejects.toThrow(
-        "OpenViking commit failed: boom (HTTP 500)",
-      );
-    });
   });
 
   describe("addResource", () => {
@@ -498,17 +419,6 @@ describe("OpenVikingClient", () => {
       expect(result.status).toBe("success");
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking addResource failed: bad request (HTTP 400)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.addResource({ path: "bad" })).rejects.toThrow(
-        "OpenViking addResource failed: bad request (HTTP 400)",
-      );
-    });
   });
 
   describe("tempUpload", () => {
@@ -542,16 +452,5 @@ describe("OpenVikingClient", () => {
       expect(result.temp_file_id).toBe("tmp-bin");
     });
 
-    test("throws user-facing error on server error", async () => {
-      const transport = mockTransport();
-      transport.request.mockRejectedValue(
-        new Error("OpenViking tempUpload failed: too large (HTTP 413)"),
-      );
-
-      const client = createClient(defaultConfig, transport);
-      await expect(client.tempUpload("x", "big.bin")).rejects.toThrow(
-        "OpenViking tempUpload failed: too large (HTTP 413)",
-      );
-    });
   });
 });

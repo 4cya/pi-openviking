@@ -1,12 +1,8 @@
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, beforeAll, vi } from "vitest";
 import { createClient } from "../src/ov-client/client";
 import { SessionSync } from "../src/session-sync/session";
 import { registerMemcommitTool } from "../src/tools/commit";
 import { getTestConfig, isTestServerUp } from "./test-config";
-
-/*
- * Integration test for memcommit — runs against isolated test server when available.
- */
 
 const config = getTestConfig();
 const client = createClient(config);
@@ -26,7 +22,7 @@ beforeAll(async () => {
 });
 
 describe("memcommit integration", () => {
-  test("commits session successfully", async () => {
+  test("commits session successfully via tool interface", async () => {
     if (!serverUp) return;
 
     const sync = new SessionSync(client, {
@@ -34,28 +30,26 @@ describe("memcommit integration", () => {
       getBranch: () => [],
       appendEntry: () => {},
     });
-    // Manually set the session id (normally created by onMessageEnd)
     (sync as any).ovSessionId = sessionId;
 
+    // Proper mock pi that captures tool defs (like tools.test.ts)
+    const tools: unknown[] = [];
     const pi = {
-      registerTool: (_def: unknown) => {},
+      registerTool: vi.fn((def: unknown) => { tools.push(def); }),
+      get tools() { return tools; },
     };
     registerMemcommitTool(pi as any, { client, sync });
 
-    // Simulate calling the tool directly
-    const toolDef = (pi as any).tools?.[0];
-    if (!toolDef) {
-      // The pi mock above doesn't capture tools; test the sync directly
-      await sync.flush();
-      const result = await client.commit(sessionId);
-      expect(result).toHaveProperty("task_id");
-      expect(result.archived).toBe(true);
-      console.log("Commit result:", result);
-      return;
-    }
+    const toolDef = pi.tools[0] as any;
+    expect(toolDef).toBeDefined();
+    expect(toolDef.name).toBe("memcommit");
 
-    const result = await toolDef.execute("tc-1", {}, undefined, undefined);
+    const result = await toolDef.execute("tc-1", {}, undefined, () => {});
+
     expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Committed to OpenViking");
+    expect(result.content[0].text).toContain("Task:");
+    expect(result.details).toHaveProperty("task_id");
     console.log("memcommit result:", result.content[0].text);
   });
 });
