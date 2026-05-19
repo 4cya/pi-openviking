@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,22 +16,22 @@ function dockerAvailable(): boolean {
   }
 }
 
-function waitForHealth(maxWaitMs = 120_000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const interval = setInterval(() => {
-      try {
-        execSync(`curl -fsS ${ENDPOINT}/health > /dev/null 2>&1`, { stdio: "ignore" });
-        clearInterval(interval);
-        resolve();
-      } catch {
-        if (Date.now() - start > maxWaitMs) {
-          clearInterval(interval);
-          reject(new Error("OV test server failed to become healthy within 120s"));
-        }
-      }
-    }, 1000);
-  });
+async function checkHealthy(): Promise<boolean> {
+  try {
+    const res = await fetch(`${ENDPOINT}/health`, { signal: AbortSignal.timeout(3000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForHealth(maxWaitMs = 120_000): Promise<void> {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    if (await checkHealthy()) return;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error("OV test server failed to become healthy within 120s");
 }
 
 export default async function setup() {
@@ -48,6 +48,13 @@ export default async function setup() {
       META_PATH,
       JSON.stringify({ endpoint: null, managed: false, reason: "docker not available" }),
     );
+    return;
+  }
+
+  // Check if server is already up — skip restart
+  if (await checkHealthy()) {
+    writeFileSync(META_PATH, JSON.stringify({ endpoint: ENDPOINT, managed: false }));
+    console.log(`[ov-test] server already healthy at ${ENDPOINT} — reusing`);
     return;
   }
 
