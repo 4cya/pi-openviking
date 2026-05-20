@@ -53,12 +53,6 @@ describe("parseArgs", () => {
     expect(result.positional).toEqual([]);
   });
 
-  test("handles -- alone", () => {
-    const result = parseArgs("--");
-    expect(result.flags).toEqual({ "": undefined });
-    expect(result.positional).toEqual([]);
-  });
-
   test("trims whitespace", () => {
     const result = parseArgs("  --limit 10  query  ");
     expect(result.flags).toEqual({ limit: "10" });

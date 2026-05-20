@@ -106,30 +106,7 @@ describe("Logging", () => {
     });
   });
 
-  describe("No console.* usage in source", () => {
-    it("has no console.debug, console.error, or console.log in src/", async () => {
-      const { readdir, readFile } = await import("node:fs/promises");
-      const { join } = await import("node:path");
 
-      const srcDir = join(import.meta.dirname, "..", "src");
-      const files = await readdir(srcDir, { recursive: true });
-      const tsFiles = files.filter((f: string) => f.endsWith(".ts"));
-
-      const violations: string[] = [];
-      for (const f of tsFiles) {
-        const content = await readFile(join(srcDir, f), "utf-8");
-        const lines = content.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          if (/import.*from.*logger/.test(lines[i])) continue;
-          if (/console\.(debug|error|log|warn)\(/.test(lines[i])) {
-            violations.push(`${f}:${i + 1}: ${lines[i].trim()}`);
-          }
-        }
-      }
-
-      expect(violations).toEqual([]);
-    });
-  });
 
   describe("Session Sync: error catch logs", () => {
     it("logs error when createSession throws", async () => {

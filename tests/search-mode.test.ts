@@ -10,21 +10,14 @@ describe("resolveSearchMode", () => {
     expect(resolveSearchMode("deep", "hello", undefined)).toBe("deep");
   });
 
-  test("auto with session and simple query returns fast", () => {
+  test("auto with simple query returns fast", () => {
     expect(resolveSearchMode("auto", "hello", "sess-1")).toBe("fast");
-  });
-
-  test("auto with session and long query returns deep", () => {
-    const query = "a".repeat(80);
-    expect(resolveSearchMode("auto", query, "sess-1")).toBe("deep");
-  });
-
-  test("auto without session and simple query returns fast", () => {
     expect(resolveSearchMode("auto", "hello", undefined)).toBe("fast");
   });
 
-  test("auto without session and long query returns deep", () => {
+  test("auto with long query (>=80 chars) returns deep", () => {
     const query = "a".repeat(80);
+    expect(resolveSearchMode("auto", query, "sess-1")).toBe("deep");
     expect(resolveSearchMode("auto", query, undefined)).toBe("deep");
   });
 

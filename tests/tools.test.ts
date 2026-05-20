@@ -409,48 +409,20 @@ describe("membrowse tool", () => {
     expect(result.content[0].text).toContain("file");
   });
 
-  test("passes recursive=true to fsList", async () => {
+  test.each([
+    { name: "recursive", params: { recursive: true }, expected: [undefined, true, undefined] },
+    { name: "simple", params: { simple: true }, expected: [undefined, undefined, true] },
+    { name: "both recursive and simple", params: { recursive: true, simple: true }, expected: [undefined, true, true] },
+    { name: "neither (default)", params: {}, expected: [undefined, undefined, undefined] },
+  ])("passes $name to fsList", async ({ params, expected }) => {
     const client = createMockClient({
       fsList: vi.fn(async () => ({ uri: "viking://resources/", children: [] })),
     });
     registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
 
     const tool = pi.tools.find((t) => t.name === "membrowse")!;
-    await tool.execute("tc-1", { uri: "viking://resources/", view: "list", recursive: true });
-    expect(client.fsList).toHaveBeenCalledWith("viking://resources/", undefined, true, undefined);
-  });
-
-  test("passes simple=true to fsList", async () => {
-    const client = createMockClient({
-      fsList: vi.fn(async () => ({ uri: "viking://resources/", children: [] })),
-    });
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
-    const tool = pi.tools.find((t) => t.name === "membrowse")!;
-    await tool.execute("tc-1", { uri: "viking://resources/", view: "list", simple: true });
-    expect(client.fsList).toHaveBeenCalledWith("viking://resources/", undefined, undefined, true);
-  });
-
-  test("passes both recursive and simple to fsList", async () => {
-    const client = createMockClient({
-      fsList: vi.fn(async () => ({ uri: "viking://resources/", children: [] })),
-    });
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
-    const tool = pi.tools.find((t) => t.name === "membrowse")!;
-    await tool.execute("tc-1", { uri: "viking://resources/", view: "list", recursive: true, simple: true });
-    expect(client.fsList).toHaveBeenCalledWith("viking://resources/", undefined, true, true);
-  });
-
-  test("omits recursive and simple when not provided", async () => {
-    const client = createMockClient({
-      fsList: vi.fn(async () => ({ uri: "viking://resources/", children: [] })),
-    });
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
-    const tool = pi.tools.find((t) => t.name === "membrowse")!;
-    await tool.execute("tc-1", { uri: "viking://resources/", view: "list" });
-    expect(client.fsList).toHaveBeenCalledWith("viking://resources/", undefined, undefined, undefined);
+    await tool.execute("tc-1", { uri: "viking://resources/", view: "list", ...params });
+    expect(client.fsList).toHaveBeenCalledWith("viking://resources/", ...expected);
   });
 
   test("returns error for invalid URI prefix", async () => {

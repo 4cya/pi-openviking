@@ -5,11 +5,6 @@ import { tmpdir } from "node:os";
 import { createClient } from "../src/ov-client/client";
 import { getTestConfig, isTestServerUp } from "./test-config";
 
-/*
- * Integration test for memsearch target_uri scoping — runs against isolated test server.
- * Skips automatically if server is unreachable.
- */
-
 const config = getTestConfig();
 const client = createClient(config);
 
@@ -42,21 +37,25 @@ async function deleteWithRetry(uri: string, maxRetries = 5): Promise<{ uri: stri
   throw new Error("deleteWithRetry exhausted retries");
 }
 
-async function searchWithRetry(
-  query: string,
+/**
+ * Poll search until resource is indexed or maxWait expires.
+ * Returns search results once resource is found, or throws.
+ */
+async function waitForIndex(
+  keyword: string,
   expectedPrefix: string,
-  target_uri?: string,
-  maxRetries = 15,
+  maxWaitMs = 60_000,
 ): Promise<ReturnType<typeof client.search>> {
-  for (let i = 0; i < maxRetries; i++) {
-    const results = await client.search(sessionId, query, 10, "fast", target_uri);
-    const hasMatch = results.resources.some((r) => r.uri.startsWith(expectedPrefix));
-    if (hasMatch || i === maxRetries - 1) {
-      return results;
-    }
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    const results = await client.search(sessionId, keyword, 10, "fast");
+    const found = results.resources.some((r) => r.uri.startsWith(expectedPrefix));
+    if (found) return results;
     await new Promise((r) => setTimeout(r, 3000));
   }
-  return { memories: [], resources: [], skills: [], total: 0 };
+  throw new Error(
+    `Resource with keyword "${keyword}" not indexed within ${maxWaitMs}ms (prefix: ${expectedPrefix})`,
+  );
 }
 
 describe("memsearch target_uri scoping integration", () => {
@@ -65,8 +64,8 @@ describe("memsearch target_uri scoping integration", () => {
 
     const tmpDir = mkdtempSync(join(tmpdir(), "ov-scope-"));
     const filePath = join(tmpDir, "scoped-resource.md");
-    const uniqueKeyword = "ov-scope-test-xyz123";
-    const content = `# Scoped Resource\n\nThis is a ${uniqueKeyword} document for memsearch scoping.`;
+    const uniqueKeyword = `ov-scope-${Date.now()}`;
+    const content = `# Scoped Resource\n\nKeyword: ${uniqueKeyword}`;
     writeFileSync(filePath, content);
 
     let importedUri: string | undefined;
@@ -76,52 +75,27 @@ describe("memsearch target_uri scoping integration", () => {
       const upload = await client.tempUpload(body, "scoped-resource.md");
       const result = await client.addResource({ temp_file_id: upload.temp_file_id });
       importedUri = result.root_uri;
-      console.log("imported →", importedUri);
 
-      // Wait for indexing with retries
-      const unscoped = await searchWithRetry(uniqueKeyword, importedUri);
-      console.log("unscoped URIs:", unscoped.resources.map((r) => r.uri));
-      const foundUnscoped = unscoped.resources.some((r) => r.uri.startsWith(importedUri!));
-      console.log("unscoped found:", foundUnscoped, "total:", unscoped.total);
+      // Wait for indexing — fail if it never arrives
+      await waitForIndex(uniqueKeyword, importedUri);
+      console.log("indexed at:", importedUri);
 
-      // If our resource isn't indexed yet, fall back to a generic scoping sanity check
-      if (!foundUnscoped) {
-        console.log("Resource not indexed yet — falling back to generic scoping check");
-        const allResults = await client.search(sessionId, "test", 10, "fast");
-        const scopedResults = await client.search(sessionId, "test", 10, "fast", "viking://resources/");
-        // Scoping should not throw and should return consistent results
-        expect(allResults.total).toBeGreaterThanOrEqual(0);
-        expect(scopedResults.total).toBeGreaterThanOrEqual(0);
-        return;
-      }
-
-      // Scoped to resources/ should find it
-      const scopedResources = await searchWithRetry(
-        uniqueKeyword,
-        importedUri,
-        "viking://resources/",
-      );
-      console.log("scoped resources URIs:", scopedResources.resources.map((r) => r.uri));
+      // Scoped to resources/ — MUST find it
+      const scopedResources = await client.search(sessionId, uniqueKeyword, 10, "fast", "viking://resources/");
       const foundResources = scopedResources.resources.some((r) => r.uri.startsWith(importedUri!));
-      console.log("scoped resources found:", foundResources, "total:", scopedResources.total);
       expect(foundResources).toBe(true);
+      console.log("scoped to resources/ — found:", foundResources);
 
-      // Scoped to agent/skills/ should NOT find it
+      // Scoped to wrong scope — MUST NOT find it
       const scopedSkills = await client.search(sessionId, uniqueKeyword, 10, "fast", "viking://agent/skills/");
-      console.log("scoped skills URIs:", scopedSkills.resources.map((r) => r.uri));
       const foundSkills = scopedSkills.resources.some((r) => r.uri.startsWith(importedUri!));
-      console.log("scoped skills found:", foundSkills, "total:", scopedSkills.total);
       expect(foundSkills).toBe(false);
+      console.log("scoped to skills/ — found:", foundSkills);
     } finally {
       if (importedUri) {
-        try {
-          await deleteWithRetry(importedUri);
-          console.log("cleaned up:", importedUri);
-        } catch (e: any) {
-          console.log("cleanup skipped:", e.message);
-        }
+        try { await deleteWithRetry(importedUri); } catch (e: any) { console.log("cleanup:", e.message); }
       }
       rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 120_000);
 });

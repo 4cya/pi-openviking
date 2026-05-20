@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { notifyOnce } from "../src/shared/notify";
 
 describe("notifyOnce", () => {
@@ -51,37 +51,18 @@ describe("notifyOnce", () => {
     expect(notified).toEqual(["for ctx1", "for ctx2"]);
   });
 
-  test("skips when ctx is null", () => {
+  test("skips when ctx is null, undefined, or non-object", () => {
     notifyOnce(null, "should not throw", "error");
-  });
-
-  test("skips when ctx is undefined", () => {
     notifyOnce(undefined, "should not throw", "error");
-  });
-
-  test("skips when ctx is a string", () => {
     notifyOnce("not an object", "should not throw", "error");
   });
 
-  test("skips when hasUI is false", () => {
-    const notified: string[] = [];
-    const ctx = {
-      hasUI: false,
-      ui: { notify: (msg: string) => { notified.push(msg); } },
-    };
-
-    notifyOnce(ctx, "should not notify", "error");
-    expect(notified).toEqual([]);
-  });
-
-  test("skips when ui is undefined", () => {
-    const ctx = { hasUI: true };
-    notifyOnce(ctx, "should not throw", "error");
-  });
-
-  test("skips when ui.notify is undefined", () => {
-    const ctx = { hasUI: true, ui: {} };
-    notifyOnce(ctx, "should not throw", "error");
+  test("skips when hasUI is false or ui is missing", () => {
+    const spy = vi.fn();
+    notifyOnce({ hasUI: false, ui: { notify: spy } }, "should not notify", "error");
+    notifyOnce({ hasUI: true }, "should not throw", "error");
+    notifyOnce({ hasUI: true, ui: {} }, "should not throw", "error");
+    expect(spy).not.toHaveBeenCalled();
   });
 
   test("defaults level to error", () => {
