@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { loadConfig } from "./shared/config";
 import type { ToolRegisterDeps } from "./shared/tool-def";
 import { createClient } from "./ov-client/client";
+import { createTransport, type Transport } from "./ov-client/transport";
 import { logger } from "./shared/logger";
 import { registerMemsearchTool } from "./tools/search";
 import { registerMemreadTool } from "./tools/read";
@@ -18,6 +19,7 @@ import { registerCommitCommand } from "./commands/commit";
 import type { CommandRegisterDeps } from "./commands/types";
 import { SessionSync } from "./session-sync/session";
 import { createAutoRecall } from "./auto-recall/auto-recall";
+import { createHealthChecker, type HealthChecker } from "./shared/health";
 
 export const TOOLS = [
   registerMemsearchTool,
@@ -47,14 +49,25 @@ export interface BootstrapContext {
 
 export interface BootstrapResult {
   sessionSync: SessionSync;
+  healthChecker: HealthChecker;
 }
 
 export function bootstrapExtension(
   pi: ExtensionAPI,
   ctx: BootstrapContext,
+  transport?: Transport,
 ): BootstrapResult {
   const config = loadConfig(ctx.cwd);
-  const client = createClient(config);
+  const t = transport ?? createTransport(config);
+  const client = createClient(config, t);
+
+  // Health check with graceful degradation
+  const healthChecker = createHealthChecker(t, config.healthPath);
+
+  // Fire-and-forget initial health probe
+  void healthChecker.check().then((ok) => {
+    logger.debug("initial health check:", ok ? "available" : "unavailable");
+  });
 
   const sessionSync = new SessionSync(client, {
     getSessionFile: () => ctx.sessionManager.getSessionFile(),
@@ -64,7 +77,7 @@ export function bootstrapExtension(
 
   logger.debug("session sync created");
 
-  const toolDeps: ToolRegisterDeps = { client, sync: sessionSync };
+  const toolDeps: ToolRegisterDeps = { client, sync: sessionSync, healthChecker };
   for (const register of TOOLS) register(pi, toolDeps);
 
   const autoRecallState = { enabled: config.openVikingAutoRecall };
@@ -84,8 +97,17 @@ export function bootstrapExtension(
     },
   });
   pi.on("before_agent_start", async (event) => {
+    // On-demand recovery: re-check health if previously unavailable
+    if (!healthChecker.isAvailable()) {
+      const recovered = await healthChecker.check();
+      if (recovered) {
+        logger.debug("health check recovered");
+        sessionSync.recover();
+      }
+    }
+    if (!healthChecker.isAvailable()) return;
     return autoRecall(event);
   });
 
-  return { sessionSync };
+  return { sessionSync, healthChecker };
 }

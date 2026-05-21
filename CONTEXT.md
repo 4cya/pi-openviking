@@ -60,8 +60,9 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 - **Unified deps**: Tools use `ToolRegisterDeps`, commands use `CommandRegisterDeps`. Bootstrap wires both from shared `client` + `sessionSync` + `autoRecallState`.
 - Session sync is incremental: each `message_end` sends enriched content to OV session — text, tool calls as `Part[]`, and truncated tool results with metadata prefix. (ADR-003)
 - Tool calls in assistant messages are sent as structured `Part[]` (native OV `tool_use`). Tool results are sent with `role: "toolResult"`, prefixed with `[tool: {name}, error: {bool}]`, truncated to 500 chars. Thinking content is discarded. (ADR-003)
-- Async operations (commit, import) are fire-and-forget — return task_id but don't poll.
+- Async operations (commit, import) are fire-and-forget by default — return task_id. `memcommit` supports optional `wait: true` to poll `GET /api/v1/tasks/{task_id}` until completed/failed (timeout 15s).
 - **Enriched Content Serialization** (`serializeContent`): replaces old `extractText`. Handles three message types: (1) user messages → text only, (2) assistant messages → mixed `Part[]` (TextPart + ToolPart for tool calls, thinking discarded), (3) tool result messages → metadata prefix + truncated content with `role: "toolResult"`. Truncation: hardcoded 500 chars. (ADR-003)
+- **Health check with graceful degradation**: bootstrap probes `GET /health`. If unreachable, registers everything but disables auto-recall (`serverAvailable = false`). Recovery is on-demand — next auto-recall or tool call retries health check. Circuit breaker in session sync: 3 consecutive failures → stop trying until next recovery. (ADR-004)
 - No reranking in plugin — trust OV's internal pipeline.
 - No grep/glob search — semantic search covers coding agent use cases.
 
@@ -85,3 +86,4 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 - **ADR-001**: Commit exclusivamente manual via `/ov-commit` — auto-commit on shutdown removed (blocks Pi exit). `onShutdown()` is sync, zero I/O.
 - **ADR-002**: Logging file-based — `appendFileSync` to log file. No `console.*` in src/.
 - **ADR-003**: Enriched session sync — tool calls as structured `Part[]`, tool results truncated with metadata prefix, thinking discarded. Replaces text-only `extractText` with `serializeContent`.
+- **ADR-004**: Health check com graceful degradation — bootstrap probes `/health`, disables auto-recall se server down, recovery on-demand, circuit breaker no session sync (3 falhas).

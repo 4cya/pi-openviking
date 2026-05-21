@@ -13,23 +13,28 @@ export function registerMemcommitTool(
     label: "Memory Commit",
     description:
       "Commit the current conversation to OpenViking long-term memory. " +
-      "Flushes pending messages and triggers background memory extraction.",
+      "Flushes pending messages and triggers background memory extraction. " +
+      "Set wait=true to poll until memory extraction completes (timeout 15s).",
     promptSnippet: "Commit conversation to OpenViking memory",
     promptGuidelines: [
       "Use memcommit when the user explicitly asks to save the conversation to memory.",
       "memcommit requires an active OpenViking session. If no session exists, inform the user to start a conversation first.",
     ],
-    parameters: Type.Object({}),
+    parameters: Type.Object({
+      wait: Type.Optional(Type.Boolean({ description: "Poll until extraction completes (default: false)" })),
+    }),
 
-    async execute({ deps, onUpdate, signal }) {
+    async execute({ deps, params, onUpdate, signal }) {
       try {
-        onUpdate?.({ content: [{ type: "text", text: "Committing session to OpenViking..." }], details: {} });
-        const result = await commitOp(deps.sync);
+        const wait = params.wait ?? false;
+        onUpdate?.({ content: [{ type: "text", text: wait ? "Committing and waiting for extraction..." : "Committing session to OpenViking..." }], details: {} });
+        const result = await commitOp(deps.sync, wait ? { client: deps.client, wait: true, signal } : undefined);
+        const statusSuffix = result.status === "timeout" ? " (timed out)" : result.status === "failed" ? ` (failed: ${result.error})` : "";
         return {
-          text: `Committed to OpenViking. Task: ${result.task_id}, Archived: ${result.archived}`,
+          text: `Committed to OpenViking. Task: ${result.task_id}, Status: ${result.status}${statusSuffix}`,
           details: {
             task_id: result.task_id,
-            archived: result.archived,
+            status: result.status,
           },
         };
       } catch (err) {

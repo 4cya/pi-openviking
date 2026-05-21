@@ -1,12 +1,12 @@
 import type { OpenVikingConfig } from "../shared/config";
 import { createTransport, OpenVikingError } from "./transport";
 import type { Transport } from "./transport";
-import type { OpenVikingClient, SearchResult, ReadResult } from "./types";
+import type { OpenVikingClient, SearchResult, ReadResult, TaskStatus } from "./types";
 import { createFsOps } from "./fs-ops";
 import { createSessionOps } from "./session-ops";
 
 export { OpenVikingError };
-export type { OpenVikingClient, SearchResult, ReadResult, BrowseResult, CommitResult, MemorySearchItem, ResourceSearchItem, SkillSearchItem, TextPart, ToolPart, Part } from "./types";
+export type { OpenVikingClient, SearchResult, ReadResult, BrowseResult, CommitResult, MemorySearchItem, ResourceSearchItem, SkillSearchItem, TextPart, ToolPart, Part, TaskStatus } from "./types";
 
 export function createClient(config: OpenVikingConfig, transport?: Transport): OpenVikingClient {
   const t = transport ?? createTransport(config);
@@ -73,6 +73,15 @@ export function createClient(config: OpenVikingConfig, transport?: Transport): O
         signal,
       )) as { root_uri: string; status: string; errors: string[] };
       return result;
+    },
+
+    async getTaskStatus(taskId, signal?) {
+      return (await t.request(
+        "getTaskStatus",
+        `/api/v1/tasks/${taskId}`,
+        undefined,
+        signal,
+      )) as TaskStatus;
     },
 
     async tempUpload(fileBody, filename, signal?) {

@@ -16,6 +16,7 @@ export interface OpenVikingConfig {
   autoRecallMaxContentChars: number;
   autoRecallPreferAbstract: boolean;
   autoRecallTokenBudget: number;
+  healthPath: string;
 }
 
 interface PiSettings {
@@ -74,6 +75,7 @@ export function loadConfig(cwd: string): OpenVikingConfig {
     autoRecallScoreThreshold: cascade(s, "openVikingAutoRecallScoreThreshold", "OPENVIKING_AUTO_RECALL_SCORE_THRESHOLD", 0.15, Number),
     autoRecallMaxContentChars: cascade(s, "openVikingAutoRecallMaxContentChars", "OPENVIKING_AUTO_RECALL_MAX_CONTENT_CHARS", 500, Number),
     autoRecallPreferAbstract: cascade(s, "openVikingAutoRecallPreferAbstract", "OPENVIKING_AUTO_RECALL_PREFER_ABSTRACT", true, v => v === "true"),
-    autoRecallTokenBudget: cascade(s, "openVikingAutoRecallTokenBudget", "OPENVIKING_AUTO_RECALL_TOKEN_BUDGET", 500, Number),
+    autoRecallTokenBudget: cascade(s, "openVikingAutoRecallTokenBudget", "OPENVIKING_AUTO_RECALL_TOKEN_BUDGET", 700, Number),
+    healthPath: cascade(s, "openVikingHealthPath", "OPENVIKING_HEALTH_PATH", "/health"),
   };
 }

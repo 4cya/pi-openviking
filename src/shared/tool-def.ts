@@ -2,10 +2,12 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { TSchema, Static } from "typebox";
 import type { OpenVikingClient } from "../ov-client/client";
 import type { SessionSyncLike } from "../session-sync/session";
+import type { HealthChecker } from "../shared/health";
 
 export interface ToolRegisterDeps {
   client: OpenVikingClient;
   sync: SessionSyncLike;
+  healthChecker?: HealthChecker;
   [key: string]: unknown;
 }
 
@@ -49,6 +51,19 @@ export function defineTool<P extends TSchema, D extends ToolDeps>(
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       try {
+        // On-demand health recovery before tool execution
+        const hc = (deps as Record<string, unknown>).healthChecker as HealthChecker | undefined;
+        if (hc && !hc.isAvailable()) {
+          const recovered = await hc.check();
+          if (!recovered) {
+            return {
+              content: [{ type: "text", text: "OpenViking server is unavailable. Try again later." }],
+              details: {},
+              isError: true,
+            };
+          }
+        }
+
         if (def.validateUri) {
           const uri = (params as Record<string, unknown>).uri as string | undefined;
           if (!uri || !uri.startsWith("viking://")) {

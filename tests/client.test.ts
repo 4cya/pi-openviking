@@ -17,6 +17,7 @@ const defaultConfig: OpenVikingConfig = {
   autoRecallMaxContentChars: 500,
   autoRecallPreferAbstract: true,
   autoRecallTokenBudget: 500,
+    healthPath: "/health",
 };
 
 function mockTransport() {

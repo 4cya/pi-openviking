@@ -68,6 +68,13 @@ export interface CommitResult {
   trace_id: string;
 }
 
+export interface TaskStatus {
+  task_id: string;
+  status: string;
+  error?: string;
+  result?: Record<string, unknown>;
+}
+
 export interface OpenVikingClient {
   createSession(signal?: AbortSignal): Promise<string>;
   sendMessage(sessionId: string, role: string, content: string | Part[], signal?: AbortSignal): Promise<void>;
@@ -80,4 +87,5 @@ export interface OpenVikingClient {
   delete(uri: string, signal?: AbortSignal): Promise<{ uri: string }>;
   addResource(params: { path?: string; temp_file_id?: string; parent?: string; reason?: string; kind?: "resource" | "skill" }, signal?: AbortSignal): Promise<{ root_uri: string; status: string; errors: string[] }>;
   tempUpload(fileBody: string | Uint8Array, filename: string, signal?: AbortSignal): Promise<{ temp_file_id: string }>;
+  getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus>;
 }

@@ -333,7 +333,7 @@ describe("memcommit tool", () => {
     expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "Committing session to OpenViking..." }], details: {} });
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("task-abc");
-    expect(result.content[0].text).toContain("Archived");
+    expect(result.content[0].text).toContain("Status: committed");
   });
 });
 
@@ -699,5 +699,75 @@ describe("memimport tool", () => {
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("tool health guard", () => {
+  let pi: ReturnType<typeof createMockPi>;
+
+  beforeEach(() => {
+    pi = createMockPi();
+  });
+
+  test("returns unavailable error when healthChecker says server down", async () => {
+    const client = createMockClient();
+    const sync = createMockSessionSync();
+    const healthChecker = {
+      check: vi.fn(async () => false),
+      isAvailable: vi.fn(() => false),
+    };
+    registerMemsearchTool(pi as any, { client, sync, healthChecker });
+
+    const tool = pi.tools.find((t) => t.name === "memsearch")!;
+    const result = await tool.execute("tc-1", { query: "test" });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("unavailable");
+    expect(client.search).not.toHaveBeenCalled();
+  });
+
+  test("proceeds when healthChecker says server is up", async () => {
+    const client = createMockClient();
+    const sync = createMockSessionSync();
+    const healthChecker = {
+      check: vi.fn(async () => true),
+      isAvailable: vi.fn(() => true),
+    };
+    registerMemsearchTool(pi as any, { client, sync, healthChecker });
+
+    const tool = pi.tools.find((t) => t.name === "memsearch")!;
+    const result = await tool.execute("tc-1", { query: "test" });
+
+    expect(result.isError).toBeUndefined();
+    expect(client.search).toHaveBeenCalled();
+  });
+
+  test("recovers and proceeds when healthChecker was down but recovers", async () => {
+    const client = createMockClient();
+    const sync = createMockSessionSync();
+    const healthChecker = {
+      check: vi.fn(async () => true),
+      isAvailable: vi.fn(() => false),
+    };
+    registerMemsearchTool(pi as any, { client, sync, healthChecker });
+
+    const tool = pi.tools.find((t) => t.name === "memsearch")!;
+    const result = await tool.execute("tc-1", { query: "test" });
+
+    expect(result.isError).toBeUndefined();
+    expect(healthChecker.check).toHaveBeenCalledOnce();
+    expect(client.search).toHaveBeenCalled();
+  });
+
+  test("skips health check when no healthChecker provided", async () => {
+    const client = createMockClient();
+    const sync = createMockSessionSync();
+    registerMemsearchTool(pi as any, { client, sync });
+
+    const tool = pi.tools.find((t) => t.name === "memsearch")!;
+    const result = await tool.execute("tc-1", { query: "test" });
+
+    expect(result.isError).toBeUndefined();
+    expect(client.search).toHaveBeenCalled();
   });
 });

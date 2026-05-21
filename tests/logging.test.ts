@@ -24,6 +24,7 @@ function testConfig(): OpenVikingConfig {
     autoRecallMaxContentChars: 500,
     autoRecallPreferAbstract: true,
     autoRecallTokenBudget: 500,
+    healthPath: "/health",
   };
 }
 

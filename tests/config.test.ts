@@ -49,7 +49,8 @@ describe("loadConfig", () => {
       autoRecallScoreThreshold: 0.15,
       autoRecallMaxContentChars: 500,
       autoRecallPreferAbstract: true,
-      autoRecallTokenBudget: 500,
+      autoRecallTokenBudget: 700,
+      healthPath: "/health",
     });
   });
 
@@ -82,7 +83,8 @@ describe("loadConfig", () => {
       autoRecallScoreThreshold: 0.15,
       autoRecallMaxContentChars: 500,
       autoRecallPreferAbstract: true,
-      autoRecallTokenBudget: 500,
+      autoRecallTokenBudget: 700,
+      healthPath: "/health",
     });
   });
 
@@ -118,7 +120,8 @@ describe("loadConfig", () => {
       autoRecallScoreThreshold: 0.15,
       autoRecallMaxContentChars: 500,
       autoRecallPreferAbstract: true,
-      autoRecallTokenBudget: 500,
+      autoRecallTokenBudget: 700,
+      healthPath: "/health",
     });
   });
 

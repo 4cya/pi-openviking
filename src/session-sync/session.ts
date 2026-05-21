@@ -10,12 +10,14 @@ export interface SessionSyncOpts {
   getSessionFile: () => string | undefined;
   getBranch: () => Array<{ type: string; customType?: string; data?: unknown }>;
   appendEntry: (type: string, data: unknown) => void;
+  maxConsecutiveFailures?: number;
 }
 
 export interface SessionSyncLike {
   getOvSessionId(): string | undefined;
   flush(): Promise<void>;
   commit(): Promise<import("../ov-client/client").CommitResult>;
+  recover(): void;
 }
 
 export class SessionSync implements SessionSyncLike {
@@ -23,10 +25,13 @@ export class SessionSync implements SessionSyncLike {
   private opts: SessionSyncOpts;
   private ovSessionId: string | undefined;
   private pendingChain: Promise<void> = Promise.resolve();
+  private consecutiveFailures = 0;
+  private readonly maxFailures: number;
 
   constructor(client: OpenVikingClient, opts: SessionSyncOpts) {
     this.client = client;
     this.opts = opts;
+    this.maxFailures = opts.maxConsecutiveFailures ?? 3;
   }
 
   onSessionStart(): void {
@@ -43,6 +48,9 @@ export class SessionSync implements SessionSyncLike {
 
   onMessageEnd(message: AgentMessage): void {
     if (message.role !== "user" && message.role !== "assistant" && message.role !== "toolResult") return;
+
+    // Circuit breaker: skip if too many consecutive failures
+    if (this.consecutiveFailures >= this.maxFailures) return;
 
     let serialized: string | Part[] | undefined;
     if (message.role === "toolResult") {
@@ -67,7 +75,9 @@ export class SessionSync implements SessionSyncLike {
         await this.client.sendMessage(this.ovSessionId!, role, contentToSend);
         const len = typeof contentToSend === "string" ? contentToSend.length : JSON.stringify(contentToSend).length;
         logger.debug("message sent:", role, len);
+        this.consecutiveFailures = 0;
       } catch (err) {
+        this.consecutiveFailures++;
         // OV server down — silently drop to avoid crashing Pi
         logger.error("message send failed:", (err as Error).message);
       }
@@ -91,9 +101,15 @@ export class SessionSync implements SessionSyncLike {
     return this.pendingChain;
   }
 
-  onShutdown(): void {
+  recover(): void {
+    this.consecutiveFailures = 0;
+  }
+
+  onShutdown(): Promise<void> {
     this.pendingChain = Promise.resolve();
     this.ovSessionId = undefined;
+    this.consecutiveFailures = 0;
+    return Promise.resolve();
   }
 
   private serializeContent(content: string | (TextContent | ImageContent | ThinkingContent | ToolCall)[]): string | Part[] | undefined {

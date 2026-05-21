@@ -20,6 +20,7 @@ export function createMockClient(overrides: Partial<OpenVikingClient> = {}): Ope
     delete: vi.fn(async () => ({ uri: "" })),
     addResource: vi.fn(async () => ({ root_uri: "viking://resources/imported.md", status: "success", errors: [] })),
     tempUpload: vi.fn(async () => ({ temp_file_id: "tmp-1" })),
+    getTaskStatus: vi.fn(async () => ({ task_id: "task-1", status: "completed" })),
     ...overrides,
   };
 }
@@ -31,6 +32,7 @@ export function createMockSessionSync(
     getOvSessionId: vi.fn(() => "ov-sess-1"),
     flush: vi.fn(async () => {}),
     commit: vi.fn(async () => ({ session_id: "sess-1", status: "committed", task_id: "task-1", archive_uri: "viking://archived/sess-1", archived: true, trace_id: "trace-1" })),
+    recover: vi.fn(),
     ...overrides,
   };
 }
