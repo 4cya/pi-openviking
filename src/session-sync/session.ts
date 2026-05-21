@@ -1,7 +1,10 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { TextContent, ImageContent, ThinkingContent, ToolCall } from "@mariozechner/pi-ai";
+import type { TextContent, ImageContent, ThinkingContent, ToolCall, ToolResultMessage } from "@mariozechner/pi-ai";
 import type { CommitResult, OpenVikingClient } from "../ov-client/client";
+import type { Part } from "../ov-client/types";
 import { logger } from "../shared/logger";
+
+const TOOL_RESULT_MAX_CHARS = 500;
 
 export interface SessionSyncOpts {
   getSessionFile: () => string | undefined;
@@ -39,13 +42,19 @@ export class SessionSync implements SessionSyncLike {
   }
 
   onMessageEnd(message: AgentMessage): void {
-    if (!("content" in message)) return;
-    if (message.role !== "user" && message.role !== "assistant") return;
+    if (message.role !== "user" && message.role !== "assistant" && message.role !== "toolResult") return;
 
-    const text = this.extractText(message.content);
-    if (!text) return;
+    let serialized: string | Part[] | undefined;
+    if (message.role === "toolResult") {
+      serialized = this.serializeToolResult(message as unknown as ToolResultMessage);
+    } else {
+      if (!("content" in message)) return;
+      serialized = this.serializeContent(message.content);
+    }
+    if (!serialized) return;
 
     const role = message.role;
+    const contentToSend = serialized;
     void this.enqueue(async () => {
       try {
         if (!this.ovSessionId) {
@@ -55,8 +64,9 @@ export class SessionSync implements SessionSyncLike {
             this.opts.appendEntry("ov-session", { ovSessionId: this.ovSessionId });
           }
         }
-        await this.client.sendMessage(this.ovSessionId!, role, text);
-        logger.debug("message sent:", role, text.length);
+        await this.client.sendMessage(this.ovSessionId!, role, contentToSend);
+        const len = typeof contentToSend === "string" ? contentToSend.length : JSON.stringify(contentToSend).length;
+        logger.debug("message sent:", role, len);
       } catch (err) {
         // OV server down — silently drop to avoid crashing Pi
         logger.error("message send failed:", (err as Error).message);
@@ -86,13 +96,42 @@ export class SessionSync implements SessionSyncLike {
     this.ovSessionId = undefined;
   }
 
-  private extractText(content: string | (TextContent | ImageContent | ThinkingContent | ToolCall)[]): string | undefined {
+  private serializeContent(content: string | (TextContent | ImageContent | ThinkingContent | ToolCall)[]): string | Part[] | undefined {
     if (typeof content === "string") return content || undefined;
-    const parts = content
-      .filter((b): b is { type: "text"; text: string } => b.type === "text" && typeof b.text === "string")
-      .map((b) => b.text);
-    const joined = parts.join("");
-    return joined || undefined;
+
+    const parts: Part[] = [];
+    for (const block of content) {
+      if (block.type === "text" && typeof (block as TextContent).text === "string") {
+        parts.push({ type: "text", text: (block as TextContent).text });
+      } else if (block.type === "toolCall") {
+        const tc = block as ToolCall;
+        parts.push({ type: "tool_use", id: tc.id, name: tc.name, input: tc.arguments });
+      }
+      // Skip thinking, image
+    }
+
+    if (parts.length === 0) return undefined;
+
+    // If no tool calls, return joined string for backward compat
+    const hasToolUse = parts.some((p) => p.type === "tool_use");
+    if (!hasToolUse) {
+      const joined = parts.map((p) => (p as { type: "text"; text: string }).text).join("");
+      return joined || undefined;
+    }
+
+    return parts;
+  }
+
+  private serializeToolResult(message: ToolResultMessage): string | undefined {
+    const toolName = message.toolName;
+    const isError = message.isError;
+    const textParts = message.content
+      .filter((b: TextContent | ImageContent): b is TextContent => b.type === "text" && typeof b.text === "string")
+      .map((b: TextContent) => b.text);
+    const content = textParts.join("");
+    if (!content) return undefined;
+    const truncated = content.length > TOOL_RESULT_MAX_CHARS ? content.slice(0, TOOL_RESULT_MAX_CHARS) : content;
+    return `[tool: ${toolName}, error: ${isError}]\n${truncated}`;
   }
 
   private enqueue(fn: () => Promise<void>): Promise<void> {

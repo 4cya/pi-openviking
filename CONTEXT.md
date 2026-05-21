@@ -58,8 +58,10 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 - **Shutdown**: `onShutdown()` is synchronous, zero I/O — only resets state. Commit is manual-only via `/ov-commit` or `memcommit` tool. (ADR-001)
 - **Commands surface**: 6 slash commands (`/ov-search`, `/ov-browse`, `/ov-import`, `/ov-delete`, `/ov-recall`, `/ov-commit`) — each calls the corresponding operation, formats output for humans.
 - **Unified deps**: Tools use `ToolRegisterDeps`, commands use `CommandRegisterDeps`. Bootstrap wires both from shared `client` + `sessionSync` + `autoRecallState`.
-- Session sync is incremental: each `message_end` appends text-only content to OV session.
+- Session sync is incremental: each `message_end` sends enriched content to OV session — text, tool calls as `Part[]`, and truncated tool results with metadata prefix. (ADR-003)
+- Tool calls in assistant messages are sent as structured `Part[]` (native OV `tool_use`). Tool results are sent with `role: "toolResult"`, prefixed with `[tool: {name}, error: {bool}]`, truncated to 500 chars. Thinking content is discarded. (ADR-003)
 - Async operations (commit, import) are fire-and-forget — return task_id but don't poll.
+- **Enriched Content Serialization** (`serializeContent`): replaces old `extractText`. Handles three message types: (1) user messages → text only, (2) assistant messages → mixed `Part[]` (TextPart + ToolPart for tool calls, thinking discarded), (3) tool result messages → metadata prefix + truncated content with `role: "toolResult"`. Truncation: hardcoded 500 chars. (ADR-003)
 - No reranking in plugin — trust OV's internal pipeline.
 - No grep/glob search — semantic search covers coding agent use cases.
 
@@ -82,3 +84,4 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 
 - **ADR-001**: Commit exclusivamente manual via `/ov-commit` — auto-commit on shutdown removed (blocks Pi exit). `onShutdown()` is sync, zero I/O.
 - **ADR-002**: Logging file-based — `appendFileSync` to log file. No `console.*` in src/.
+- **ADR-003**: Enriched session sync — tool calls as structured `Part[]`, tool results truncated with metadata prefix, thinking discarded. Replaces text-only `extractText` with `serializeContent`.

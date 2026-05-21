@@ -2,6 +2,7 @@ services:
 
   openviking:
     image: ghcr.io/volcengine/openviking:latest
+    pull_policy: always
     container_name: pi-openviking
     command: ["openviking-server", "--host", "0.0.0.0"]
     environment:

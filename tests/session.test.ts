@@ -63,23 +63,135 @@ describe("SessionSync", () => {
     });
   });
 
-  test("onMessageEnd skips toolResult role", async () => {
+  test("onMessageEnd sends toolResult with metadata prefix", async () => {
+    const client = createMockClient();
+    const sync = createSync(client);
+
+    // Prime session
+    sync.onMessageEnd(msg({ role: "user", content: "hello", timestamp: Date.now() }));
+    await vi.waitFor(() => expect(client.createSession).toHaveBeenCalledOnce());
+
+    sync.onMessageEnd(msg({
+      role: "toolResult",
+      toolCallId: "tc-1",
+      toolName: "bash",
+      content: [{ type: "text", text: "file1.txt\nfile2.txt" }],
+      isError: false,
+      timestamp: Date.now(),
+    } as any));
+
+    await vi.waitFor(() => {
+      expect(client.sendMessage).toHaveBeenCalledWith(
+        "ov-sess-1",
+        "toolResult",
+        "[tool: bash, error: false]\nfile1.txt\nfile2.txt",
+      );
+    });
+  });
+
+  test("onMessageEnd truncates toolResult content at 500 chars", async () => {
+    const client = createMockClient();
+    const sync = createSync(client);
+
+    sync.onMessageEnd(msg({ role: "user", content: "hello", timestamp: Date.now() }));
+    await vi.waitFor(() => expect(client.createSession).toHaveBeenCalledOnce());
+
+    const longContent = "x".repeat(600);
+    sync.onMessageEnd(msg({
+      role: "toolResult",
+      toolCallId: "tc-2",
+      toolName: "read",
+      content: [{ type: "text", text: longContent }],
+      isError: true,
+      timestamp: Date.now(),
+    } as any));
+
+    await vi.waitFor(() => {
+      expect(client.sendMessage).toHaveBeenCalledWith(
+        "ov-sess-1",
+        "toolResult",
+        `[tool: read, error: true]\n${"x".repeat(500)}`,
+      );
+    });
+  });
+
+  test("onMessageEnd with assistant text + tool calls sends Part[]", async () => {
+    const client = createMockClient();
+    const sync = createSync(client);
+
+    // Prime session with a user message first
+    sync.onMessageEnd(msg({
+      role: "user",
+      content: "do something",
+      timestamp: Date.now(),
+    }));
+    await vi.waitFor(() => expect(client.createSession).toHaveBeenCalledOnce());
+
+    sync.onMessageEnd(msg({
+      role: "assistant",
+      content: [
+        { type: "text", text: "I'll run bash" },
+        { type: "toolCall", id: "tc-1", name: "bash", arguments: { command: "ls" } },
+      ],
+      timestamp: Date.now(),
+    }));
+
+    await vi.waitFor(() => {
+      expect(client.sendMessage).toHaveBeenCalledWith("ov-sess-1", "assistant", [
+        { type: "text", text: "I'll run bash" },
+        { type: "tool_use", id: "tc-1", name: "bash", input: { command: "ls" } },
+      ]);
+    });
+  });
+
+  test("onMessageEnd with assistant text only still sends string", async () => {
     const client = createMockClient();
     const sync = createSync(client);
 
     sync.onMessageEnd(msg({
-      role: "toolResult",
-      content: [{ type: "text", text: "output" }],
+      role: "user",
+      content: "hello",
+      timestamp: Date.now(),
+    }));
+    await vi.waitFor(() => expect(client.createSession).toHaveBeenCalledOnce());
+
+    // Assistant with only text content — should send as plain string (backward compat)
+    sync.onMessageEnd(msg({
+      role: "assistant",
+      content: [
+        { type: "text", text: "thinking" },
+        { type: "text", text: " more" },
+      ],
       timestamp: Date.now(),
     }));
 
-    // Small delay to ensure nothing fires
-    await new Promise((r) => setTimeout(r, 50));
-    expect(client.createSession).not.toHaveBeenCalled();
-    expect(client.sendMessage).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(client.sendMessage).toHaveBeenCalledWith("ov-sess-1", "assistant", "thinking more");
+    });
   });
 
-  test("onMessageEnd skips non-text content (thinking, toolCall, image)", async () => {
+  test("onMessageEnd skips toolResult with no text content", async () => {
+    const client = createMockClient();
+    const sync = createSync(client);
+
+    sync.onMessageEnd(msg({ role: "user", content: "hello", timestamp: Date.now() }));
+    await vi.waitFor(() => expect(client.createSession).toHaveBeenCalledOnce());
+    const sendCount = (client.sendMessage as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    sync.onMessageEnd(msg({
+      role: "toolResult",
+      toolCallId: "tc-3",
+      toolName: "imageTool",
+      content: [{ type: "image", data: "abc", mimeType: "image/png" } as any],
+      isError: false,
+      timestamp: Date.now(),
+    } as any));
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(client.sendMessage).toHaveBeenCalledTimes(sendCount);
+  });
+
+  test("onMessageEnd skips content with only thinking + image (no text, no toolCalls)", async () => {
     const client = createMockClient();
     const sync = createSync(client);
 
@@ -87,7 +199,6 @@ describe("SessionSync", () => {
       role: "assistant",
       content: [
         { type: "thinking", thinking: "hmm" } as any,
-        { type: "toolCall", id: "1", name: "bash", arguments: {} } as any,
         { type: "image", data: "abc", mimeType: "image/png" } as any,
       ],
       timestamp: Date.now(),
