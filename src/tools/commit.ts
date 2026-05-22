@@ -28,7 +28,7 @@ export function registerMemcommitTool(
       try {
         const wait = params.wait ?? false;
         onUpdate?.({ content: [{ type: "text", text: wait ? "Committing and waiting for extraction..." : "Committing session to OpenViking..." }], details: {} });
-        const result = await commitOp(deps.sync, wait ? { client: deps.client, wait: true, signal } : undefined);
+        const result = await commitOp(deps.sync, wait ? { client: deps.session, wait: true, signal } : undefined);
         const statusSuffix = result.status === "timeout" ? " (timed out)" : result.status === "failed" ? ` (failed: ${result.error})` : "";
         return {
           text: `Committed to OpenViking. Task: ${result.task_id}, Status: ${result.status}${statusSuffix}`,

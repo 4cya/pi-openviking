@@ -1,11 +1,14 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { OpenVikingClient } from "../ov-client/client";
+import type { SessionClient, FsClient, KnowledgeClient } from "../ov-client/client";
 import type { SessionSyncLike } from "../session-sync/session";
 import type { AutoRecallState } from "../auto-recall/auto-recall";
+import type { HealthChecker } from "../shared/health";
+import type { CommandDeps } from "../shared/command-def";
 
-export interface CommandRegisterDeps {
-  pi: ExtensionAPI;
-  client: OpenVikingClient;
+export interface CommandRegisterDeps extends CommandDeps {
+  session: SessionClient;
+  fs: FsClient;
+  knowledge: KnowledgeClient;
   sync: SessionSyncLike;
   autoRecallState: AutoRecallState;
+  healthChecker?: HealthChecker;
 }

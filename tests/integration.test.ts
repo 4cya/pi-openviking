@@ -3,7 +3,7 @@ import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createClient } from "../src/ov-client/client";
-import { createAutoRecall } from "../src/auto-recall/auto-recall";
+import { createAutoRecall, DEFAULT_AUTO_RECALL_CONFIG } from "../src/auto-recall/auto-recall";
 import { registerMemdeleteTool } from "../src/tools/delete";
 import { registerMemimportTool } from "../src/tools/import";
 import { uploadDirectory } from "../src/importer/uploader";
@@ -29,7 +29,7 @@ beforeAll(async () => {
   serverUp = await checkServer();
   if (serverUp) {
     try {
-      sessionId = await client.createSession();
+      sessionId = await client.session.createSession();
     } catch {
       serverUp = false;
     }
@@ -40,7 +40,7 @@ describe("memread integration", () => {
   test("reads a viking:// URI", async () => {
     if (!serverUp) return;
     // First search to discover URIs
-    const results = await client.search(sessionId, "test", 5);
+    const results = await client.knowledge.search(sessionId, "test", 5);
     if (results.resources.length === 0) {
       // No resources indexed yet — try reading root
       console.log("No resources found via search, trying viking:// root");
@@ -48,7 +48,7 @@ describe("memread integration", () => {
 
     // Try reading the root — should not throw
     try {
-      const content = await client.read("viking://", "overview");
+      const content = await client.fs.read("viking://", "overview");
       expect(content).toHaveProperty("content");
       console.log("memread viking:// →", content.content?.substring(0, 120));
     } catch (err) {
@@ -60,7 +60,7 @@ describe("memread integration", () => {
   test("fsStat resolves a URI", async () => {
     if (!serverUp) return;
     try {
-      const stat = await client.fsStat("viking://");
+      const stat = await client.fs.fsStat("viking://");
       expect(stat).toHaveProperty("uri");
       console.log("fsStat viking:// → uri:", stat.uri, "children:", stat.children?.length ?? 0);
     } catch (err) {
@@ -73,7 +73,7 @@ describe("membrowse integration", () => {
   test("lists root directory", async () => {
     if (!serverUp) return;
     try {
-      const listing = await client.fsList("viking://");
+      const listing = await client.fs.fsList("viking://");
       expect(listing).toHaveProperty("uri");
       console.log("fsList viking:// → children:", listing.children?.length ?? 0);
       for (const c of listing.children?.slice(0, 5) ?? []) {
@@ -87,7 +87,7 @@ describe("membrowse integration", () => {
   test("tree view", async () => {
     if (!serverUp) return;
     try {
-      const tree = await client.fsTree("viking://");
+      const tree = await client.fs.fsTree("viking://");
       expect(tree).toHaveProperty("uri");
       console.log("fsTree viking:// → children:", tree.children?.length ?? 0);
     } catch (err) {
@@ -99,7 +99,7 @@ describe("membrowse integration", () => {
 describe("full round-trip: search → memread", () => {
   test("search returns URIs that memread can consume", async () => {
     if (!serverUp) return;
-    const results = await client.search(sessionId, "openviking", 5);
+    const results = await client.knowledge.search(sessionId, "openviking", 5);
     console.log("Search results:", results.total, "total");
 
     if (results.resources.length > 0) {
@@ -115,14 +115,14 @@ describe("full round-trip: search → memread", () => {
       }
 
       // Read it
-      const content = await client.read(topResource.uri, "read");
+      const content = await client.fs.read(topResource.uri, "read");
       expect(content).toHaveProperty("content");
       console.log("memread →", content.content?.substring(0, 150));
 
       // Browse its parent
       const parentUri = topResource.uri.substring(0, topResource.uri.lastIndexOf("/") + 1);
       if (parentUri.startsWith("viking://")) {
-        const listing = await client.fsList(parentUri);
+        const listing = await client.fs.fsList(parentUri);
         console.log("Parent listing:", listing.children?.length ?? 0, "items");
       }
     } else {
@@ -136,7 +136,7 @@ describe("full round-trip: search → memread", () => {
 async function deleteWithRetry(ovClient: typeof client, uri: string, maxRetries = 10): Promise<{ uri: string }> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await ovClient.delete(uri);
+      return await ovClient.knowledge.delete(uri);
     } catch (err: any) {
       const isProcessing = err.message?.includes("being processed") || err.message?.includes("409");
       if (isProcessing && i < maxRetries - 1) {
@@ -159,8 +159,8 @@ describe("memdelete integration", () => {
     // First create a known test resource so we don't race with parallel tests
     const content = "# memdelete test target\n";
     const body = new TextEncoder().encode(content);
-    const upload = await client.tempUpload(body, "memdelete-target.md");
-    const addResult = await client.addResource({ temp_file_id: upload.temp_file_id });
+    const upload = await client.knowledge.tempUpload(body, "memdelete-target.md");
+    const addResult = await client.knowledge.addResource({ temp_file_id: upload.temp_file_id });
     const targetUri = addResult.root_uri;
     console.log("Created test resource:", targetUri);
 
@@ -176,7 +176,7 @@ describe("memdelete integration", () => {
         (pi as any)._tool = def;
       }),
     };
-    registerMemdeleteTool(pi as any, { client, sync: {} as any });
+    registerMemdeleteTool(pi as any, { session: client.session, fs: client.fs, knowledge: client.knowledge, sync: {} as any });
 
     const tool = (pi as any)._tool;
     const result = await tool.execute("tc-1", { uri: "file:///etc/passwd" });
@@ -194,7 +194,7 @@ describe("memimport integration", () => {
     let importedUri: string | undefined;
 
     try {
-      const result = await client.addResource({ path: source });
+      const result = await client.knowledge.addResource({ path: source });
       expect(result).toHaveProperty("root_uri");
       expect(result.status).toBe("success");
       importedUri = result.root_uri;
@@ -202,13 +202,13 @@ describe("memimport integration", () => {
 
       await new Promise((r) => setTimeout(r, 3000));
 
-      const searchResults = await client.search(sessionId, "pi-openviking", 10);
+      const searchResults = await client.knowledge.search(sessionId, "pi-openviking", 10);
       const found = searchResults.resources.some((r) => r.uri === importedUri);
       console.log("Found in search:", found);
     } finally {
       if (importedUri) {
         try {
-          await client.delete(importedUri);
+          await client.knowledge.delete(importedUri);
           console.log("Cleaned up:", importedUri);
         } catch (e: any) {
           console.log("Cleanup skipped:", e.message);
@@ -227,11 +227,11 @@ describe("memimport integration", () => {
 
     try {
       const body = new TextEncoder().encode(content);
-      const upload = await client.tempUpload(body, "test-import.md");
+      const upload = await client.knowledge.tempUpload(body, "test-import.md");
       expect(upload).toHaveProperty("temp_file_id");
       console.log("tempUpload →", upload.temp_file_id);
 
-      const result = await client.addResource({ temp_file_id: upload.temp_file_id });
+      const result = await client.knowledge.addResource({ temp_file_id: upload.temp_file_id });
       expect(result).toHaveProperty("root_uri");
       console.log("memimport local →", result.root_uri);
 
@@ -239,15 +239,15 @@ describe("memimport integration", () => {
 
       // OV returns a directory root_uri; find the actual file inside
       try {
-        const listing = await client.fsList(result.root_uri);
+        const listing = await client.fs.fsList(result.root_uri);
         const fileEntry = listing.children?.find((c) => c.type === "file");
         if (fileEntry) {
-          const readResult = await client.read(fileEntry.uri, "read");
+          const readResult = await client.fs.read(fileEntry.uri, "read");
           expect(readResult.content).toContain("memimport integration test");
           console.log("memread confirmed content via", fileEntry.uri);
 
           try {
-            await client.delete(fileEntry.uri);
+            await client.knowledge.delete(fileEntry.uri);
             console.log("Cleaned up file:", fileEntry.uri);
           } catch (e: any) {
             console.log("File cleanup skipped:", e.message);
@@ -261,7 +261,7 @@ describe("memimport integration", () => {
 
       // Cleanup directory if possible
       try {
-        await client.delete(result.root_uri);
+        await client.knowledge.delete(result.root_uri);
         console.log("Cleaned up dir:", result.root_uri);
       } catch (e: any) {
         console.log("Dir cleanup skipped:", e.message);
@@ -286,13 +286,13 @@ describe("memimport integration", () => {
 
     try {
       const body = new TextEncoder().encode(skillContent);
-      const upload = await client.tempUpload(body, "test-skill.md");
+      const upload = await client.knowledge.tempUpload(body, "test-skill.md");
       expect(upload).toHaveProperty("temp_file_id");
       console.log("tempUpload skill →", upload.temp_file_id);
 
       let result;
       try {
-        result = await client.addResource({ temp_file_id: upload.temp_file_id, kind: "skill" });
+        result = await client.knowledge.addResource({ temp_file_id: upload.temp_file_id, kind: "skill" });
       } catch (err: any) {
         // OV v0.3.14 bug: skill import fails if VLM is unavailable
         console.log("Skill import failed (likely VLM unavailable):", err.message);
@@ -311,7 +311,7 @@ describe("memimport integration", () => {
       expect(isAgentSkill).toBe(true);
 
       await new Promise((r) => setTimeout(r, 5000));
-      const searchResults = await client.search(sessionId, "test-skill", 10);
+      const searchResults = await client.knowledge.search(sessionId, "test-skill", 10);
       const skillEntry = searchResults.skills?.find((s) => s.uri === skillUri);
       console.log("Found in skills:", !!skillEntry);
       if (skillEntry) {
@@ -335,7 +335,7 @@ describe("memimport integration", () => {
     let importedUri: string | undefined;
 
     try {
-      const result = await uploadDirectory(client, tmpDir);
+      const result = await uploadDirectory(client.knowledge, tmpDir);
       expect(result).toHaveProperty("root_uri");
       expect(result.status).toBe("success");
       importedUri = result.root_uri;
@@ -343,7 +343,7 @@ describe("memimport integration", () => {
 
       await new Promise((r) => setTimeout(r, 3000));
 
-      const tree = await client.fsTree(importedUri);
+      const tree = await client.fs.fsTree(importedUri);
       console.log("root_uri:", importedUri);
       console.log("tree children:", JSON.stringify(tree.children));
       const names = tree.children?.map((c) => c.uri.split("/").pop()) ?? [];
@@ -378,8 +378,8 @@ describe("auto-recall integration", () => {
     writeFileSync(filePath, "# OpenViking Seed\n\nThis document mentions openviking for auto-recall integration testing.\n");
     try {
       const body = new TextEncoder().encode("# OpenViking Seed\n\nThis document mentions openviking for auto-recall integration testing.\n");
-      const upload = await client.tempUpload(body, "seed.md");
-      const result = await client.addResource({ temp_file_id: upload.temp_file_id });
+      const upload = await client.knowledge.tempUpload(body, "seed.md");
+      const result = await client.knowledge.addResource({ temp_file_id: upload.temp_file_id });
       seededUri = result.root_uri;
       await new Promise((r) => setTimeout(r, 3000));
     } finally {
@@ -389,7 +389,7 @@ describe("auto-recall integration", () => {
 
   afterAll(async () => {
     if (seededUri) {
-      try { await client.delete(seededUri); } catch { /* ignore */ }
+      try { await client.knowledge.delete(seededUri); } catch { /* ignore */ }
     }
   });
 
@@ -400,9 +400,10 @@ describe("auto-recall integration", () => {
       getOvSessionId: vi.fn(() => sessionId),
       flush: vi.fn(async () => {}),
       commit: vi.fn(async () => ({ session_id: "sess-1", status: "committed", task_id: "task-1", archive_uri: "viking://archived/sess-1", archived: true, trace_id: "trace-1" })),
+      recover: vi.fn(),
     };
 
-    const autoRecall = createAutoRecall(client, sync, { enabled: true });
+    const autoRecall = createAutoRecall(client.knowledge, sync, { ...DEFAULT_AUTO_RECALL_CONFIG, enabled: true });
     const result = await autoRecall({ prompt: "openviking", systemPrompt: "You are a helpful assistant." });
 
     if (!result.systemPrompt) {
@@ -425,9 +426,10 @@ describe("auto-recall integration", () => {
       getOvSessionId: vi.fn(() => undefined),
       flush: vi.fn(async () => {}),
       commit: vi.fn(async () => ({ session_id: "sess-1", status: "committed", task_id: "task-1", archive_uri: "viking://archived/sess-1", archived: true, trace_id: "trace-1" })),
+      recover: vi.fn(),
     };
 
-    const autoRecall = createAutoRecall(client, sync, { enabled: true });
+    const autoRecall = createAutoRecall(client.knowledge, sync, { ...DEFAULT_AUTO_RECALL_CONFIG, enabled: true });
     const result = await autoRecall({ prompt: "openviking", systemPrompt: "base" });
 
     if (!result.systemPrompt) {
@@ -454,8 +456,8 @@ describe("auto-recall integration", () => {
     try {
       for (let i = 0; i < 6; i++) {
         const body = new TextEncoder().encode(contents[i]);
-        const upload = await client.tempUpload(body, `long-${i}.md`);
-        const result = await client.addResource({ temp_file_id: upload.temp_file_id });
+        const upload = await client.knowledge.tempUpload(body, `long-${i}.md`);
+        const result = await client.knowledge.addResource({ temp_file_id: upload.temp_file_id });
         if (result.root_uri) importedUris.push(result.root_uri);
       }
 
@@ -465,9 +467,10 @@ describe("auto-recall integration", () => {
         getOvSessionId: vi.fn(() => sessionId),
         flush: vi.fn(async () => {}),
         commit: vi.fn(async () => ({ session_id: "sess-1", status: "committed", task_id: "task-1", archive_uri: "viking://archived/sess-1", archived: true, trace_id: "trace-1" })),
+      recover: vi.fn(),
       };
 
-      const autoRecall = createAutoRecall(client, sync, { enabled: true }, { topN: 5 });
+      const autoRecall = createAutoRecall(client.knowledge, sync, { ...DEFAULT_AUTO_RECALL_CONFIG, enabled: true });
       const result = await autoRecall({ prompt: "word", systemPrompt: "base" });
 
       if (result.systemPrompt) {
@@ -478,7 +481,7 @@ describe("auto-recall integration", () => {
       }
     } finally {
       for (const uri of importedUris) {
-        try { await client.delete(uri); } catch { /* ignore */ }
+        try { await client.knowledge.delete(uri); } catch { /* ignore */ }
       }
       rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -491,9 +494,10 @@ describe("auto-recall integration", () => {
       getOvSessionId: vi.fn(() => sessionId),
       flush: vi.fn(async () => {}),
       commit: vi.fn(async () => ({ session_id: "sess-1", status: "committed", task_id: "task-1", archive_uri: "viking://archived/sess-1", archived: true, trace_id: "trace-1" })),
+      recover: vi.fn(),
     };
 
-    const autoRecall = createAutoRecall(client, sync, { enabled: false });
+    const autoRecall = createAutoRecall(client.knowledge, sync, { ...DEFAULT_AUTO_RECALL_CONFIG, enabled: false });
     const result = await autoRecall({ prompt: "openviking", systemPrompt: "base" });
 
     expect(result.systemPrompt).toBeUndefined();
@@ -508,7 +512,7 @@ afterAll(async () => {
 
   async function cleanupDir(uri: string) {
     try {
-      const listing = await client.fsList(uri);
+      const listing = await client.fs.fsList(uri);
       for (const child of listing.children ?? []) {
         const name = child.uri.split("/").pop() ?? "";
         const isTest = patterns.some((p) => p.test(name));

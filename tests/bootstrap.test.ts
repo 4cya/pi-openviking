@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import type { Transport } from "../src/ov-client/transport";
 import type { OpenVikingConfig } from "../src/shared/config";
+import { DEFAULT_AUTO_RECALL_CONFIG } from "../src/auto-recall/auto-recall";
 import { bootstrapExtension } from "../src/bootstrap";
 
 const defaultConfig: OpenVikingConfig = {
@@ -10,16 +11,10 @@ const defaultConfig: OpenVikingConfig = {
   apiKey: "dev",
   account: "default",
   user: "default",
-  autoRecallLimit: 10,
-  autoRecallTimeout: 5000,
-  autoRecallTopN: 5,
-  openVikingAutoRecall: true,
-  autoRecallScoreThreshold: 0.15,
-  autoRecallMaxContentChars: 500,
-  autoRecallPreferAbstract: true,
-  autoRecallTokenBudget: 500,
   healthPath: "/health",
 };
+
+const defaultRecallConfig = { ...DEFAULT_AUTO_RECALL_CONFIG };
 
 function createMockPi() {
   const tools: any[] = [];
@@ -53,6 +48,7 @@ function createMockTransport(overrides: Partial<Transport> = {}): Transport {
 // Mock config module
 vi.mock("../src/shared/config", () => ({
   loadConfig: vi.fn(() => defaultConfig),
+  loadAutoRecallConfig: vi.fn(() => ({ ...defaultRecallConfig })),
 }));
 
 describe("bootstrap health check", () => {

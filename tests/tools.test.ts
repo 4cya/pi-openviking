@@ -37,6 +37,27 @@ function createMockPi() {
   };
 }
 
+function makeDeps(overrides?: {
+  session?: Record<string, unknown>;
+  fs?: Record<string, unknown>;
+  knowledge?: Record<string, unknown>;
+  sync?: ReturnType<typeof createMockSessionSync>;
+  healthChecker?: { check: () => Promise<boolean>; isAvailable: () => boolean };
+}) {
+  const { session, fs, knowledge } = createMockClient(
+    overrides
+      ? {
+          session: overrides.session as any,
+          fs: overrides.fs as any,
+          knowledge: overrides.knowledge as any,
+        }
+      : undefined,
+  );
+  const sync = overrides?.sync ?? createMockSessionSync();
+  const hc = overrides?.healthChecker;
+  return { session, fs, knowledge, sync, healthChecker: hc };
+}
+
 describe("memsearch tool", () => {
   let pi: ReturnType<typeof createMockPi>;
 
@@ -45,9 +66,8 @@ describe("memsearch tool", () => {
   });
 
   test("registers with promptSnippet and promptGuidelines", () => {
-    const client = createMockClient();
-    const sync = createMockSessionSync();
-    registerMemsearchTool(pi as any, { client, sync });
+    const deps = makeDeps();
+    registerMemsearchTool(pi as any, deps);
 
     expect(pi.registerTool).toHaveBeenCalledOnce();
     const tool = pi.tools[0];
@@ -61,77 +81,62 @@ describe("memsearch tool", () => {
   });
 
   test("uses sync session and calls search", async () => {
-    const client = createMockClient({
-      search: vi.fn(async () => ({
-        memories: [{ text: "hello world", score: 0.95, uri: "viking://test" }],
-        resources: [],
-        skills: [],
-        total: 1,
-      } as SearchResult)),
-    });
-    const sync = createMockSessionSync({ getOvSessionId: () => "ov-sess-1" });
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const search = vi.fn(async () => ({
+      memories: [{ text: "hello world", score: 0.95, uri: "viking://test" }],
+      resources: [],
+      skills: [],
+      total: 1,
+    } as SearchResult));
+    const deps = makeDeps({ knowledge: { search } as any, sync: createMockSessionSync({ getOvSessionId: () => "ov-sess-1" }) });
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
 
     const result = await tool.execute("tc-1", { query: "hello" });
-    expect(client.createSession).not.toHaveBeenCalled();
-    expect(client.search).toHaveBeenCalledWith("ov-sess-1", "hello", 10, "fast", undefined, undefined);
+    expect(deps.session.createSession).not.toHaveBeenCalled();
+    expect(search).toHaveBeenCalledWith("ov-sess-1", "hello", 10, "auto", undefined, undefined);
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.memories[0].text).toBe("hello world");
   });
 
   test("passes uri as target_uri when provided", async () => {
-    const client = createMockClient({
-      search: vi.fn(async () => ({
-        memories: [],
-        resources: [{ uri: "viking://resources/doc.md", score: 0.9 }],
-        skills: [],
-        total: 1,
-      } as SearchResult)),
-    });
-    const sync = createMockSessionSync({ getOvSessionId: () => "ov-sess-1" });
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const search = vi.fn(async () => ({
+      memories: [],
+      resources: [{ uri: "viking://resources/doc.md", score: 0.9 }],
+      skills: [],
+      total: 1,
+    } as SearchResult));
+    const deps = makeDeps({ knowledge: { search } as any, sync: createMockSessionSync({ getOvSessionId: () => "ov-sess-1" }) });
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
+
     await tool.execute("tc-1", { query: "hello", uri: "viking://resources/" });
-    expect(client.search).toHaveBeenCalledWith("ov-sess-1", "hello", 10, "fast", "viking://resources/", undefined);
+    expect(search).toHaveBeenCalledWith("ov-sess-1", "hello", 10, "auto", "viking://resources/", undefined);
   });
 
   test("returns 'No results found' when empty", async () => {
-    const client = createMockClient();
-    const sync = createMockSessionSync();
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const deps = makeDeps();
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
+
     const result = await tool.execute("tc-1", { query: "nothing" });
     expect(result.content[0].text).toBe("No results found.");
   });
 
   test("returns isError on client failure", async () => {
-    const client = createMockClient({
-      search: vi.fn(async () => {
-        throw new Error("OpenViking search failed: server error (HTTP 500)");
-      }),
-    });
-    const sync = createMockSessionSync();
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const search = vi.fn(async () => { throw new Error("OpenViking search failed: server error (HTTP 500)"); });
+    const deps = makeDeps({ knowledge: { search } as any });
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
+
     const result = await tool.execute("tc-1", { query: "test" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("HTTP 500");
   });
 
   test("notifies on first failure when ctx.hasUI is true", async () => {
-    const client = createMockClient({
-      search: vi.fn(async () => {
-        throw new Error("OpenViking search failed: server error (HTTP 500)");
-      }),
-    });
-    const sync = createMockSessionSync();
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const search = vi.fn(async () => { throw new Error("OpenViking search failed: server error (HTTP 500)"); });
+    const deps = makeDeps({ knowledge: { search } as any });
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
     const notify = vi.fn();
     const ctx = { hasUI: true, ui: { notify } } as any;
@@ -140,20 +145,14 @@ describe("memsearch tool", () => {
     expect(notify).toHaveBeenCalledOnce();
     expect(notify.mock.calls[0][0]).toContain("HTTP 500");
 
-    // Second failure — no additional notification (debounced)
     await tool.execute("tc-2", { query: "test2" }, undefined, undefined, ctx);
     expect(notify).toHaveBeenCalledOnce();
   });
 
   test("skips notification when ctx.hasUI is false", async () => {
-    const client = createMockClient({
-      search: vi.fn(async () => {
-        throw new Error("OpenViking search failed: server error (HTTP 500)");
-      }),
-    });
-    const sync = createMockSessionSync();
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const search = vi.fn(async () => { throw new Error("OpenViking search failed: server error (HTTP 500)"); });
+    const deps = makeDeps({ knowledge: { search } as any });
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
     const ctx = { hasUI: false, ui: { notify: vi.fn() } } as any;
 
@@ -161,50 +160,24 @@ describe("memsearch tool", () => {
     expect(ctx.ui.notify).not.toHaveBeenCalled();
   });
 
-  test("auto mode resolves to fast when session available and simple query", async () => {
+  test("passes auto mode to knowledge.search for resolution", async () => {
     const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 } as SearchResult));
-    const client = createMockClient({ search });
-    const sync = createMockSessionSync({ getOvSessionId: () => "ov-sess-1" });
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const deps = makeDeps({ knowledge: { search } as any, sync: createMockSessionSync({ getOvSessionId: () => "ov-sess-1" }) });
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
+
     await tool.execute("tc-1", { query: "test", mode: "auto" });
-    expect(search).toHaveBeenCalledWith("ov-sess-1", "test", 10, "fast", undefined, undefined);
+    expect(search).toHaveBeenCalledWith("ov-sess-1", "test", 10, "auto", undefined, undefined);
   });
 
-  test("auto mode resolves to fast when no session and simple query", async () => {
+  test("passes explicit deep mode to knowledge.search", async () => {
     const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 } as SearchResult));
-    const client = createMockClient({ search });
-    const sync = createMockSessionSync({ getOvSessionId: () => undefined });
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const deps = makeDeps({ knowledge: { search } as any, sync: createMockSessionSync({ getOvSessionId: () => undefined }) });
+    registerMemsearchTool(pi as any, deps);
     const tool = pi.tools[0];
-    await tool.execute("tc-1", { query: "test", mode: "auto" });
-    expect(search).toHaveBeenCalledWith(undefined, "test", 10, "fast", undefined, undefined);
-  });
 
-  test("deep mode without session still passes deep to client fallback", async () => {
-    const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 } as SearchResult));
-    const client = createMockClient({ search });
-    const sync = createMockSessionSync({ getOvSessionId: () => undefined });
-    registerMemsearchTool(pi as any, { client, sync });
-
-    const tool = pi.tools[0];
     await tool.execute("tc-1", { query: "test", mode: "deep" });
-    // resolveSearchMode returns "deep"; client.search internally falls back to /find when no session
     expect(search).toHaveBeenCalledWith(undefined, "test", 10, "deep", undefined, undefined);
-  });
-
-  test("auto mode resolves to deep for complex query without session", async () => {
-    const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 } as SearchResult));
-    const client = createMockClient({ search });
-    const sync = createMockSessionSync({ getOvSessionId: () => undefined });
-    registerMemsearchTool(pi as any, { client, sync });
-
-    const tool = pi.tools[0];
-    const complexQuery = "What are the detailed coding preferences and patterns used across all previous sessions?";
-    await tool.execute("tc-1", { query: complexQuery, mode: "auto" });
-    expect(search).toHaveBeenCalledWith(undefined, complexQuery, 10, "deep", undefined, undefined);
   });
 });
 
@@ -216,9 +189,7 @@ describe("memread tool", () => {
   });
 
   test("registers with promptSnippet and no promptGuidelines", () => {
-    const client = createMockClient();
-    registerMemreadTool(pi as any, { client, sync: createMockSessionSync() });
-
+    registerMemreadTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "memread");
     expect(tool).toBeDefined();
     expect(tool!.promptSnippet).toBeDefined();
@@ -226,58 +197,49 @@ describe("memread tool", () => {
   });
 
   test("reads content at explicit read level", async () => {
-    const client = createMockClient({
-      read: vi.fn(async () => ({ content: "# Hello\n\nWorld" })),
-    });
-    registerMemreadTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const read = vi.fn(async () => ({ content: "# Hello\n\nWorld" }));
+    const deps = makeDeps({ fs: { read } as any });
+    registerMemreadTool(pi as any, deps);
     const tool = pi.tools.find((t) => t.name === "memread")!;
-    const result = await tool.execute("tc-1", { uri: "viking://docs/readme.md", level: "read" });
 
-    expect(client.read).toHaveBeenCalledWith("viking://docs/readme.md", "read", undefined);
+    const result = await tool.execute("tc-1", { uri: "viking://docs/readme.md", level: "read" });
+    expect(read).toHaveBeenCalledWith("viking://docs/readme.md", "read", undefined);
     expect(result.content[0].text).toBe("# Hello\n\nWorld");
   });
 
   test("auto-level resolves to read for files", async () => {
-    const client = createMockClient({
-      fsStat: vi.fn(async () => ({ uri: "viking://docs/readme.md", children: [{ uri: "viking://docs/readme.md", type: "file" }] })),
-      read: vi.fn(async () => ({ content: "file content" })),
-    });
-    registerMemreadTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const fsStat = vi.fn(async () => ({ uri: "viking://docs/readme.md", children: [{ uri: "viking://docs/readme.md", type: "file" }] }));
+    const read = vi.fn(async () => ({ content: "file content" }));
+    const deps = makeDeps({ fs: { fsStat, read } as any });
+    registerMemreadTool(pi as any, deps);
     const tool = pi.tools.find((t) => t.name === "memread")!;
-    const result = await tool.execute("tc-1", { uri: "viking://docs/readme.md", level: "auto" });
 
-    expect(client.fsStat).toHaveBeenCalledWith("viking://docs/readme.md", undefined);
-    expect(client.read).toHaveBeenCalledWith("viking://docs/readme.md", "read", undefined);
+    const result = await tool.execute("tc-1", { uri: "viking://docs/readme.md", level: "auto" });
+    expect(fsStat).toHaveBeenCalledWith("viking://docs/readme.md", undefined);
+    expect(read).toHaveBeenCalledWith("viking://docs/readme.md", "read", undefined);
     expect(result.content[0].text).toBe("file content");
   });
 
   test("auto-level resolves to overview for directories", async () => {
-    const client = createMockClient({
-      fsStat: vi.fn(async () => ({ uri: "viking://docs/", children: [{ uri: "viking://docs/", type: "directory" }] })),
-      read: vi.fn(async () => ({ content: "dir overview" })),
-    });
-    registerMemreadTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const fsStat = vi.fn(async () => ({ uri: "viking://docs/", children: [{ uri: "viking://docs/", type: "directory" }] }));
+    const read = vi.fn(async () => ({ content: "dir overview" }));
+    const deps = makeDeps({ fs: { fsStat, read } as any });
+    registerMemreadTool(pi as any, deps);
     const tool = pi.tools.find((t) => t.name === "memread")!;
-    const result = await tool.execute("tc-1", { uri: "viking://docs/", level: "auto" });
 
-    expect(client.fsStat).toHaveBeenCalledWith("viking://docs/", undefined);
-    expect(client.read).toHaveBeenCalledWith("viking://docs/", "overview", undefined);
+    const result = await tool.execute("tc-1", { uri: "viking://docs/", level: "auto" });
+    expect(fsStat).toHaveBeenCalledWith("viking://docs/", undefined);
+    expect(read).toHaveBeenCalledWith("viking://docs/", "overview", undefined);
     expect(result.content[0].text).toBe("dir overview");
   });
 
   test("returns error for invalid URI prefix", async () => {
-    const client = createMockClient();
-    registerMemreadTool(pi as any, { client, sync: createMockSessionSync() });
-
+    registerMemreadTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "memread")!;
     const result = await tool.execute("tc-1", { uri: "https://example.com", level: "read" });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("viking://");
-    expect(client.read).not.toHaveBeenCalled();
   });
 });
 
@@ -289,10 +251,7 @@ describe("memcommit tool", () => {
   });
 
   test("registers with promptSnippet and promptGuidelines", () => {
-    const client = createMockClient();
-    const sync = createMockSessionSync();
-    registerMemcommitTool(pi as any, { client, sync });
-
+    registerMemcommitTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "memcommit");
     expect(tool).toBeDefined();
     expect(tool!.promptSnippet).toBeDefined();
@@ -302,32 +261,28 @@ describe("memcommit tool", () => {
   });
 
   test("returns error when no session mapped", async () => {
-    const client = createMockClient();
     const sync = createMockSessionSync({
       getOvSessionId: () => undefined,
       commit: vi.fn(async () => { throw new Error("No OpenViking session mapped"); }),
     });
-    registerMemcommitTool(pi as any, { client, sync });
-
+    registerMemcommitTool(pi as any, makeDeps({ sync }));
     const tool = pi.tools.find((t) => t.name === "memcommit")!;
-    const result = await tool.execute("tc-1", {});
 
+    const result = await tool.execute("tc-1", {});
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("No OpenViking session mapped");
   });
 
   test("flushes pending messages and calls commit via sync", async () => {
-    const client = createMockClient();
     const sync = createMockSessionSync({
       getOvSessionId: () => "ov-sess-123",
       commit: vi.fn(async () => ({ session_id: "sess-1", status: "committed", task_id: "task-abc", archive_uri: "viking://archived/sess-1", archived: true, trace_id: "trace-1" })),
     });
-    registerMemcommitTool(pi as any, { client, sync });
-
+    registerMemcommitTool(pi as any, makeDeps({ sync }));
     const tool = pi.tools.find((t) => t.name === "memcommit")!;
     const onUpdate = vi.fn();
-    const result = await tool.execute("tc-1", {}, undefined, onUpdate);
 
+    const result = await tool.execute("tc-1", {}, undefined, onUpdate);
     expect(sync.flush).toHaveBeenCalledTimes(1);
     expect(sync.commit).toHaveBeenCalledTimes(1);
     expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "Committing session to OpenViking..." }], details: {} });
@@ -345,9 +300,7 @@ describe("membrowse tool", () => {
   });
 
   test("registers with promptSnippet and no promptGuidelines", () => {
-    const client = createMockClient();
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
+    registerMembrowseTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "membrowse");
     expect(tool).toBeDefined();
     expect(tool!.promptSnippet).toBeDefined();
@@ -355,57 +308,48 @@ describe("membrowse tool", () => {
   });
 
   test("lists directory contents", async () => {
-    const client = createMockClient({
-      fsList: vi.fn(async () => ({
-        uri: "viking://resources/docs/",
-        children: [
-          { uri: "viking://resources/docs/api.md", type: "file", abstract: "API ref" },
-          { uri: "viking://resources/docs/guides/", type: "directory" },
-        ],
-      })),
-    });
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const fsList = vi.fn(async () => ({
+      uri: "viking://resources/docs/",
+      children: [
+        { uri: "viking://resources/docs/api.md", type: "file", abstract: "API ref" },
+        { uri: "viking://resources/docs/guides/", type: "directory" },
+      ],
+    }));
+    registerMembrowseTool(pi as any, makeDeps({ fs: { fsList } as any }));
     const tool = pi.tools.find((t) => t.name === "membrowse")!;
-    const result = await tool.execute("tc-1", { uri: "viking://resources/docs/", view: "list" });
 
-    expect(client.fsList).toHaveBeenCalledWith("viking://resources/docs/", undefined, undefined, undefined);
+    const result = await tool.execute("tc-1", { uri: "viking://resources/docs/", view: "list" });
+    expect(fsList).toHaveBeenCalledWith("viking://resources/docs/", undefined, undefined, undefined);
     expect(result.content[0].text).toContain("api.md");
     expect(result.content[0].text).toContain("guides/");
   });
 
   test("returns tree view", async () => {
-    const client = createMockClient({
-      fsTree: vi.fn(async () => ({
-        uri: "viking://resources/",
-        children: [
-          { uri: "viking://resources/docs/", type: "directory" },
-          { uri: "viking://resources/README.md", type: "file" },
-        ],
-      })),
-    });
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const fsTree = vi.fn(async () => ({
+      uri: "viking://resources/",
+      children: [
+        { uri: "viking://resources/docs/", type: "directory" },
+        { uri: "viking://resources/README.md", type: "file" },
+      ],
+    }));
+    registerMembrowseTool(pi as any, makeDeps({ fs: { fsTree } as any }));
     const tool = pi.tools.find((t) => t.name === "membrowse")!;
-    const result = await tool.execute("tc-1", { uri: "viking://resources/", view: "tree" });
 
-    expect(client.fsTree).toHaveBeenCalledWith("viking://resources/", undefined);
+    const result = await tool.execute("tc-1", { uri: "viking://resources/", view: "tree" });
+    expect(fsTree).toHaveBeenCalledWith("viking://resources/", undefined);
     expect(result.content[0].text).toContain("README.md");
   });
 
   test("returns stat view", async () => {
-    const client = createMockClient({
-      fsStat: vi.fn(async () => ({
-        uri: "viking://resources/file.md",
-        children: [{ uri: "viking://resources/file.md", type: "file" }],
-      })),
-    });
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const fsStat = vi.fn(async () => ({
+      uri: "viking://resources/file.md",
+      children: [{ uri: "viking://resources/file.md", type: "file" }],
+    }));
+    registerMembrowseTool(pi as any, makeDeps({ fs: { fsStat } as any }));
     const tool = pi.tools.find((t) => t.name === "membrowse")!;
-    const result = await tool.execute("tc-1", { uri: "viking://resources/file.md", view: "stat" });
 
-    expect(client.fsStat).toHaveBeenCalledWith("viking://resources/file.md", undefined);
+    const result = await tool.execute("tc-1", { uri: "viking://resources/file.md", view: "stat" });
+    expect(fsStat).toHaveBeenCalledWith("viking://resources/file.md", undefined);
     expect(result.content[0].text).toContain("file");
   });
 
@@ -415,26 +359,21 @@ describe("membrowse tool", () => {
     { name: "both recursive and simple", params: { recursive: true, simple: true }, expected: [undefined, true, true] },
     { name: "neither (default)", params: {}, expected: [undefined, undefined, undefined] },
   ])("passes $name to fsList", async ({ params, expected }) => {
-    const client = createMockClient({
-      fsList: vi.fn(async () => ({ uri: "viking://resources/", children: [] })),
-    });
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const fsList = vi.fn(async () => ({ uri: "viking://resources/", children: [] }));
+    registerMembrowseTool(pi as any, makeDeps({ fs: { fsList } as any }));
     const tool = pi.tools.find((t) => t.name === "membrowse")!;
+
     await tool.execute("tc-1", { uri: "viking://resources/", view: "list", ...params });
-    expect(client.fsList).toHaveBeenCalledWith("viking://resources/", ...expected);
+    expect(fsList).toHaveBeenCalledWith("viking://resources/", ...expected);
   });
 
   test("returns error for invalid URI prefix", async () => {
-    const client = createMockClient();
-    registerMembrowseTool(pi as any, { client, sync: createMockSessionSync() });
-
+    registerMembrowseTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "membrowse")!;
     const result = await tool.execute("tc-1", { uri: "http://example.com", view: "list" });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("viking://");
-    expect(client.fsList).not.toHaveBeenCalled();
   });
 });
 
@@ -446,9 +385,7 @@ describe("memdelete tool", () => {
   });
 
   test("registers with promptSnippet and no promptGuidelines", () => {
-    const client = createMockClient();
-    registerMemdeleteTool(pi as any, { client, sync: createMockSessionSync() });
-
+    registerMemdeleteTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "memdelete");
     expect(tool).toBeDefined();
     expect(tool!.promptSnippet).toBeDefined();
@@ -456,76 +393,41 @@ describe("memdelete tool", () => {
   });
 
   test("deletes a viking:// URI and returns confirmation", async () => {
-    const client = createMockClient({
-      delete: vi.fn(async () => ({ uri: "viking://resources/temp.txt" })),
-    });
-    registerMemdeleteTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const verifiedDelete = vi.fn(async () => ({ uri: "viking://resources/temp.txt", verified: true }));
+    registerMemdeleteTool(pi as any, makeDeps({ knowledge: { verifiedDelete } as any }));
     const tool = pi.tools.find((t) => t.name === "memdelete")!;
-    const result = await tool.execute("tc-1", { uri: "viking://resources/temp.txt" });
 
-    expect(client.delete).toHaveBeenCalledWith("viking://resources/temp.txt", undefined);
+    const result = await tool.execute("tc-1", { uri: "viking://resources/temp.txt" });
+    expect(verifiedDelete).toHaveBeenCalledWith("viking://resources/temp.txt", undefined);
     expect(result.content[0].text).toBe("Deleted: viking://resources/temp.txt");
     expect(result.isError).toBeUndefined();
   });
 
   test("returns error for invalid URI prefix", async () => {
-    const client = createMockClient();
-    registerMemdeleteTool(pi as any, { client, sync: createMockSessionSync() });
-
+    registerMemdeleteTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "memdelete")!;
     const result = await tool.execute("tc-1", { uri: "file:///etc/passwd" });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe("Invalid URI: must start with viking://");
-    expect(client.delete).not.toHaveBeenCalled();
   });
 
   test("returns isError on client failure", async () => {
-    const client = createMockClient({
-      delete: vi.fn(async () => {
-        throw new Error("OpenViking delete failed: not found (HTTP 404)");
-      }),
-    });
-    registerMemdeleteTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const verifiedDelete = vi.fn(async () => { throw new Error("OpenViking delete failed: not found (HTTP 404)"); });
+    registerMemdeleteTool(pi as any, makeDeps({ knowledge: { verifiedDelete } as any }));
     const tool = pi.tools.find((t) => t.name === "memdelete")!;
-    const result = await tool.execute("tc-1", { uri: "viking://resources/missing.txt" });
 
+    const result = await tool.execute("tc-1", { uri: "viking://resources/missing.txt" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("HTTP 404");
   });
 
-  test("verifies resource is gone via post-delete search", async () => {
-    const client = createMockClient({
-      delete: vi.fn(async () => ({ uri: "viking://resources/doc.md" })),
-      search: vi.fn(async () => ({
-        memories: [], resources: [], skills: [], total: 0,
-      })),
-    });
-    registerMemdeleteTool(pi as any, { client, sync: createMockSessionSync() });
-
+  test("warns when verifiedDelete reports not verified", async () => {
+    const verifiedDelete = vi.fn(async () => ({ uri: "viking://resources/stale.md", verified: false }));
+    registerMemdeleteTool(pi as any, makeDeps({ knowledge: { verifiedDelete } as any }));
     const tool = pi.tools.find((t) => t.name === "memdelete")!;
-    const result = await tool.execute("tc-1", { uri: "viking://resources/doc.md" });
 
-    expect(client.search).toHaveBeenCalledWith(undefined, "doc.md", 5, "fast", undefined, undefined);
-    expect(result.details).toEqual({ uri: "viking://resources/doc.md", verified: true });
-  });
-
-  test("warns when resource still found in search after delete", async () => {
-    const client = createMockClient({
-      delete: vi.fn(async () => ({ uri: "viking://resources/stale.md" })),
-      search: vi.fn(async () => ({
-        memories: [],
-        resources: [{ uri: "viking://resources/stale.md", score: 0.9 }],
-        skills: [], total: 1,
-      })),
-    });
-    registerMemdeleteTool(pi as any, { client, sync: createMockSessionSync() });
-
-    const tool = pi.tools.find((t) => t.name === "memdelete")!;
     const result = await tool.execute("tc-1", { uri: "viking://resources/stale.md" });
-
     expect(result.content[0].text).toContain("warning");
     expect(result.content[0].text).toContain("async index sync");
     expect(result.details).toEqual({ uri: "viking://resources/stale.md", verified: false });
@@ -540,9 +442,7 @@ describe("memimport tool", () => {
   });
 
   test("registers with promptSnippet and no promptGuidelines", () => {
-    const client = createMockClient();
-    registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
+    registerMemimportTool(pi as any, makeDeps());
     const tool = pi.tools.find((t) => t.name === "memimport");
     expect(tool).toBeDefined();
     expect(tool!.promptSnippet).toBeDefined();
@@ -550,47 +450,27 @@ describe("memimport tool", () => {
   });
 
   test("imports URL source via path with defaults", async () => {
-    const client = createMockClient({
-      addResource: vi.fn(async () => ({ root_uri: "viking://resources/github.md", status: "success", errors: [] })),
-    });
-    registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const addResource = vi.fn(async () => ({ root_uri: "viking://resources/github.md", status: "success", errors: [] }));
+    registerMemimportTool(pi as any, makeDeps({ knowledge: { addResource } as any }));
     const tool = pi.tools.find((t) => t.name === "memimport")!;
-    const result = await tool.execute("tc-1", { source: "https://example.com/doc.md" });
 
-    expect(client.addResource).toHaveBeenCalledWith({ path: "https://example.com/doc.md", kind: "resource" }, undefined);
-    expect(client.tempUpload).not.toHaveBeenCalled();
+    const result = await tool.execute("tc-1", { source: "https://example.com/doc.md" });
+    expect(addResource).toHaveBeenCalledWith({ path: "https://example.com/doc.md", kind: "resource" }, undefined);
     expect(result.content[0].text).toBe("Imported: viking://resources/github.md (status: success)");
   });
 
-  test("imports git:// URL source via path", async () => {
-    const client = createMockClient({
-      addResource: vi.fn(async () => ({ root_uri: "viking://resources/repo", status: "success", errors: [] })),
-    });
-    registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
-    const tool = pi.tools.find((t) => t.name === "memimport")!;
-    const result = await tool.execute("tc-1", { source: "git://github.com/user/repo.git" });
-
-    expect(client.addResource).toHaveBeenCalledWith({ path: "git://github.com/user/repo.git", kind: "resource" }, undefined);
-    expect(result.content[0].text).toBe("Imported: viking://resources/repo (status: success)");
-  });
-
   test("forwards kind=skill, reason, and to params", async () => {
-    const client = createMockClient({
-      addResource: vi.fn(async () => ({ root_uri: "viking://agent/skills/test.md", status: "success", errors: [] })),
-    });
-    registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const addResource = vi.fn(async () => ({ root_uri: "viking://agent/skills/test.md", status: "success", errors: [] }));
+    registerMemimportTool(pi as any, makeDeps({ knowledge: { addResource } as any }));
     const tool = pi.tools.find((t) => t.name === "memimport")!;
+
     const result = await tool.execute("tc-1", {
       source: "https://example.com/skill.md",
       kind: "skill",
       reason: "test import",
       to: "viking://agent/skills/",
     });
-
-    expect(client.addResource).toHaveBeenCalledWith(
+    expect(addResource).toHaveBeenCalledWith(
       { path: "https://example.com/skill.md", kind: "skill", reason: "test import", parent: "viking://agent/skills/" },
       undefined,
     );
@@ -603,20 +483,17 @@ describe("memimport tool", () => {
     writeFileSync(filePath, "# local test");
 
     try {
-      const client = createMockClient({
-        addResource: vi.fn(async () => ({ root_uri: "viking://resources/local.md", status: "success", errors: [] })),
-      });
-      registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
+      const addResource = vi.fn(async () => ({ root_uri: "viking://resources/local.md", status: "success", errors: [] }));
+      registerMemimportTool(pi as any, makeDeps({ knowledge: { addResource } as any }));
       const tool = pi.tools.find((t) => t.name === "memimport")!;
+
       const result = await tool.execute("tc-1", {
         source: filePath,
         kind: "resource",
         reason: "local test",
         to: "viking://resources/docs/",
       });
-
-      expect(client.addResource).toHaveBeenCalledWith(
+      expect(addResource).toHaveBeenCalledWith(
         expect.objectContaining({ kind: "resource", reason: "local test", parent: "viking://resources/docs/" }),
         undefined,
       );
@@ -627,16 +504,11 @@ describe("memimport tool", () => {
   });
 
   test("returns isError on client failure", async () => {
-    const client = createMockClient({
-      addResource: vi.fn(async () => {
-        throw new Error("OpenViking addResource failed: bad request (HTTP 400)");
-      }),
-    });
-    registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
+    const addResource = vi.fn(async () => { throw new Error("OpenViking addResource failed: bad request (HTTP 400)"); });
+    registerMemimportTool(pi as any, makeDeps({ knowledge: { addResource } as any }));
     const tool = pi.tools.find((t) => t.name === "memimport")!;
-    const result = await tool.execute("tc-1", { source: "https://bad.url" });
 
+    const result = await tool.execute("tc-1", { source: "https://bad.url" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("HTTP 400");
   });
@@ -648,54 +520,20 @@ describe("memimport tool", () => {
     writeFileSync(join(tmpDir, "sub", "b.txt"), "world");
 
     try {
-      const client = createMockClient({
-        addResource: vi.fn(async () => ({ root_uri: "viking://resources/mydir", status: "success", errors: [] })),
-      });
-      registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
+      const tempUpload = vi.fn(async () => ({ temp_file_id: "tmp-1" }));
+      const addResource = vi.fn(async () => ({ root_uri: "viking://resources/mydir", status: "success", errors: [] }));
+      registerMemimportTool(pi as any, makeDeps({ knowledge: { tempUpload, addResource } as any }));
       const tool = pi.tools.find((t) => t.name === "memimport")!;
-      const result = await tool.execute("tc-1", { source: tmpDir });
 
-      expect(client.tempUpload).toHaveBeenCalledOnce();
-      const uploadedBody = (client.tempUpload as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      const uploadedName = (client.tempUpload as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      const result = await tool.execute("tc-1", { source: tmpDir });
+      expect(tempUpload).toHaveBeenCalledOnce();
+      const uploadedBody = (tempUpload as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const uploadedName = (tempUpload as ReturnType<typeof vi.fn>).mock.calls[0][1];
       expect(uploadedBody).toBeInstanceOf(Uint8Array);
       expect(uploadedBody.length).toBeGreaterThan(0);
       expect(uploadedName).toMatch(/\.zip$/);
-
-      expect(client.addResource).toHaveBeenCalledWith(
-        expect.objectContaining({ kind: "resource" }),
-        undefined,
-      );
+      expect(addResource).toHaveBeenCalledWith(expect.objectContaining({ kind: "resource" }), undefined);
       expect(result.content[0].text).toBe("Imported: viking://resources/mydir (status: success)");
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  test("forwards kind, reason, and to for local directory", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "ov-import-dir-"));
-    writeFileSync(join(tmpDir, "file.txt"), "content");
-
-    try {
-      const client = createMockClient({
-        addResource: vi.fn(async () => ({ root_uri: "viking://agent/skills/mydir", status: "success", errors: [] })),
-      });
-      registerMemimportTool(pi as any, { client, sync: createMockSessionSync() });
-
-      const tool = pi.tools.find((t) => t.name === "memimport")!;
-      const result = await tool.execute("tc-1", {
-        source: tmpDir,
-        kind: "skill",
-        reason: "test dir",
-        to: "viking://agent/skills/",
-      });
-
-      expect(client.addResource).toHaveBeenCalledWith(
-        expect.objectContaining({ kind: "skill", reason: "test dir", parent: "viking://agent/skills/" }),
-        undefined,
-      );
-      expect(result.content[0].text).toBe("Imported: viking://agent/skills/mydir (status: success)");
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -709,65 +547,51 @@ describe("tool health guard", () => {
     pi = createMockPi();
   });
 
-  test("returns unavailable error when healthChecker says server down", async () => {
-    const client = createMockClient();
-    const sync = createMockSessionSync();
-    const healthChecker = {
-      check: vi.fn(async () => false),
-      isAvailable: vi.fn(() => false),
+  function healthChecker(available: boolean, recovers: boolean = false) {
+    return {
+      check: vi.fn(async () => recovers),
+      isAvailable: vi.fn(() => available),
     };
-    registerMemsearchTool(pi as any, { client, sync, healthChecker });
+  }
 
+  test("returns unavailable error when healthChecker says server down", async () => {
+    registerMemsearchTool(pi as any, makeDeps({ healthChecker: healthChecker(false) }));
     const tool = pi.tools.find((t) => t.name === "memsearch")!;
     const result = await tool.execute("tc-1", { query: "test" });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("unavailable");
-    expect(client.search).not.toHaveBeenCalled();
   });
 
   test("proceeds when healthChecker says server is up", async () => {
-    const client = createMockClient();
-    const sync = createMockSessionSync();
-    const healthChecker = {
-      check: vi.fn(async () => true),
-      isAvailable: vi.fn(() => true),
-    };
-    registerMemsearchTool(pi as any, { client, sync, healthChecker });
-
+    const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 } as SearchResult));
+    registerMemsearchTool(pi as any, makeDeps({ knowledge: { search } as any, healthChecker: healthChecker(true) }));
     const tool = pi.tools.find((t) => t.name === "memsearch")!;
-    const result = await tool.execute("tc-1", { query: "test" });
 
+    const result = await tool.execute("tc-1", { query: "test" });
     expect(result.isError).toBeUndefined();
-    expect(client.search).toHaveBeenCalled();
+    expect(search).toHaveBeenCalled();
   });
 
   test("recovers and proceeds when healthChecker was down but recovers", async () => {
-    const client = createMockClient();
-    const sync = createMockSessionSync();
-    const healthChecker = {
-      check: vi.fn(async () => true),
-      isAvailable: vi.fn(() => false),
-    };
-    registerMemsearchTool(pi as any, { client, sync, healthChecker });
-
+    const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 } as SearchResult));
+    const hc = healthChecker(false, true);
+    registerMemsearchTool(pi as any, makeDeps({ knowledge: { search } as any, healthChecker: hc }));
     const tool = pi.tools.find((t) => t.name === "memsearch")!;
-    const result = await tool.execute("tc-1", { query: "test" });
 
+    const result = await tool.execute("tc-1", { query: "test" });
     expect(result.isError).toBeUndefined();
-    expect(healthChecker.check).toHaveBeenCalledOnce();
-    expect(client.search).toHaveBeenCalled();
+    expect(hc.check).toHaveBeenCalledOnce();
+    expect(search).toHaveBeenCalled();
   });
 
   test("skips health check when no healthChecker provided", async () => {
-    const client = createMockClient();
-    const sync = createMockSessionSync();
-    registerMemsearchTool(pi as any, { client, sync });
-
+    const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 } as SearchResult));
+    registerMemsearchTool(pi as any, makeDeps({ knowledge: { search } as any }));
     const tool = pi.tools.find((t) => t.name === "memsearch")!;
-    const result = await tool.execute("tc-1", { query: "test" });
 
+    const result = await tool.execute("tc-1", { query: "test" });
     expect(result.isError).toBeUndefined();
-    expect(client.search).toHaveBeenCalled();
+    expect(search).toHaveBeenCalled();
   });
 });

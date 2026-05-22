@@ -51,7 +51,7 @@
 | ---- | ---------- | ---------------- |
 | **Pi Slash Command** | A user-invoked command registered with Pi (e.g. `/ov-search`, `/ov-commit`) | command, CLI command |
 | **ov-search** | Command to search OpenViking memories and resources interactively | search command |
-| **ov-browse** | Command to browse the OpenViking filesystem interactively (list, tree, stat views) | browse command, ov-ls |
+| **ov-ls** | Command to browse the OpenViking filesystem interactively (list, tree, stat views) | browse command |
 | **ov-import** | Command to import a URL or local file into OpenViking | import command |
 | **ov-delete** | Command to delete a resource by URI from OpenViking | delete command |
 | **ov-recall** | Command to toggle **Auto-Recall** on or off for the current session | recall toggle |
@@ -70,7 +70,7 @@
 | **Source Resolver** | The logic that determines whether an import source is a URL, local file, or directory | resolver, parser |
 | **Temp Upload** | Transient binary staging endpoint used for directory zip uploads before final import | temp file, staging upload |
 | **Post-Delete Verification** | Best-effort search confirmation after `memdelete` to warn if a resource still appears in the index | verification check |
-| **Operation** | A pure business-logic function in `src/operations/` that calls the **Client Adapter** and returns raw data. Both tools and commands are thin adapters over operations | operation function, biz logic |
+| **Operation** | A deep business-logic function in `src/operations/` that calls the **Client Adapter** and returns raw data. Only complex operations (commit, import) deserve a separate module. Simple passthroughs (search, browse, read, delete) call the **Client Adapter** directly | operation function, biz logic |
 | **Recall Item** | The ranked, deduplicated output unit from the **Recall Curator** (type `RecallItem`). Carries score, text, URI, and type (memory/resource) | curated item, result item |
 | **Fire-and-Forget** | An async operation (commit, import) that returns a **Task ID** immediately without polling for completion | async task, background job |
 | **Shutdown** | The synchronous `onShutdown()` lifecycle hook — resets state only, zero I/O. **Commit** is manual-only, never triggered on shutdown (ADR-001) | cleanup, teardown |
@@ -85,8 +85,8 @@
 - A **Resource** lives at a **URI** under `viking://resources/`
 - A **Skill** lives at a **URI** under `viking://agent/skills/`
 - **Memories** are extracted from committed **OV Sessions** by OpenViking background processes
-- **Pi Slash Commands** invoke the same **Operations** as tools but format output for humans instead of JSON
-- An **Operation** sits between tools/commands and the **Client Adapter** — both surfaces call the same operation, avoiding duplication
+- **Pi Slash Commands** call the **Client Adapter** (or **Operation** for commit/import) and format output for humans instead of JSON
+- An **Operation** sits between tools/commands and the **Client Adapter** only when the logic is deep enough to justify a separate module (commit, import). Shallow passthroughs skip the operation layer
 - A **Recall Item** is the final unit produced by the **Recall Curator**, carrying the **Composite Score** and trimmed content for the **Relevant Memories Block**
 - **Fire-and-Forget** operations (commit, import) return a **Task ID** — the caller never polls
 
@@ -115,7 +115,7 @@
 ## Flagged ambiguities
 
 - **"Session"** is overloaded: it can mean either a **Pi Session** (the conversation thread) or an **OV Session** (the mirrored stream in OpenViking). Always qualify with **Pi** or **OV**.
-- **"ov-ls"** vs **"ov-browse"**: the slash command is `/ov-browse` in the codebase. Avoid "ov-ls" in domain discussion — it's an implementation detail.
+- **"ov-ls"** vs **"ov-browse"**: the command is registered as `ov-ls` (invoked via `/ov-ls`). Use `ov-ls` consistently — "ov-browse" is not a command name.
 - **"CuratedItem"** was renamed to **Recall Item** (`RecallItem` in code). Avoid the old name in all domain discussion.
 - **"Commit"** in this domain means flushing a session to OpenViking for memory extraction, not a Git commit. Use **Commit to OV** or simply **Commit** when the context is clear.
 - **"Message"** without qualification refers to a Pi message turn. OV messages are internal streaming artifacts — avoid exposing them in user-facing language.

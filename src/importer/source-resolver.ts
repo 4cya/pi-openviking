@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { readFile } from "node:fs/promises";
-import type { OpenVikingClient } from "../ov-client/client";
+import type { KnowledgeClient } from "../ov-client/client";
 
 export interface ImportResult {
   root_uri: string;
@@ -20,7 +20,7 @@ type AddParams = {
 export type ResolvedSource =
   | { type: "url"; params: AddParams }
   | { type: "file"; params: AddParams; body: Buffer; filename: string }
-  | { type: "directory"; upload: (client: OpenVikingClient, signal?: AbortSignal) => Promise<ImportResult> };
+  | { type: "directory"; upload: (client: KnowledgeClient, signal?: AbortSignal) => Promise<ImportResult> };
 
 export async function resolveSource(
   source: string,

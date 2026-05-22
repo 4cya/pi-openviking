@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { AutoRecallConfig } from "../auto-recall/auto-recall";
+import { DEFAULT_AUTO_RECALL_CONFIG } from "../auto-recall/auto-recall";
 
 export interface OpenVikingConfig {
   endpoint: string;
@@ -8,14 +10,6 @@ export interface OpenVikingConfig {
   apiKey: string;
   account: string;
   user: string;
-  autoRecallLimit: number;
-  autoRecallTimeout: number;
-  autoRecallTopN: number;
-  openVikingAutoRecall: boolean;
-  autoRecallScoreThreshold: number;
-  autoRecallMaxContentChars: number;
-  autoRecallPreferAbstract: boolean;
-  autoRecallTokenBudget: number;
   healthPath: string;
 }
 
@@ -68,14 +62,22 @@ export function loadConfig(cwd: string): OpenVikingConfig {
     apiKey: cascade(s, "openVikingApiKey", "OPENVIKING_API_KEY", "dev"),
     account: cascade(s, "openVikingAccount", "OPENVIKING_ACCOUNT", "default"),
     user: cascade(s, "openVikingUser", "OPENVIKING_USER", "default"),
-    autoRecallLimit: cascade(s, "openVikingAutoRecallLimit", "OPENVIKING_AUTO_RECALL_LIMIT", 10, Number),
-    autoRecallTimeout: cascade(s, "openVikingAutoRecallTimeout", "OPENVIKING_AUTO_RECALL_TIMEOUT", 5000, Number),
-    autoRecallTopN: cascade(s, "openVikingAutoRecallTopN", "OPENVIKING_AUTO_RECALL_TOPN", 5, Number),
-    openVikingAutoRecall: cascade(s, "openVikingAutoRecall", "OPENVIKING_AUTO_RECALL", true, v => v === "true"),
-    autoRecallScoreThreshold: cascade(s, "openVikingAutoRecallScoreThreshold", "OPENVIKING_AUTO_RECALL_SCORE_THRESHOLD", 0.15, Number),
-    autoRecallMaxContentChars: cascade(s, "openVikingAutoRecallMaxContentChars", "OPENVIKING_AUTO_RECALL_MAX_CONTENT_CHARS", 500, Number),
-    autoRecallPreferAbstract: cascade(s, "openVikingAutoRecallPreferAbstract", "OPENVIKING_AUTO_RECALL_PREFER_ABSTRACT", true, v => v === "true"),
-    autoRecallTokenBudget: cascade(s, "openVikingAutoRecallTokenBudget", "OPENVIKING_AUTO_RECALL_TOKEN_BUDGET", 700, Number),
     healthPath: cascade(s, "openVikingHealthPath", "OPENVIKING_HEALTH_PATH", "/health"),
+  };
+}
+
+export function loadAutoRecallConfig(cwd: string): AutoRecallConfig {
+  const s = readPiSettings(cwd);
+  return {
+    enabled: cascade(s, "openVikingAutoRecall", "OPENVIKING_AUTO_RECALL", true, v => v === "true"),
+    limit: cascade(s, "openVikingAutoRecallLimit", "OPENVIKING_AUTO_RECALL_LIMIT", DEFAULT_AUTO_RECALL_CONFIG.limit, Number),
+    timeout: cascade(s, "openVikingAutoRecallTimeout", "OPENVIKING_AUTO_RECALL_TIMEOUT", DEFAULT_AUTO_RECALL_CONFIG.timeout, Number),
+    curator: {
+      topN: cascade(s, "openVikingAutoRecallTopN", "OPENVIKING_AUTO_RECALL_TOPN", DEFAULT_AUTO_RECALL_CONFIG.curator.topN, Number),
+      maxTokens: cascade(s, "openVikingAutoRecallTokenBudget", "OPENVIKING_AUTO_RECALL_TOKEN_BUDGET", DEFAULT_AUTO_RECALL_CONFIG.curator.maxTokens, Number),
+      maxContentChars: cascade(s, "openVikingAutoRecallMaxContentChars", "OPENVIKING_AUTO_RECALL_MAX_CONTENT_CHARS", DEFAULT_AUTO_RECALL_CONFIG.curator.maxContentChars, Number),
+      scoreThreshold: cascade(s, "openVikingAutoRecallScoreThreshold", "OPENVIKING_AUTO_RECALL_SCORE_THRESHOLD", DEFAULT_AUTO_RECALL_CONFIG.curator.scoreThreshold, Number),
+      preferAbstract: cascade(s, "openVikingAutoRecallPreferAbstract", "OPENVIKING_AUTO_RECALL_PREFER_ABSTRACT", DEFAULT_AUTO_RECALL_CONFIG.curator.preferAbstract, v => v === "true"),
+    },
   };
 }

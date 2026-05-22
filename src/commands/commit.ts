@@ -1,21 +1,19 @@
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { CommandRegisterDeps } from "./types";
-import { logger } from "../shared/logger";
+import type { CommandResult } from "../shared/command-def";
+import { defineCommand } from "../shared/command-def";
 import { commitOp } from "../operations/commit";
 
-export function registerCommitCommand(deps: CommandRegisterDeps): void {
-  const { pi, sync } = deps;
-
-  pi.registerCommand("ov-commit", {
+export function registerCommitCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
+  defineCommand(pi, deps, {
+    name: "ov-commit",
+    label: "Commit",
     description: "Commit the current conversation to OpenViking",
-    handler: async (_args, ctx) => {
-      try {
-        const result = await commitOp(sync);
-        ctx.ui.notify(`✓ Session committed. Task: ${result.task_id}`, "info");
-      } catch (err) {
-        const message = (err as Error).message ?? "Unknown error";
-        logger.error("commit command failed:", message);
-        ctx.ui.notify(`✗ Commit failed: ${message}`, "error");
-      }
+    healthChecker: deps.healthChecker,
+
+    async execute(_args, _ctx, d): Promise<CommandResult> {
+      const result = await commitOp(d.sync);
+      return { type: "notify", message: `✓ Session committed. Task: ${result.task_id}`, level: "info" };
     },
   });
 }

@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { TextContent, ImageContent, ThinkingContent, ToolCall, ToolResultMessage } from "@mariozechner/pi-ai";
-import type { CommitResult, OpenVikingClient } from "../ov-client/client";
+import type { SessionClient, CommitResult } from "../ov-client/client";
 import type { Part } from "../ov-client/types";
 import { logger } from "../shared/logger";
 
@@ -21,14 +21,14 @@ export interface SessionSyncLike {
 }
 
 export class SessionSync implements SessionSyncLike {
-  private client: OpenVikingClient;
+  private client: SessionClient;
   private opts: SessionSyncOpts;
   private ovSessionId: string | undefined;
   private pendingChain: Promise<void> = Promise.resolve();
   private consecutiveFailures = 0;
   private readonly maxFailures: number;
 
-  constructor(client: OpenVikingClient, opts: SessionSyncOpts) {
+  constructor(client: SessionClient, opts: SessionSyncOpts) {
     this.client = client;
     this.opts = opts;
     this.maxFailures = opts.maxConsecutiveFailures ?? 3;

@@ -27,7 +27,7 @@ export interface CurateOptions {
 
 export const DEFAULT_CURATE_OPTIONS: CurateOptions = {
   topN: 5,
-  maxTokens: 500,
+  maxTokens: 700,
   maxContentChars: 500,
   scoreThreshold: 0.15,
   preferAbstract: true,

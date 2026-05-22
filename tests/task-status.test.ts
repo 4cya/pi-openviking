@@ -9,15 +9,7 @@ const defaultConfig: OpenVikingConfig = {
   apiKey: "dev",
   account: "default",
   user: "default",
-  autoRecallLimit: 10,
-  autoRecallTimeout: 5000,
-  autoRecallTopN: 5,
-  openVikingAutoRecall: true,
-  autoRecallScoreThreshold: 0.15,
-  autoRecallMaxContentChars: 500,
-  autoRecallPreferAbstract: true,
-  autoRecallTokenBudget: 500,
-    healthPath: "/health",
+  healthPath: "/health",
 };
 
 function mockTransport() {
@@ -36,7 +28,7 @@ describe("getTaskStatus", () => {
     });
 
     const client = createClient(defaultConfig, transport);
-    const result = await client.getTaskStatus("task-1");
+    const result = await client.session.getTaskStatus("task-1");
 
     expect(transport.request).toHaveBeenCalledWith(
       "getTaskStatus",
@@ -56,7 +48,7 @@ describe("getTaskStatus", () => {
     });
 
     const client = createClient(defaultConfig, transport);
-    const result = await client.getTaskStatus("task-2");
+    const result = await client.session.getTaskStatus("task-2");
     expect(result.status).toBe("running");
   });
 
@@ -69,7 +61,7 @@ describe("getTaskStatus", () => {
     });
 
     const client = createClient(defaultConfig, transport);
-    const result = await client.getTaskStatus("task-3");
+    const result = await client.session.getTaskStatus("task-3");
     expect(result.status).toBe("failed");
     expect(result.error).toBe("extraction failed");
   });
@@ -80,7 +72,7 @@ describe("getTaskStatus", () => {
 
     const controller = new AbortController();
     const client = createClient(defaultConfig, transport);
-    await client.getTaskStatus("task-1", controller.signal);
+    await client.session.getTaskStatus("task-1", controller.signal);
     expect(transport.request).toHaveBeenCalledWith(
       "getTaskStatus",
       "/api/v1/tasks/task-1",
@@ -96,6 +88,6 @@ describe("getTaskStatus", () => {
     );
 
     const client = createClient(defaultConfig, transport);
-    await expect(client.getTaskStatus("bad-id")).rejects.toThrow("not found");
+    await expect(client.session.getTaskStatus("bad-id")).rejects.toThrow("not found");
   });
 });

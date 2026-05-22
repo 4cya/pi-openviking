@@ -9,15 +9,7 @@ const defaultConfig: OpenVikingConfig = {
   apiKey: "dev",
   account: "default",
   user: "default",
-  autoRecallLimit: 10,
-  autoRecallTimeout: 5000,
-  autoRecallTopN: 5,
-  openVikingAutoRecall: true,
-  autoRecallScoreThreshold: 0.15,
-  autoRecallMaxContentChars: 500,
-  autoRecallPreferAbstract: true,
-  autoRecallTokenBudget: 500,
-    healthPath: "/health",
+  healthPath: "/health",
 };
 
 function mockTransport() {
@@ -26,14 +18,14 @@ function mockTransport() {
   };
 }
 
-describe("OpenVikingClient", () => {
+describe("SessionClient", () => {
   describe("createSession", () => {
     test("returns session_id on success", async () => {
       const transport = mockTransport();
       transport.request.mockResolvedValue({ session_id: "sess-123" });
 
       const client = createClient(defaultConfig, transport);
-      const id = await client.createSession();
+      const id = await client.session.createSession();
       expect(id).toBe("sess-123");
       expect(transport.request).toHaveBeenCalledWith(
         "createSession",
@@ -50,7 +42,7 @@ describe("OpenVikingClient", () => {
       );
 
       const client = createClient(defaultConfig, transport);
-      await expect(client.createSession()).rejects.toThrow(
+      await expect(client.session.createSession()).rejects.toThrow(
         "OpenViking createSession failed: boom (HTTP 500)",
       );
     });
@@ -61,7 +53,7 @@ describe("OpenVikingClient", () => {
 
       const controller = new AbortController();
       const client = createClient(defaultConfig, transport);
-      await client.createSession(controller.signal);
+      await client.session.createSession(controller.signal);
       expect(transport.request).toHaveBeenCalledWith(
         "createSession",
         "/api/v1/sessions",
@@ -71,6 +63,84 @@ describe("OpenVikingClient", () => {
     });
   });
 
+  describe("sendMessage", () => {
+    test("sends correct body", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue({});
+
+      const client = createClient(defaultConfig, transport);
+      await client.session.sendMessage("sess-1", "user", "hello");
+      expect(transport.request).toHaveBeenCalledWith(
+        "sendMessage",
+        "/api/v1/sessions/sess-1/messages",
+        { body: { role: "user", content: "hello" } },
+        undefined,
+      );
+    });
+
+    test("sends parts body when content is Part array", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue({});
+
+      const client = createClient(defaultConfig, transport);
+      const parts = [{ type: "text" as const, text: "hello" }, { type: "tool_use" as const, id: "t1", name: "search", input: { query: "q" } }];
+      await client.session.sendMessage("sess-1", "user", parts);
+      expect(transport.request).toHaveBeenCalledWith(
+        "sendMessage",
+        "/api/v1/sessions/sess-1/messages",
+        { body: { role: "user", parts } },
+        undefined,
+      );
+    });
+  });
+
+  describe("commit", () => {
+    test("returns full CommitResult on success", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue({
+        session_id: "sess-1",
+        status: "committed",
+        task_id: "task-999",
+        archive_uri: "viking://archived/sess-1",
+        archived: true,
+        trace_id: "trace-999",
+      });
+
+      const client = createClient(defaultConfig, transport);
+      const result = await client.session.commit("sess-1");
+      expect(transport.request).toHaveBeenCalledWith(
+        "commit",
+        "/api/v1/sessions/sess-1/commit",
+        { body: {}, timeout: 60000 },
+        undefined,
+      );
+      expect(result).toEqual({
+        session_id: "sess-1",
+        status: "committed",
+        task_id: "task-999",
+        archive_uri: "viking://archived/sess-1",
+        archived: true,
+        trace_id: "trace-999",
+      });
+    });
+
+    test("uses commitTimeout from config", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue({});
+
+      const client = createClient({ ...defaultConfig, commitTimeout: 120000 }, transport);
+      await client.session.commit("sess-1");
+      expect(transport.request).toHaveBeenCalledWith(
+        "commit",
+        expect.any(String),
+        expect.objectContaining({ timeout: 120000 }),
+        undefined,
+      );
+    });
+  });
+});
+
+describe("KnowledgeClient", () => {
   describe("search", () => {
     test("returns results on success", async () => {
       const transport = mockTransport();
@@ -81,7 +151,7 @@ describe("OpenVikingClient", () => {
       });
 
       const client = createClient(defaultConfig, transport);
-      const results = await client.search("sess-1", "test query");
+      const results = await client.knowledge.search("sess-1", "test query");
       expect(transport.request).toHaveBeenCalledWith(
         "search",
         "/api/v1/search/find",
@@ -104,7 +174,7 @@ describe("OpenVikingClient", () => {
       });
 
       const client = createClient(defaultConfig, transport);
-      const results = await client.search("sess-1", "deep query", 10, "deep");
+      const results = await client.knowledge.search("sess-1", "deep query", 10, "deep");
       expect(transport.request).toHaveBeenCalledWith(
         "search",
         "/api/v1/search/search",
@@ -119,7 +189,7 @@ describe("OpenVikingClient", () => {
       transport.request.mockResolvedValue({ memories: [], resources: [], total: 0 });
 
       const client = createClient(defaultConfig, transport);
-      await client.search(undefined, "query", 10, "deep");
+      await client.knowledge.search(undefined, "query", 10, "deep");
       expect(transport.request).toHaveBeenCalledWith(
         "search",
         "/api/v1/search/find",
@@ -137,7 +207,7 @@ describe("OpenVikingClient", () => {
       });
 
       const client = createClient(defaultConfig, transport);
-      await client.search("sess-1", "scoped", 5, "fast", "viking://resources/");
+      await client.knowledge.search("sess-1", "scoped", 5, "fast", "viking://resources/");
       expect(transport.request).toHaveBeenCalledWith(
         "search",
         "/api/v1/search/find",
@@ -151,256 +221,53 @@ describe("OpenVikingClient", () => {
       transport.request.mockResolvedValue({ memories: [], resources: [], total: 0 });
 
       const client = createClient(defaultConfig, transport);
-      await client.search("sess-1", "unscoped");
+      await client.knowledge.search("sess-1", "unscoped");
       const body = (transport.request.mock.calls[0] as any)[2]?.body;
       expect(body).not.toHaveProperty("target_uri");
     });
-  });
 
-  describe("sendMessage", () => {
-    test("sends correct body", async () => {
+    test("auto mode with session resolves to deep for complex query", async () => {
       const transport = mockTransport();
-      transport.request.mockResolvedValue({});
+      transport.request.mockResolvedValue({ memories: [], resources: [], total: 0 });
 
       const client = createClient(defaultConfig, transport);
-      await client.sendMessage("sess-1", "user", "hello");
+      const complexQuery = "What does this application do and how does it work?";
+      await client.knowledge.search("sess-1", complexQuery, 10, "auto");
       expect(transport.request).toHaveBeenCalledWith(
-        "sendMessage",
-        "/api/v1/sessions/sess-1/messages",
-        { body: { role: "user", content: "hello" } },
+        "search",
+        "/api/v1/search/search",
+        { body: { query: complexQuery, limit: 10, session_id: "sess-1", mode: "deep" } },
         undefined,
       );
     });
 
-    test("sends parts body when content is Part array", async () => {
+    test("auto mode without session resolves to fast for simple query", async () => {
       const transport = mockTransport();
-      transport.request.mockResolvedValue({});
+      transport.request.mockResolvedValue({ memories: [], resources: [], total: 0 });
 
       const client = createClient(defaultConfig, transport);
-      const parts = [{ type: "text" as const, text: "hello" }, { type: "tool_use" as const, id: "t1", name: "search", input: { query: "q" } }];
-      await client.sendMessage("sess-1", "user", parts);
+      await client.knowledge.search(undefined, "hello", 10, "auto");
       expect(transport.request).toHaveBeenCalledWith(
-        "sendMessage",
-        "/api/v1/sessions/sess-1/messages",
-        { body: { role: "user", parts } },
-        undefined,
-      );
-    });
-  });
-
-  describe("read", () => {
-    test("returns content on success", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue("# API Docs\n\nHello world");
-
-      const client = createClient(defaultConfig, transport);
-      const result = await client.read("viking://docs/api.md");
-      expect(transport.request).toHaveBeenCalledWith(
-        "read",
-        "/api/v1/content/read?uri=viking%3A%2F%2Fdocs%2Fapi.md",
-        undefined,
-        undefined,
-      );
-      expect(result.content).toBe("# API Docs\n\nHello world");
-    });
-
-    test("passes level in path", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue("abstract text");
-
-      const client = createClient(defaultConfig, transport);
-      const result = await client.read("viking://docs/api.md", "abstract");
-      expect(transport.request).toHaveBeenCalledWith(
-        "read",
-        "/api/v1/content/abstract?uri=viking%3A%2F%2Fdocs%2Fapi.md",
-        undefined,
-        undefined,
-      );
-      expect(result.content).toBe("abstract text");
-    });
-
-  });
-
-  describe("fsList", () => {
-    test("returns children on success", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue([
-        { uri: "viking://resources/docs/api.md", isDir: false, abstract: "API reference" },
-        { uri: "viking://resources/docs/guides/", isDir: true, abstract: "Guides" },
-      ]);
-
-      const client = createClient(defaultConfig, transport);
-      const result = await client.fsList("viking://resources/docs/");
-      expect(transport.request).toHaveBeenCalledWith(
-        "fsList",
-        "/api/v1/fs/ls?uri=viking%3A%2F%2Fresources%2Fdocs%2F",
-        undefined,
-        undefined,
-      );
-      expect(result.uri).toBe("viking://resources/docs/");
-      expect(result.children).toHaveLength(2);
-      expect(result.children[0].uri).toBe("viking://resources/docs/api.md");
-      expect(result.children[0].type).toBe("file");
-      expect(result.children[1].type).toBe("directory");
-    });
-
-    test("passes recursive=true as query param", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue([
-        { uri: "viking://resources/docs/api.md", isDir: false },
-      ]);
-
-      const client = createClient(defaultConfig, transport);
-      await client.fsList("viking://resources/docs/", undefined, true);
-      expect(transport.request).toHaveBeenCalledWith(
-        "fsList",
-        "/api/v1/fs/ls?uri=viking%3A%2F%2Fresources%2Fdocs%2F&recursive=true",
-        undefined,
+        "search",
+        "/api/v1/search/find",
+        { body: { query: "hello", limit: 10 } },
         undefined,
       );
     });
 
-    test("passes simple=true as query param", async () => {
+    test("auto mode with session resolves to fast for simple query", async () => {
       const transport = mockTransport();
-      transport.request.mockResolvedValue([
-        { uri: "viking://resources/docs/api.md", isDir: false },
-      ]);
+      transport.request.mockResolvedValue({ memories: [], resources: [], total: 0 });
 
       const client = createClient(defaultConfig, transport);
-      await client.fsList("viking://resources/docs/", undefined, undefined, true);
+      await client.knowledge.search("sess-1", "hello", 10, "auto");
       expect(transport.request).toHaveBeenCalledWith(
-        "fsList",
-        "/api/v1/fs/ls?uri=viking%3A%2F%2Fresources%2Fdocs%2F&simple=true",
-        undefined,
+        "search",
+        "/api/v1/search/find",
+        { body: { query: "hello", limit: 10, session_id: "sess-1" } },
         undefined,
       );
     });
-
-    test("passes both recursive and simple when provided", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue([
-        { uri: "viking://resources/docs/api.md", isDir: false },
-      ]);
-
-      const client = createClient(defaultConfig, transport);
-      await client.fsList("viking://resources/docs/", undefined, true, true);
-      const url = (transport.request.mock.calls[0] as any)[1];
-      expect(url).toContain("recursive=true");
-      expect(url).toContain("simple=true");
-      expect(url).toContain("uri=");
-    });
-
-    test("omits params when not provided", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue([]);
-
-      const client = createClient(defaultConfig, transport);
-      await client.fsList("viking://resources/docs/");
-      const url = (transport.request.mock.calls[0] as any)[1] as string;
-      expect(url).not.toContain("recursive");
-      expect(url).not.toContain("simple");
-    });
-
-  });
-
-  describe("fsTree", () => {
-    test("returns tree on success", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue([{ uri: "viking://resources/docs/", isDir: true }]);
-
-      const client = createClient(defaultConfig, transport);
-      const result = await client.fsTree("viking://resources/");
-      expect(transport.request).toHaveBeenCalledWith(
-        "fsTree",
-        "/api/v1/fs/tree?uri=viking%3A%2F%2Fresources%2F",
-        undefined,
-        undefined,
-      );
-      expect(result.uri).toBe("viking://resources/");
-      expect(result.children).toHaveLength(1);
-      expect(result.children[0].type).toBe("directory");
-    });
-
-  });
-
-  describe("fsStat", () => {
-    test("returns stat on success", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue({
-        name: "file.md",
-        size: 42,
-        mode: 420,
-        modTime: "2026-04-30T00:00:00Z",
-        isDir: false,
-      });
-
-      const client = createClient(defaultConfig, transport);
-      const result = await client.fsStat("viking://resources/file.md");
-      expect(transport.request).toHaveBeenCalledWith(
-        "fsStat",
-        "/api/v1/fs/stat?uri=viking%3A%2F%2Fresources%2Ffile.md",
-        undefined,
-        undefined,
-      );
-      expect(result.uri).toBe("viking://resources/file.md");
-      expect(result.children[0].type).toBe("file");
-    });
-
-    test("returns directory type when isDir", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue({ name: "docs", isDir: true });
-
-      const client = createClient(defaultConfig, transport);
-      const result = await client.fsStat("viking://resources/docs/");
-      expect(result.children[0].type).toBe("directory");
-    });
-
-  });
-
-  describe("commit", () => {
-    test("returns full CommitResult on success", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue({
-        session_id: "sess-1",
-        status: "committed",
-        task_id: "task-999",
-        archive_uri: "viking://archived/sess-1",
-        archived: true,
-        trace_id: "trace-999",
-      });
-
-      const client = createClient(defaultConfig, transport);
-      const result = await client.commit("sess-1");
-      expect(transport.request).toHaveBeenCalledWith(
-        "commit",
-        "/api/v1/sessions/sess-1/commit",
-        { body: {}, timeout: 60000 },
-        undefined,
-      );
-      expect(result).toEqual({
-        session_id: "sess-1",
-        status: "committed",
-        task_id: "task-999",
-        archive_uri: "viking://archived/sess-1",
-        archived: true,
-        trace_id: "trace-999",
-      });
-    });
-
-    test("uses commitTimeout from config", async () => {
-      const transport = mockTransport();
-      transport.request.mockResolvedValue({});
-
-      const client = createClient({ ...defaultConfig, commitTimeout: 120000 }, transport);
-      await client.commit("sess-1");
-      expect(transport.request).toHaveBeenCalledWith(
-        "commit",
-        expect.any(String),
-        expect.objectContaining({ timeout: 120000 }),
-        undefined,
-      );
-    });
-
   });
 
   describe("addResource", () => {
@@ -409,7 +276,7 @@ describe("OpenVikingClient", () => {
       transport.request.mockResolvedValue({ root_uri: "viking://resources/foo.md", status: "success", errors: [] });
 
       const client = createClient(defaultConfig, transport);
-      const result = await client.addResource({ path: "https://example.com/doc.md", reason: "import" });
+      const result = await client.knowledge.addResource({ path: "https://example.com/doc.md", reason: "import" });
       expect(transport.request).toHaveBeenCalledWith(
         "addResource",
         "/api/v1/resources",
@@ -419,7 +286,6 @@ describe("OpenVikingClient", () => {
       expect(result.root_uri).toBe("viking://resources/foo.md");
       expect(result.status).toBe("success");
     });
-
   });
 
   describe("tempUpload", () => {
@@ -428,7 +294,7 @@ describe("OpenVikingClient", () => {
       transport.request.mockResolvedValue({ temp_file_id: "tmp-abc" });
 
       const client = createClient(defaultConfig, transport);
-      const result = await client.tempUpload("file contents", "notes.md");
+      const result = await client.knowledge.tempUpload("file contents", "notes.md");
       expect(transport.request).toHaveBeenCalledWith(
         "tempUpload",
         "/api/v1/resources/temp_upload",
@@ -443,7 +309,7 @@ describe("OpenVikingClient", () => {
       transport.request.mockResolvedValue({ temp_file_id: "tmp-bin" });
 
       const client = createClient(defaultConfig, transport);
-      const result = await client.tempUpload(new Uint8Array([1, 2, 3]), "data.bin");
+      const result = await client.knowledge.tempUpload(new Uint8Array([1, 2, 3]), "data.bin");
       expect(transport.request).toHaveBeenCalledWith(
         "tempUpload",
         "/api/v1/resources/temp_upload",
@@ -452,6 +318,85 @@ describe("OpenVikingClient", () => {
       );
       expect(result.temp_file_id).toBe("tmp-bin");
     });
+  });
+});
 
+describe("FsClient", () => {
+  describe("read", () => {
+    test("returns content on success", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue("# API Docs\n\nHello world");
+
+      const client = createClient(defaultConfig, transport);
+      const result = await client.fs.read("viking://docs/api.md");
+      expect(transport.request).toHaveBeenCalledWith(
+        "read",
+        "/api/v1/content/read?uri=viking%3A%2F%2Fdocs%2Fapi.md",
+        undefined,
+        undefined,
+      );
+      expect(result.content).toBe("# API Docs\n\nHello world");
+    });
+  });
+
+  describe("fsList", () => {
+    test("returns children on success", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue([
+        { uri: "viking://resources/docs/api.md", isDir: false, abstract: "API reference" },
+        { uri: "viking://resources/docs/guides/", isDir: true, abstract: "Guides" },
+      ]);
+
+      const client = createClient(defaultConfig, transport);
+      const result = await client.fs.fsList("viking://resources/docs/");
+      expect(transport.request).toHaveBeenCalledWith(
+        "fsList",
+        "/api/v1/fs/ls?uri=viking%3A%2F%2Fresources%2Fdocs%2F",
+        undefined,
+        undefined,
+      );
+      expect(result.uri).toBe("viking://resources/docs/");
+      expect(result.children).toHaveLength(2);
+      expect(result.children[0].uri).toBe("viking://resources/docs/api.md");
+      expect(result.children[0].type).toBe("file");
+      expect(result.children[1].type).toBe("directory");
+    });
+  });
+
+  describe("fsTree", () => {
+    test("returns tree on success", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue([{ uri: "viking://resources/docs/", isDir: true }]);
+
+      const client = createClient(defaultConfig, transport);
+      const result = await client.fs.fsTree("viking://resources/");
+      expect(transport.request).toHaveBeenCalledWith(
+        "fsTree",
+        "/api/v1/fs/tree?uri=viking%3A%2F%2Fresources%2F",
+        undefined,
+        undefined,
+      );
+      expect(result.uri).toBe("viking://resources/");
+      expect(result.children).toHaveLength(1);
+      expect(result.children[0].type).toBe("directory");
+    });
+  });
+
+  describe("fsStat", () => {
+    test("returns stat on success", async () => {
+      const transport = mockTransport();
+      transport.request.mockResolvedValue({ name: "file.md", size: 42, isDir: false });
+
+      const client = createClient(defaultConfig, transport);
+      const result = await client.fs.fsStat("viking://resources/file.md");
+      expect(transport.request).toHaveBeenCalledWith(
+        "fsStat",
+        "/api/v1/fs/stat?uri=viking%3A%2F%2Fresources%2Ffile.md",
+        undefined,
+        undefined,
+      );
+      expect(result.uri).toBe("viking://resources/file.md");
+      expect(result.children[0].type).toBe("file");
+    });
   });
 });

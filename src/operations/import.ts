@@ -1,4 +1,4 @@
-import type { OpenVikingClient } from "../ov-client/client";
+import type { KnowledgeClient } from "../ov-client/client";
 import { resolveSource } from "../importer/source-resolver";
 
 export interface ImportInput {
@@ -14,7 +14,7 @@ export interface ImportResult {
 }
 
 export async function importOp(
-  client: OpenVikingClient,
+  client: KnowledgeClient,
   input: ImportInput,
   signal?: AbortSignal,
 ): Promise<ImportResult> {

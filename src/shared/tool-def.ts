@@ -1,27 +1,29 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { TSchema, Static } from "typebox";
-import type { OpenVikingClient } from "../ov-client/client";
+import type { SessionClient, FsClient, KnowledgeClient } from "../ov-client/client";
 import type { SessionSyncLike } from "../session-sync/session";
 import type { HealthChecker } from "../shared/health";
+import { notifyOnce } from "../shared/notify";
 
 export interface ToolRegisterDeps {
-  client: OpenVikingClient;
+  session: SessionClient;
+  fs: FsClient;
+  knowledge: KnowledgeClient;
   sync: SessionSyncLike;
   healthChecker?: HealthChecker;
-  [key: string]: unknown;
 }
 
-export type ToolDeps = Record<string, unknown>;
+export type ToolDeps = ToolRegisterDeps;
 
-export interface ExecuteArgs<P extends TSchema, D extends ToolDeps> {
+export interface ExecuteArgs<P extends TSchema> {
   params: Static<P>;
-  deps: D;
+  deps: ToolRegisterDeps;
   signal?: AbortSignal;
   onUpdate?: ((result: any) => void);
   ctx?: unknown;
 }
 
-export interface ToolDef<P extends TSchema, D extends ToolDeps> {
+export interface ToolDef<P extends TSchema> {
   name: string;
   label: string;
   description: string;
@@ -29,17 +31,17 @@ export interface ToolDef<P extends TSchema, D extends ToolDeps> {
   promptGuidelines?: string[];
   parameters: P;
   validateUri?: boolean;
-  execute: (args: ExecuteArgs<P, D>) => Promise<{
+  execute: (args: ExecuteArgs<P>) => Promise<{
     text: string;
     details?: Record<string, unknown>;
     isError?: boolean;
   }>;
 }
 
-export function defineTool<P extends TSchema, D extends ToolDeps>(
+export function defineTool<P extends TSchema>(
   pi: ExtensionAPI,
-  deps: D,
-  def: ToolDef<P, D>,
+  deps: ToolRegisterDeps,
+  def: ToolDef<P>,
 ): void {
   pi.registerTool({
     name: def.name,
@@ -52,7 +54,7 @@ export function defineTool<P extends TSchema, D extends ToolDeps>(
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       try {
         // On-demand health recovery before tool execution
-        const hc = (deps as Record<string, unknown>).healthChecker as HealthChecker | undefined;
+        const hc = deps.healthChecker;
         if (hc && !hc.isAvailable()) {
           const recovered = await hc.check();
           if (!recovered) {
@@ -90,6 +92,7 @@ export function defineTool<P extends TSchema, D extends ToolDeps>(
         };
       } catch (err) {
         const msg = (err as Error).message;
+        notifyOnce(ctx, `OpenViking error: ${msg}`, "error");
         return {
           content: [{ type: "text", text: msg }],
           details: {},

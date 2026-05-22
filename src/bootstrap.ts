@@ -1,5 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadConfig } from "./shared/config";
+import { loadConfig, loadAutoRecallConfig } from "./shared/config";
 import type { ToolRegisterDeps } from "./shared/tool-def";
 import { createClient } from "./ov-client/client";
 import { createTransport, type Transport } from "./ov-client/transport";
@@ -16,9 +15,11 @@ import { registerImportCommand } from "./commands/import";
 import { registerDeleteCommand } from "./commands/delete";
 import { registerRecallCommand } from "./commands/recall";
 import { registerCommitCommand } from "./commands/commit";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { CommandRegisterDeps } from "./commands/types";
 import { SessionSync } from "./session-sync/session";
 import { createAutoRecall } from "./auto-recall/auto-recall";
+import type { AutoRecallState } from "./auto-recall/auto-recall";
 import { createHealthChecker, type HealthChecker } from "./shared/health";
 
 export const TOOLS = [
@@ -30,7 +31,7 @@ export const TOOLS = [
   registerMemimportTool,
 ];
 
-export const COMMANDS = [
+export const COMMANDS: Array<(pi: ExtensionAPI, deps: CommandRegisterDeps) => void> = [
   registerSearchCommand,
   registerBrowseCommand,
   registerImportCommand,
@@ -58,8 +59,10 @@ export function bootstrapExtension(
   transport?: Transport,
 ): BootstrapResult {
   const config = loadConfig(ctx.cwd);
+  const recallConfig = loadAutoRecallConfig(ctx.cwd);
   const t = transport ?? createTransport(config);
   const client = createClient(config, t);
+  const { session: sessionClient, fs: fsClient, knowledge: knowledgeClient } = client;
 
   // Health check with graceful degradation
   const healthChecker = createHealthChecker(t, config.healthPath);
@@ -69,7 +72,7 @@ export function bootstrapExtension(
     logger.debug("initial health check:", ok ? "available" : "unavailable");
   });
 
-  const sessionSync = new SessionSync(client, {
+  const sessionSync = new SessionSync(sessionClient, {
     getSessionFile: () => ctx.sessionManager.getSessionFile(),
     getBranch: () => ctx.sessionManager.getBranch(),
     appendEntry: (type, data) => pi.appendEntry(type, data),
@@ -77,25 +80,15 @@ export function bootstrapExtension(
 
   logger.debug("session sync created");
 
-  const toolDeps: ToolRegisterDeps = { client, sync: sessionSync, healthChecker };
+  const toolDeps: ToolRegisterDeps = { session: sessionClient, fs: fsClient, knowledge: knowledgeClient, sync: sessionSync, healthChecker };
   for (const register of TOOLS) register(pi, toolDeps);
 
-  const autoRecallState = { enabled: config.openVikingAutoRecall };
+  const autoRecallState: { enabled: boolean } = recallConfig;
 
-  const cmdDeps: CommandRegisterDeps = { pi, client, sync: sessionSync, autoRecallState };
-  for (const register of COMMANDS) register(cmdDeps);
+  const cmdDeps: CommandRegisterDeps = { session: sessionClient, fs: fsClient, knowledge: knowledgeClient, sync: sessionSync, autoRecallState, healthChecker };
+  for (const register of COMMANDS) register(pi, cmdDeps);
 
-  const autoRecall = createAutoRecall(client, sessionSync, autoRecallState, {
-    limit: config.autoRecallLimit,
-    timeout: config.autoRecallTimeout,
-    topN: config.autoRecallTopN,
-    curateOptions: {
-      scoreThreshold: config.autoRecallScoreThreshold,
-      maxContentChars: config.autoRecallMaxContentChars,
-      preferAbstract: config.autoRecallPreferAbstract,
-      maxTokens: config.autoRecallTokenBudget,
-    },
-  });
+  const autoRecall = createAutoRecall(knowledgeClient, sessionSync, recallConfig);
   pi.on("before_agent_start", async (event) => {
     // On-demand recovery: re-check health if previously unavailable
     if (!healthChecker.isAvailable()) {

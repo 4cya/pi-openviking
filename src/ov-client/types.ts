@@ -68,6 +68,11 @@ export interface CommitResult {
   trace_id: string;
 }
 
+export interface DeleteResult {
+  uri: string;
+  verified: boolean;
+}
+
 export interface TaskStatus {
   task_id: string;
   status: string;
@@ -75,17 +80,27 @@ export interface TaskStatus {
   result?: Record<string, unknown>;
 }
 
-export interface OpenVikingClient {
+export interface SessionClient {
   createSession(signal?: AbortSignal): Promise<string>;
   sendMessage(sessionId: string, role: string, content: string | Part[], signal?: AbortSignal): Promise<void>;
-  search(sessionId: string | undefined, query: string, limit?: number, mode?: "fast" | "deep", target_uri?: string, signal?: AbortSignal): Promise<SearchResult>;
+  commit(sessionId: string, signal?: AbortSignal): Promise<CommitResult>;
+  getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus>;
+}
+
+export interface FsClient {
   read(uri: string, level?: "abstract" | "overview" | "read", signal?: AbortSignal): Promise<ReadResult>;
   fsList(uri: string, signal?: AbortSignal, recursive?: boolean, simple?: boolean): Promise<BrowseResult>;
   fsTree(uri: string, signal?: AbortSignal): Promise<BrowseResult>;
   fsStat(uri: string, signal?: AbortSignal): Promise<BrowseResult>;
-  commit(sessionId: string, signal?: AbortSignal): Promise<CommitResult>;
+}
+
+export interface KnowledgeClient {
+  search(sessionId: string | undefined, query: string, limit?: number, mode?: "auto" | "fast" | "deep", target_uri?: string, signal?: AbortSignal): Promise<SearchResult>;
   delete(uri: string, signal?: AbortSignal): Promise<{ uri: string }>;
+  verifiedDelete(uri: string, signal?: AbortSignal): Promise<DeleteResult>;
   addResource(params: { path?: string; temp_file_id?: string; parent?: string; reason?: string; kind?: "resource" | "skill" }, signal?: AbortSignal): Promise<{ root_uri: string; status: string; errors: string[] }>;
   tempUpload(fileBody: string | Uint8Array, filename: string, signal?: AbortSignal): Promise<{ temp_file_id: string }>;
-  getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus>;
 }
+
+/** @deprecated Use SessionClient | FsClient | KnowledgeClient instead */
+export interface OpenVikingClient extends SessionClient, FsClient, KnowledgeClient {}

@@ -14,8 +14,8 @@ beforeAll(async () => {
   serverUp = await isTestServerUp(config);
   if (!serverUp) return;
   try {
-    sessionId = await client.createSession();
-    await client.sendMessage(sessionId, "user", "hello from integration test");
+    sessionId = await client.session.createSession();
+    await client.session.sendMessage(sessionId, "user", "hello from integration test");
   } catch {
     serverUp = false;
   }
@@ -25,7 +25,7 @@ describe("memcommit integration", () => {
   test("commits session successfully via tool interface", async () => {
     if (!serverUp) return;
 
-    const sync = new SessionSync(client, {
+    const sync = new SessionSync(client.session, {
       getSessionFile: () => "test.session",
       getBranch: () => [],
       appendEntry: () => {},
@@ -38,7 +38,7 @@ describe("memcommit integration", () => {
       registerTool: vi.fn((def: unknown) => { tools.push(def); }),
       get tools() { return tools; },
     };
-    registerMemcommitTool(pi as any, { client, sync });
+    registerMemcommitTool(pi as any, { session: client.session, fs: client.fs, knowledge: client.knowledge, sync });
 
     const toolDef = pi.tools[0] as any;
     expect(toolDef).toBeDefined();

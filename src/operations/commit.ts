@@ -1,4 +1,4 @@
-import type { CommitResult, OpenVikingClient } from "../ov-client/client";
+import type { SessionClient } from "../ov-client/client";
 import type { SessionSyncLike } from "../session-sync/session";
 
 export interface CommitOpResult {
@@ -13,7 +13,7 @@ export interface CommitOpResult {
 }
 
 export interface CommitOpOpts {
-  client: OpenVikingClient;
+  client: SessionClient;
   wait?: boolean;
   pollInterval?: number;
   timeout?: number;

@@ -2,7 +2,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
-import { browseOp } from "../operations/browse";
 
 const MEMBROWSE_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to browse" }),
@@ -27,12 +26,18 @@ export function registerMembrowseTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
     validateUri: true,
 
     async execute({ params, deps, signal }) {
-      const result = await browseOp(deps.client, {
-        uri: params.uri,
-        view: params.view ?? "list",
-        recursive: params.recursive,
-        simple: params.simple,
-      }, signal);
+      let result;
+      switch (params.view ?? "list") {
+        case "tree":
+          result = await deps.fs.fsTree(params.uri, signal);
+          break;
+        case "stat":
+          result = await deps.fs.fsStat(params.uri, signal);
+          break;
+        default:
+          result = await deps.fs.fsList(params.uri, signal, params.recursive, params.simple);
+          break;
+      }
 
       const parts: string[] = [];
       parts.push(`URI: ${result.uri}`);

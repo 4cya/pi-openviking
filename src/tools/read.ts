@@ -29,11 +29,11 @@ export function registerMemreadTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
 
       let resolvedLevel = level;
       if (resolvedLevel === "auto") {
-        const stat = await deps.client.fsStat(params.uri, signal);
+        const stat = await deps.fs.fsStat(params.uri, signal);
         const entry = stat.children?.[0];
         resolvedLevel = entry?.type === "directory" ? "overview" : "read";
       }
-      const result = await deps.client.read(params.uri, resolvedLevel, signal);
+      const result = await deps.fs.read(params.uri, resolvedLevel, signal);
       return { text: result.content };
     },
   });

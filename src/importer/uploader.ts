@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { zipSync } from "fflate";
-import type { OpenVikingClient } from "../ov-client/client";
+import type { KnowledgeClient } from "../ov-client/client";
 
 const EXCLUDED_DIRS = new Set([".git", "node_modules"]);
 
@@ -12,7 +12,7 @@ export interface UploadDirectoryOptions {
 }
 
 export async function uploadDirectory(
-  client: OpenVikingClient,
+  client: KnowledgeClient,
   dirPath: string,
   options?: UploadDirectoryOptions,
   signal?: AbortSignal,

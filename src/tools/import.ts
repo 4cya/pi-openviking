@@ -26,7 +26,7 @@ export function registerMemimportTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
     parameters: MEMIMPORT_PARAMS,
 
     async execute({ params, deps, signal }) {
-      const result = await importOp(deps.client, {
+      const result = await importOp(deps.knowledge, {
         source: params.source,
         kind: params.kind ?? "resource",
         reason: params.reason,

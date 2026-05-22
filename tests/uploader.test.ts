@@ -2,6 +2,7 @@ import { describe, test, expect, vi } from "vitest";
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { KnowledgeClient } from "../src/ov-client/client";
 import { uploadDirectory } from "../src/importer/uploader";
 import { createMockClient } from "./mocks";
 
@@ -12,13 +13,16 @@ describe("uploadDirectory", () => {
     writeFileSync(join(tmpDir, "b.txt"), "world");
 
     const client = createMockClient({
-      addResource: vi.fn(async () => ({ root_uri: "viking://resources/dir", status: "success", errors: [] })),
+      knowledge: {
+        addResource: vi.fn(async () => ({ root_uri: "viking://resources/dir", status: "success", errors: [] })),
+      } as any,
     });
+    const kc: KnowledgeClient = client.knowledge;
 
     try {
-      const result = await uploadDirectory(client, tmpDir);
-      expect(client.tempUpload).toHaveBeenCalledOnce();
-      const [body, filename] = (client.tempUpload as ReturnType<typeof vi.fn>).mock.calls[0];
+      const result = await uploadDirectory(kc, tmpDir);
+      expect(kc.tempUpload).toHaveBeenCalledOnce();
+      const [body, filename] = (kc.tempUpload as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(body).toBeInstanceOf(Uint8Array);
       expect(body.length).toBeGreaterThan(0);
       expect(filename).toMatch(/\.zip$/);
@@ -39,16 +43,18 @@ describe("uploadDirectory", () => {
     writeFileSync(join(tmpDir, "readme.md"), "readme");
 
     const client = createMockClient({
-      addResource: vi.fn(async () => ({ root_uri: "viking://resources/dir", status: "success", errors: [] })),
+      knowledge: {
+        addResource: vi.fn(async () => ({ root_uri: "viking://resources/dir", status: "success", errors: [] })),
+      } as any,
     });
+    const kc: KnowledgeClient = client.knowledge;
 
     try {
-      await uploadDirectory(client, tmpDir);
-      const [body] = (client.tempUpload as ReturnType<typeof vi.fn>).mock.calls[0];
+      await uploadDirectory(kc, tmpDir);
+      const [body] = (kc.tempUpload as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(body).toBeInstanceOf(Uint8Array);
-      // We can't introspect the zip without unzipping, but we verify the call happened
-      expect(client.tempUpload).toHaveBeenCalledOnce();
-      expect(client.addResource).toHaveBeenCalledOnce();
+      expect(kc.tempUpload).toHaveBeenCalledOnce();
+      expect(kc.addResource).toHaveBeenCalledOnce();
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -59,16 +65,19 @@ describe("uploadDirectory", () => {
     writeFileSync(join(tmpDir, "x.txt"), "x");
 
     const client = createMockClient({
-      addResource: vi.fn(async () => ({ root_uri: "viking://agent/skills/dir", status: "success", errors: [] })),
+      knowledge: {
+        addResource: vi.fn(async () => ({ root_uri: "viking://agent/skills/dir", status: "success", errors: [] })),
+      } as any,
     });
+    const kc: KnowledgeClient = client.knowledge;
 
     try {
-      await uploadDirectory(client, tmpDir, {
+      await uploadDirectory(kc, tmpDir, {
         kind: "skill",
         reason: "test",
         parent: "viking://agent/skills/",
       });
-      expect(client.addResource).toHaveBeenCalledWith(
+      expect(kc.addResource).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: "skill",
           reason: "test",

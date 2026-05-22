@@ -1,24 +1,27 @@
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { CommandRegisterDeps } from "./types";
+import type { CommandResult } from "../shared/command-def";
+import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
 
-export function registerRecallCommand(deps: CommandRegisterDeps): void {
-  const { pi, autoRecallState } = deps;
-
-  pi.registerCommand("ov-recall", {
+export function registerRecallCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
+  defineCommand(pi, deps, {
+    name: "ov-recall",
+    label: "Recall",
     description: "Toggle auto-recall on or off for the current session",
-    handler: async (args, ctx) => {
+
+    async execute(args, _ctx, d): Promise<CommandResult> {
       const booleans = new Set(["status"]);
       const parsed = parseArgs(args, booleans);
 
       if ("status" in parsed.flags) {
-        const status = autoRecallState.enabled ? "enabled" : "disabled";
-        ctx.ui.notify(`Auto-recall is ${status} (session-only)`, "info");
-        return;
+        const status = d.autoRecallState.enabled ? "enabled" : "disabled";
+        return { type: "notify", message: `Auto-recall is ${status} (session-only)`, level: "info" };
       }
 
-      autoRecallState.enabled = !autoRecallState.enabled;
-      const status = autoRecallState.enabled ? "enabled" : "disabled";
-      ctx.ui.notify(`Auto-recall ${status} for this session. Resets on reload.`, "info");
+      d.autoRecallState.enabled = !d.autoRecallState.enabled;
+      const status = d.autoRecallState.enabled ? "enabled" : "disabled";
+      return { type: "notify", message: `Auto-recall ${status} for this session. Resets on reload.`, level: "info" };
     },
   });
 }

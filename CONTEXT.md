@@ -12,7 +12,7 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 |------|---------|
 | **pi** | The coding agent harness (session manager, tools, prompt builder) |
 | **OV** | OpenViking server — context database with filesystem paradigm |
-| **auto-recall** | Before each agent turn, inject relevant memories into systemPrompt via `<relevant-memories>` block. Deep mode when OV session exists, fast mode otherwise. Token budget ~500 tokens. Configurable per project (`openVikingAutoRecall`). Uses **Recall Curator** for multi-factor ranking, dedup, and budget trimming. |
+| **auto-recall** | Before each agent turn, inject relevant memories into systemPrompt via `<relevant-memories>` block. Deep mode when OV session exists, fast mode otherwise. Token budget ~700 tokens. Configurable per project (`openVikingAutoRecall`). Uses **Recall Curator** for multi-factor ranking, dedup, and budget trimming. |
 | **Session Sync** | One-to-one mapping between a pi session and an OV session. Lazily creates OV session, streams user/assistant text-only messages incrementally. |
 | **memsearch** | Tool: semantic search across OV memories, resources, and skills. Returns raw JSON (`total`, `memories`, `resources`, `skills`, `query_plan`). Supports `mode` (auto/fast/deep). Auto mode uses `Search Mode Resolver`. |
 | **memread** | Tool: read content at a viking:// URI (L0 abstract, L1 overview, L2 full). Auto-detects level from stat (dir → overview, file → read). |
@@ -20,7 +20,7 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 | **memcommit** | Tool: commit current session to OV, triggering memory extraction. Fire-and-forget (returns task_id). |
 | **memimport** | Tool: import resource or skill into OV. Sources: URLs, local files, local directories (via temp_upload + zip). Optional `kind: "resource" \| "skill"`. Fire-and-forget. |
 | **memdelete** | Tool: remove by viking:// URI. No search-then-delete. |
-| **Operation** | Pure business-logic function in `src/operations/` that calls the Client Adapter and returns raw data. Operations: browse, search, commit, delete, import. Each written once — tools and commands are thin adapters that call the operation and format the result. **Exception:** `memread` calls Client Adapter directly (no operation wrapper — read is a simple passthrough). |
+| **Operation** | Pure business-logic function in `src/operations/` that calls the Client Adapter and returns raw data. Operations: commit, import. Each written once — tools and commands are thin adapters that call the operation and format the result. Simple passthroughs (search, browse, read) call the Client Adapter directly — no operation wrapper needed. Delete uses `client.verifiedDelete()` which combines delete + post-verification search. |
 | **Transport** | Low-level HTTP module for OpenViking. Handles fetch, timeout/abort merge, JSON envelope parsing, and `OpenVikingError` classification. Interface: `request(methodLabel, path, opts?, signal?)`. |
 | **Client Adapter** | `createClient` (ov-client/client.ts) + modular operation factories: `createFsOps` (fs-ops.ts) for filesystem ops, `createSessionOps` (session-ops.ts) for session/commit ops. All share a `Transport` instance. Maps domain operations (`search`, `read`, `fsList`, `commit`, etc.) to HTTP calls. |
 | **Search Mode Resolver** | `resolveSearchMode` — decides between `fast` and `deep` for auto mode. Deep if session exists, else deep if query is complex (`?`, length ≥ 80, wordCount ≥ 8), else fast. |
@@ -28,7 +28,7 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 | **Command** | User-facing CLI adapter (`/ov-search`, `/ov-ls`, etc.). Parses CLI args via `parseArgs`, calls the corresponding operation, formats output for humans via `formatSearch`/`formatBrowse`, and sends via `pi.sendMessage`. |
 | **Bootstrap** | `bootstrapExtension` — one-time setup per extension lifetime. Loads config, creates client and sessionSync, registers tools and commands, wires auto-recall. Returns `{ sessionSync }` for lifecycle delegation. |
 | **Recall Curator** | `curate` — multi-factor ranking and dedup pipeline for search results. Takes raw `SearchResult` + query + options, produces `RecallItem[]`. Scoring: base + leaf boost (0.12) + temporal boost (0.10) + preference boost (0.08) + lexical overlap (max 0.20). Deduplicates by abstract for non-event categories, by URI for events/cases/resources. Prefers leaf items, truncates content, trims to token budget. Pure function — zero network calls, fully testable. |
-| **Auto Recall Options** | Configurable parameters for `createAutoRecall`: `limit` (search results, default 10), `timeout` (ms, default 5000), `topN` (max memories injected, default 5). Set via `openVikingAutoRecallLimit/Timeout/TopN` in `.pi/settings.json` or env vars. |
+| **Auto Recall Config** | `AutoRecallConfig` — structured config object with `{ enabled, limit, timeout, curator }`. Set via `loadAutoRecallConfig()` from `.pi/settings.json` or env vars. Defaults come from `DEFAULT_AUTO_RECALL_CONFIG` (which uses `DEFAULT_CURATE_OPTIONS`). |
 | **Resource** | External knowledge (docs, code, URLs) stored under `viking://resources/` |
 | **Skill** | Structured agent capability stored under `viking://agent/skills/` |
 | **Memory** | Long-term knowledge extracted from sessions (profile, preferences, entities, events, cases, patterns) |
@@ -46,17 +46,17 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 
 ## Design Decisions
 
-- **Operations layer** (`src/operations/`): business logic written once, called by both tools and commands. Operations return raw data. Tools format as JSON for agent reasoning; commands format as human-readable text. This is the seam — adding a third surface (e.g. MCP tool) reuses the operation without duplication.
+- **Operations layer** (`src/operations/`): business logic written once, called by both tools and commands. Only deep operations deserve a separate module: `commitOp` (flush + commit + polling loop + timeout) and `importOp` (source resolution + file/directory branching). Shallow passthroughs (search, browse, read, delete) call the Client Adapter directly — no operation wrapper needed. This avoids shallow modules where the interface matches the implementation.
 - Auto-recall and memsearch tool format search results differently **by design**: auto-recall produces compressed XML (`<relevant-memories>`) with dedup and token budget for system prompt injection; memsearch returns full JSON for agent reasoning. No shared formatter.
 
 - Pi keeps its own session history. OV does **not** reassemble it (no `assemble()` / `compact()` pattern).
-- Auto-recall runs on `before_agent_start` — searches OV with the user prompt, injects top results into systemPrompt with ~500 token budget.
+- Auto-recall runs on `before_agent_start` — searches OV with the user prompt, injects top results into systemPrompt with ~700 token budget.
 - Auto-recall uses **deep** mode when OV session exists, **fast** when not.
 - Auto-recall is **configurable per project** via `openVikingAutoRecall` setting (default true).
-- Recall Curator options: `scoreThreshold` (0.15), `maxContentChars` (500), `preferAbstract` (true), `tokenBudget` (500) — configurable via settings/env vars.
+- Recall Curator options: `scoreThreshold` (0.15), `maxContentChars` (500), `preferAbstract` (true), `tokenBudget` (700) — configurable via settings/env vars.
 - **Logging**: file-based via `appendFileSync` → `~/.pi/agent/pi-openviking.log` (or `OV_LOG_FILE` env). No `console.*` in `src/` — tests enforce this. (ADR-002)
 - **Shutdown**: `onShutdown()` is synchronous, zero I/O — only resets state. Commit is manual-only via `/ov-commit` or `memcommit` tool. (ADR-001)
-- **Commands surface**: 6 slash commands (`/ov-search`, `/ov-browse`, `/ov-import`, `/ov-delete`, `/ov-recall`, `/ov-commit`) — each calls the corresponding operation, formats output for humans.
+- **Commands surface**: 6 slash commands (`/ov-search`, `/ov-ls`, `/ov-import`, `/ov-delete`, `/ov-recall`, `/ov-commit`) — each calls the Client Adapter (or operation for commit/import) and formats output for humans.
 - **Unified deps**: Tools use `ToolRegisterDeps`, commands use `CommandRegisterDeps`. Bootstrap wires both from shared `client` + `sessionSync` + `autoRecallState`.
 - Session sync is incremental: each `message_end` sends enriched content to OV session — text, tool calls as `Part[]`, and truncated tool results with metadata prefix. (ADR-003)
 - Tool calls in assistant messages are sent as structured `Part[]` (native OV `tool_use`). Tool results are sent with `role: "toolResult"`, prefixed with `[tool: {name}, error: {bool}]`, truncated to 500 chars. Thinking content is discarded. (ADR-003)
@@ -71,6 +71,21 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 - `session.used()` — track which contexts/skills agent consumed. Low priority, easy to add later.
 - `grep`/`glob` search — can add if real need arises.
 - Multi-namespace parallel search (user + agent memories) — single global search for now.
+
+## Differences from OpenClaw Plugin
+
+OpenViking ships an official OpenClaw (Claude) plugin. This table documents the architectural split:
+
+| Feature | OpenClaw | pi-openviking | Rationale |
+|---------|----------|---------------|----------|
+| Session history source | OV reassembles via `assemble`/`compact` | Pi is source of truth | Pi already manages full history; no need to rebuild from OV |
+| Auto-commit | Threshold-based, fires when session grows | Manual-only (`/ov-commit`, `memcommit`) | `onShutdown()` must be sync zero-I/O; explicit commit avoids data loss |
+| Archive expansion | Reconstructs from compressed archives | Not needed | Pi keeps full branch history natively |
+| Multi-agent header | `X-OpenViking-Agent` for routing | Not sent | Single-agent setup; no multi-agent routing |
+| Multi-namespace search | Parallel search `user/` + `agent/` memories | Single global search | OV ranks across namespaces; separate searches add latency for marginal gain |
+| Tool call sync | Preserves tool calls | Structured `Part[]` (ADR-003) | OV-native format; tool results prefixed with metadata |
+| Reranking | Server-side via API | OV pipeline + local curator | No need for plugin-side reranking; curator handles dedup + budget |
+| Session used tracking | `session.used()` | Deferred | Low priority |
 
 ## Out of Scope (from OpenClaw plugin)
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { OpenVikingClient } from "../src/ov-client/client";
+import type { SessionClient } from "../src/ov-client/client";
 import type { OpenVikingConfig } from "../src/shared/config";
 
 const appendFileSyncMock = vi.fn();
@@ -16,31 +16,16 @@ function testConfig(): OpenVikingConfig {
     apiKey: "key",
     account: "acc",
     user: "u",
-    autoRecallLimit: 10,
-    autoRecallTimeout: 5000,
-    autoRecallTopN: 5,
-    openVikingAutoRecall: true,
-    autoRecallScoreThreshold: 0.15,
-    autoRecallMaxContentChars: 500,
-    autoRecallPreferAbstract: true,
-    autoRecallTokenBudget: 500,
     healthPath: "/health",
   };
 }
 
-function mockClient(overrides?: Partial<OpenVikingClient>): OpenVikingClient {
+function mockSessionClient(overrides?: Partial<SessionClient>): SessionClient {
   return {
     createSession: vi.fn().mockResolvedValue("sess-123"),
     sendMessage: vi.fn().mockResolvedValue(undefined),
-    search: vi.fn().mockResolvedValue({ memories: [], resources: [], skills: [], total: 0 }),
-    read: vi.fn().mockResolvedValue({ content: "" }),
-    fsList: vi.fn().mockResolvedValue({ uri: "", children: [] }),
-    fsTree: vi.fn().mockResolvedValue({ uri: "", children: [] }),
-    fsStat: vi.fn().mockResolvedValue({ uri: "", children: [] }),
-    commit: vi.fn().mockResolvedValue({ task_id: "t1", archived: true }),
-    delete: vi.fn().mockResolvedValue({ uri: "" }),
-    addResource: vi.fn().mockResolvedValue({ root_uri: "", status: "", errors: [] }),
-    tempUpload: vi.fn().mockResolvedValue({ temp_file_id: "" }),
+    commit: vi.fn().mockResolvedValue({ session_id: "s1", status: "committed", task_id: "t1", archive_uri: "viking://a/s1", archived: true, trace_id: "tr1" }),
+    getTaskStatus: vi.fn().mockResolvedValue({ task_id: "t1", status: "completed" }),
     ...overrides,
   };
 }
@@ -112,7 +97,7 @@ describe("Logging", () => {
   describe("Session Sync: error catch logs", () => {
     it("logs error when createSession throws", async () => {
       const { SessionSync } = await import("../src/session-sync/session");
-      const client = mockClient({
+      const client = mockSessionClient({
         createSession: vi.fn().mockRejectedValue(new Error("connection refused")),
       });
       const sync = new SessionSync(client, mockOpts());
@@ -126,7 +111,7 @@ describe("Logging", () => {
 
     it("logs error when sendMessage throws", async () => {
       const { SessionSync } = await import("../src/session-sync/session");
-      const client = mockClient();
+      const client = mockSessionClient();
       (client.createSession as ReturnType<typeof vi.fn>).mockResolvedValue("sess-err");
       (client.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("timeout"));
       const sync = new SessionSync(client, mockOpts());
@@ -151,7 +136,7 @@ describe("Logging", () => {
       };
       const client = createClient(testConfig(), mockTransport as any);
 
-      await client.commit("sess-abc");
+      await client.session.commit("sess-abc");
 
       const calls = appendFileSyncMock.mock.calls.map((c: unknown[]) => c[1] as string);
       expect(calls.some((c: string) => c.includes("commit: sess-abc"))).toBe(true);

@@ -27,22 +27,30 @@ function createMockCmdCtx() {
 }
 
 function registerAll(pi: ReturnType<typeof createMockPi>, overrides?: {
-  client?: ReturnType<typeof createMockClient>;
+  session?: Record<string, unknown>;
+  fs?: Record<string, unknown>;
+  knowledge?: Record<string, unknown>;
   sync?: ReturnType<typeof createMockSessionSync>;
   autoRecallState?: { enabled: boolean };
 }) {
-  const client = overrides?.client ?? createMockClient();
+  const { session, fs, knowledge } = createMockClient(
+    overrides
+      ? { session: overrides.session as any, fs: overrides.fs as any, knowledge: overrides.knowledge as any }
+      : undefined,
+  );
   const sync = overrides?.sync ?? createMockSessionSync();
   const autoRecallState = overrides?.autoRecallState ?? { enabled: true };
 
-  const deps: CommandRegisterDeps = { pi: pi as any, client, sync, autoRecallState };
-  for (const register of COMMANDS) register(deps);
+  const deps: CommandRegisterDeps = { session, fs, knowledge, sync, autoRecallState };
+  for (const register of COMMANDS) register(pi as any, deps);
 
-  return { pi, client, sync, autoRecallState };
+  return { pi, session, fs, knowledge, sync, autoRecallState };
 }
 
 function makeDeps(overrides?: {
-  client?: ReturnType<typeof createMockClient>;
+  session?: Record<string, unknown>;
+  fs?: Record<string, unknown>;
+  knowledge?: Record<string, unknown>;
   sync?: ReturnType<typeof createMockSessionSync>;
   autoRecallState?: { enabled: boolean };
 }) {
@@ -64,12 +72,18 @@ describe("COMMANDS registry", () => {
 
   describe("/ov-search", () => {
     test("searches and injects message", async () => {
-      const { pi, client } = makeDeps();
+      const search = vi.fn(async () => ({
+        memories: [],
+        resources: [{ uri: "viking://doc", score: 0.9, abstract: "doc" }],
+        skills: [],
+        total: 1,
+      }));
+      const { pi } = makeDeps({ knowledge: { search } as any });
       const cmd = pi.getCommand("ov-search");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("how does auth work", ctx);
-      expect(client.search).toHaveBeenCalledWith("ov-sess-1", "how does auth work", 10, "fast", undefined, undefined);
+      expect(search).toHaveBeenCalledWith("ov-sess-1", "how does auth work", 10, "auto", undefined);
       expect(pi.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({ customType: "ov-search", display: true }),
         expect.objectContaining({ triggerTurn: true, deliverAs: "steer" }),
@@ -77,12 +91,13 @@ describe("COMMANDS registry", () => {
     });
 
     test("parses flags", async () => {
-      const { pi, client } = makeDeps();
+      const search = vi.fn(async () => ({ memories: [], resources: [], skills: [], total: 0 }));
+      const { pi } = makeDeps({ knowledge: { search } as any });
       const cmd = pi.getCommand("ov-search");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("--deep --limit 20 --uri viking://docs auth flow", ctx);
-      expect(client.search).toHaveBeenCalledWith("ov-sess-1", "auth flow", 20, "deep", "viking://docs", undefined);
+      expect(search).toHaveBeenCalledWith("ov-sess-1", "auth flow", 20, "deep", "viking://docs");
     });
 
     test("notifies on missing query", async () => {
@@ -96,10 +111,8 @@ describe("COMMANDS registry", () => {
     });
 
     test("notifies on error", async () => {
-      const client = createMockClient({
-        search: vi.fn(async () => { throw new Error("search boom"); }),
-      });
-      const { pi } = makeDeps({ client });
+      const search = vi.fn(async () => { throw new Error("search boom"); });
+      const { pi } = makeDeps({ knowledge: { search } as any });
       const cmd = pi.getCommand("ov-search");
       const ctx = createMockCmdCtx();
 
@@ -110,12 +123,13 @@ describe("COMMANDS registry", () => {
 
   describe("/ov-ls", () => {
     test("lists and injects message", async () => {
-      const { pi, client } = makeDeps();
+      const fsList = vi.fn(async () => ({ uri: "viking://resources", children: [] }));
+      const { pi } = makeDeps({ fs: { fsList } as any });
       const cmd = pi.getCommand("ov-ls");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("viking://resources", ctx);
-      expect(client.fsList).toHaveBeenCalledWith("viking://resources", undefined, false, false);
+      expect(fsList).toHaveBeenCalledWith("viking://resources", undefined, undefined, undefined);
       expect(pi.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({ customType: "ov-ls", display: true }),
         expect.objectContaining({ triggerTurn: true, deliverAs: "steer" }),
@@ -123,41 +137,45 @@ describe("COMMANDS registry", () => {
     });
 
     test("uses tree flag", async () => {
-      const { pi, client } = makeDeps();
+      const fsTree = vi.fn(async () => ({ uri: "viking://resources", children: [] }));
+      const { pi } = makeDeps({ fs: { fsTree } as any });
       const cmd = pi.getCommand("ov-ls");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("--tree viking://resources", ctx);
-      expect(client.fsTree).toHaveBeenCalledWith("viking://resources", undefined);
+      expect(fsTree).toHaveBeenCalledWith("viking://resources");
     });
 
     test("uses stat flag", async () => {
-      const { pi, client } = makeDeps();
+      const fsStat = vi.fn(async () => ({ uri: "viking://resources/file.md", children: [] }));
+      const { pi } = makeDeps({ fs: { fsStat } as any });
       const cmd = pi.getCommand("ov-ls");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("--stat viking://resources/file.md", ctx);
-      expect(client.fsStat).toHaveBeenCalledWith("viking://resources/file.md", undefined);
+      expect(fsStat).toHaveBeenCalledWith("viking://resources/file.md");
     });
 
     test("defaults to viking://", async () => {
-      const { pi, client } = makeDeps();
+      const fsList = vi.fn(async () => ({ uri: "viking://", children: [] }));
+      const { pi } = makeDeps({ fs: { fsList } as any });
       const cmd = pi.getCommand("ov-ls");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("", ctx);
-      expect(client.fsList).toHaveBeenCalledWith("viking://", undefined, false, false);
+      expect(fsList).toHaveBeenCalledWith("viking://", undefined, undefined, undefined);
     });
   });
 
   describe("/ov-import", () => {
     test("imports URL and notifies", async () => {
-      const { pi, client } = makeDeps();
+      const addResource = vi.fn(async () => ({ root_uri: "viking://resources/doc", status: "success", errors: [] }));
+      const { pi } = makeDeps({ knowledge: { addResource } as any });
       const cmd = pi.getCommand("ov-import");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("https://example.com/docs", ctx);
-      expect(client.addResource).toHaveBeenCalled();
+      expect(addResource).toHaveBeenCalled();
       expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("✓ Imported:"), "info");
     });
 
@@ -173,12 +191,13 @@ describe("COMMANDS registry", () => {
 
   describe("/ov-delete", () => {
     test("deletes and notifies", async () => {
-      const { pi, client } = makeDeps();
+      const verifiedDelete = vi.fn(async () => ({ uri: "viking://resources/old", verified: true }));
+      const { pi } = makeDeps({ knowledge: { verifiedDelete } as any });
       const cmd = pi.getCommand("ov-delete");
       const ctx = createMockCmdCtx();
 
       await cmd.handler("viking://resources/old", ctx);
-      expect(client.delete).toHaveBeenCalledWith("viking://resources/old", undefined);
+      expect(verifiedDelete).toHaveBeenCalledWith("viking://resources/old");
       expect(ctx.ui.notify).toHaveBeenCalledWith("✓ Deleted: viking://resources/old", "info");
     });
 
@@ -194,7 +213,7 @@ describe("COMMANDS registry", () => {
 
   describe("/ov-recall", () => {
     test("toggles state", async () => {
-      const { autoRecallState } = makeDeps({ autoRecallState: { enabled: true } });
+      const autoRecallState = { enabled: true };
       const pi = createMockPi();
       registerAll(pi, { autoRecallState });
       const cmd = pi.getCommand("ov-recall");
@@ -207,7 +226,7 @@ describe("COMMANDS registry", () => {
     });
 
     test("shows status", async () => {
-      const { autoRecallState } = makeDeps({ autoRecallState: { enabled: false } });
+      const autoRecallState = { enabled: false };
       const pi = createMockPi();
       registerAll(pi, { autoRecallState });
       const cmd = pi.getCommand("ov-recall");

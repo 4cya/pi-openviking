@@ -1,53 +1,35 @@
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { CommandRegisterDeps } from "./types";
-import { logger } from "../shared/logger";
+import type { CommandResult } from "../shared/command-def";
+import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
 import { formatSearch } from "../shared/format-search";
-import { searchOp } from "../operations/search";
 
-export function registerSearchCommand(deps: CommandRegisterDeps): void {
-  const { pi, client, sync } = deps;
-
-  pi.registerCommand("ov-search", {
+export function registerSearchCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
+  defineCommand(pi, deps, {
+    name: "ov-search",
+    label: "Search",
     description: "Search OpenViking memories and resources",
-    handler: async (args, ctx) => {
-      try {
-        const booleans = new Set(["deep", "fast"]);
-        const parsed = parseArgs(args, booleans);
-        const query = parsed.positional.join(" ") || "";
-        if (!query) {
-          ctx.ui.notify("Usage: /ov-search [--deep|--fast] [--limit N] [--uri <uri>] <query>", "error");
-          return;
-        }
+    healthChecker: deps.healthChecker,
 
-        const limit = parsed.flags.limit ? parseInt(parsed.flags.limit, 10) : 10;
-        const mode = "deep" in parsed.flags ? "deep" : "fast" in parsed.flags ? "fast" : "auto";
-        const uri = parsed.flags.uri;
-        const sessionId = sync.getOvSessionId();
-
-        const results = await searchOp(client, {
-          query,
-          limit,
-          mode,
-          uri,
-          sessionId: sessionId ?? undefined,
-        });
-
-        const text = formatSearch(results, query);
-
-        pi.sendMessage(
-          {
-            customType: "ov-search",
-            content: [{ type: "text", text }],
-            display: true,
-            details: { total: results.total },
-          },
-          { triggerTurn: true, deliverAs: "steer" },
-        );
-      } catch (err) {
-        const msg = (err as Error).message;
-        logger.error("ov-search command failed:", msg);
-        ctx.ui.notify(`✗ Search failed: ${msg}`, "error");
+    async execute(args, _ctx, d): Promise<CommandResult> {
+      const booleans = new Set(["deep", "fast"]);
+      const parsed = parseArgs(args, booleans);
+      const query = parsed.positional.join(" ") || "";
+      if (!query) {
+        return { type: "notify", message: "Usage: /ov-search [--deep|--fast] [--limit N] [--uri <uri>] <query>", level: "error" };
       }
+
+      const rawLimit = parseInt(parsed.flags.limit ?? "", 10);
+      const limit = Number.isFinite(rawLimit) ? rawLimit : 10;
+      const mode = "deep" in parsed.flags ? "deep" : "fast" in parsed.flags ? "fast" : "auto";
+      const uri = parsed.flags.uri;
+      const sessionId = d.sync.getOvSessionId();
+
+      const results = await d.knowledge.search(sessionId, query, limit, mode, uri);
+      const text = formatSearch(results, query);
+
+      return { type: "steer", customType: "ov-search", text, details: { total: results.total } };
     },
   });
 }

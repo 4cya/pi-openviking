@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig } from "../src/shared/config";
+import { loadConfig, loadAutoRecallConfig } from "../src/shared/config";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -42,14 +42,6 @@ describe("loadConfig", () => {
       apiKey: "dev",
       account: "default",
       user: "default",
-      autoRecallLimit: 10,
-      autoRecallTimeout: 5000,
-      autoRecallTopN: 5,
-      openVikingAutoRecall: true,
-      autoRecallScoreThreshold: 0.15,
-      autoRecallMaxContentChars: 500,
-      autoRecallPreferAbstract: true,
-      autoRecallTokenBudget: 700,
       healthPath: "/health",
     });
   });
@@ -76,14 +68,6 @@ describe("loadConfig", () => {
       apiKey: "my-key",
       account: "acme",
       user: "alice",
-      autoRecallLimit: 20,
-      autoRecallTimeout: 10000,
-      autoRecallTopN: 3,
-      openVikingAutoRecall: true,
-      autoRecallScoreThreshold: 0.15,
-      autoRecallMaxContentChars: 500,
-      autoRecallPreferAbstract: true,
-      autoRecallTokenBudget: 700,
       healthPath: "/health",
     });
   });
@@ -113,14 +97,6 @@ describe("loadConfig", () => {
       apiKey: "my-key",
       account: "acme",
       user: "alice",
-      autoRecallLimit: 10,
-      autoRecallTimeout: 5000,
-      autoRecallTopN: 5,
-      openVikingAutoRecall: true,
-      autoRecallScoreThreshold: 0.15,
-      autoRecallMaxContentChars: 500,
-      autoRecallPreferAbstract: true,
-      autoRecallTokenBudget: 700,
       healthPath: "/health",
     });
   });
@@ -133,34 +109,96 @@ describe("loadConfig", () => {
 
     expect(config.endpoint).toBe("http://env-only:1933");
     expect(config.timeout).toBe(30000);
-    expect(config.autoRecallLimit).toBe(10);
-    expect(config.autoRecallTimeout).toBe(5000);
-    expect(config.autoRecallTopN).toBe(5);
+  });
+});
+
+describe("loadAutoRecallConfig", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    testDir = join(tmpdir(), `ov-test-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
   });
 
-  test("env vars override auto-recall defaults", () => {
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  function writeSettings(settings: Record<string, unknown>) {
+    mkdirSync(join(testDir, ".pi"), { recursive: true });
+    writeFileSync(join(testDir, ".pi", "settings.json"), JSON.stringify(settings));
+  }
+
+  test("returns defaults when no settings file or env", () => {
+    delete process.env.OPENVIKING_AUTO_RECALL;
+
+    const config = loadAutoRecallConfig(testDir);
+
+    expect(config.enabled).toBe(true);
+    expect(config.limit).toBe(10);
+    expect(config.timeout).toBe(5000);
+    expect(config.curator.topN).toBe(5);
+    expect(config.curator.maxTokens).toBe(700);
+    expect(config.curator.maxContentChars).toBe(500);
+    expect(config.curator.scoreThreshold).toBe(0.15);
+    expect(config.curator.preferAbstract).toBe(true);
+  });
+
+  test("merges .pi/settings.json values over defaults", () => {
+    writeSettings({
+      openVikingAutoRecall: false,
+      openVikingAutoRecallLimit: 25,
+      openVikingAutoRecallTimeout: 20000,
+      openVikingAutoRecallTopN: 3,
+      openVikingAutoRecallTokenBudget: 1000,
+      openVikingAutoRecallScoreThreshold: 0.3,
+    });
+
+    const config = loadAutoRecallConfig(testDir);
+
+    expect(config.enabled).toBe(false);
+    expect(config.limit).toBe(25);
+    expect(config.timeout).toBe(20000);
+    expect(config.curator.topN).toBe(3);
+    expect(config.curator.maxTokens).toBe(1000);
+    expect(config.curator.scoreThreshold).toBe(0.3);
+    expect(config.curator.maxContentChars).toBe(500); // not set in settings
+  });
+
+  test("settings.json overrides env vars", () => {
+    writeSettings({ openVikingAutoRecallLimit: 20 });
+    process.env.OPENVIKING_AUTO_RECALL_LIMIT = "99";
+
+    const config = loadAutoRecallConfig(testDir);
+
+    expect(config.limit).toBe(20); // settings > env
+  });
+
+  test("env vars work without settings.json", () => {
     process.env.OPENVIKING_AUTO_RECALL_LIMIT = "20";
     process.env.OPENVIKING_AUTO_RECALL_TIMEOUT = "10000";
     process.env.OPENVIKING_AUTO_RECALL_TOPN = "3";
 
-    const config = loadConfig(testDir);
+    const config = loadAutoRecallConfig(testDir);
 
-    expect(config.autoRecallLimit).toBe(20);
-    expect(config.autoRecallTimeout).toBe(10000);
-    expect(config.autoRecallTopN).toBe(3);
+    expect(config.limit).toBe(20);
+    expect(config.timeout).toBe(10000);
+    expect(config.curator.topN).toBe(3);
   });
 
   test("openVikingAutoRecall setting can be disabled", () => {
     writeSettings({ openVikingAutoRecall: false });
 
-    const config = loadConfig(testDir);
-    expect(config.openVikingAutoRecall).toBe(false);
+    const config = loadAutoRecallConfig(testDir);
+    expect(config.enabled).toBe(false);
   });
 
   test("env var OPENVIKING_AUTO_RECALL overrides default", () => {
     process.env.OPENVIKING_AUTO_RECALL = "false";
 
-    const config = loadConfig(testDir);
-    expect(config.openVikingAutoRecall).toBe(false);
+    const config = loadAutoRecallConfig(testDir);
+    expect(config.enabled).toBe(false);
   });
 });

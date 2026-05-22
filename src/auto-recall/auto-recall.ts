@@ -1,4 +1,4 @@
-import type { OpenVikingClient } from "../ov-client/client";
+import type { KnowledgeClient } from "../ov-client/client";
 import type { SessionSyncLike } from "../session-sync/session";
 import { logger } from "../shared/logger";
 import { curate, DEFAULT_CURATE_OPTIONS, type CurateOptions, type RecallItem } from "./recall-curator";
@@ -7,12 +7,19 @@ export interface AutoRecallState {
   enabled: boolean;
 }
 
-export interface AutoRecallOptions {
-  limit?: number;
-  timeout?: number;
-  topN?: number;
-  curateOptions?: Partial<CurateOptions>;
+export interface AutoRecallConfig {
+  enabled: boolean;
+  limit: number;
+  timeout: number;
+  curator: CurateOptions;
 }
+
+export const DEFAULT_AUTO_RECALL_CONFIG: AutoRecallConfig = {
+  enabled: true,
+  limit: 10,
+  timeout: 5000,
+  curator: DEFAULT_CURATE_OPTIONS,
+};
 
 export interface AutoRecallEvent {
   prompt: string;
@@ -20,29 +27,23 @@ export interface AutoRecallEvent {
 }
 
 export function createAutoRecall(
-  client: OpenVikingClient,
+  client: KnowledgeClient,
   sessionSync: SessionSyncLike,
-  state: AutoRecallState,
-  options?: AutoRecallOptions,
+  config: AutoRecallConfig,
 ): (event: AutoRecallEvent) => Promise<{ systemPrompt?: string }> {
-  const limit = options?.limit ?? 10;
-  const timeoutMs = options?.timeout ?? 5000;
-  const curateOptions: CurateOptions = {
-    ...DEFAULT_CURATE_OPTIONS,
-    topN: options?.topN ?? DEFAULT_CURATE_OPTIONS.topN,
-    ...options?.curateOptions,
-  };
+  const limit = config.limit;
+  const timeoutMs = config.timeout;
+  const curateOptions = config.curator;
 
   return async function autoRecall(event: AutoRecallEvent): Promise<{ systemPrompt?: string }> {
-    if (!state.enabled) return {};
+    if (!config.enabled) return {};
 
     const sessionId = sessionSync.getOvSessionId();
-    const mode = sessionId ? "deep" : "fast";
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const results = await client.search(sessionId, event.prompt, limit, mode, undefined, controller.signal);
+      const results = await client.search(sessionId, event.prompt, limit, "auto", undefined, controller.signal);
       const items = curate(results, event.prompt, curateOptions);
       if (items.length === 0) return {};
       const block = renderBlock(items);

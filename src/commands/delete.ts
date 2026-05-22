@@ -1,32 +1,28 @@
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { CommandRegisterDeps } from "./types";
-import { logger } from "../shared/logger";
+import type { CommandResult } from "../shared/command-def";
+import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
-import { deleteOp } from "../operations/delete";
 
-export function registerDeleteCommand(deps: CommandRegisterDeps): void {
-  const { pi, client } = deps;
-
-  pi.registerCommand("ov-delete", {
+export function registerDeleteCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
+  defineCommand(pi, deps, {
+    name: "ov-delete",
+    label: "Delete",
     description: "Delete a resource or directory from OpenViking by URI",
-    handler: async (args, ctx) => {
-      try {
-        const parsed = parseArgs(args);
-        const uri = parsed.positional[0];
-        if (!uri) {
-          ctx.ui.notify("Usage: /ov-delete <viking://uri>", "error");
-          return;
-        }
+    healthChecker: deps.healthChecker,
 
-        const result = await deleteOp(client, { uri });
-        const label = result.verified
-          ? `✓ Deleted: ${result.uri}`
-          : `✓ Deleted: ${result.uri} (warning: may still appear in search due to async index sync)`;
-        ctx.ui.notify(label, "info");
-      } catch (err) {
-        const msg = (err as Error).message;
-        logger.error("ov-delete command failed:", msg);
-        ctx.ui.notify(`✗ Delete failed: ${msg}`, "error");
+    async execute(args, _ctx, d): Promise<CommandResult> {
+      const parsed = parseArgs(args);
+      const uri = parsed.positional[0];
+      if (!uri) {
+        return { type: "notify", message: "Usage: /ov-delete <viking://uri>", level: "error" };
       }
+
+      const result = await d.knowledge.verifiedDelete(uri);
+      const message = result.verified
+        ? `✓ Deleted: ${result.uri}`
+        : `✓ Deleted: ${result.uri} (warning: resource may still appear in search due to async index sync)`;
+      return { type: "notify", message, level: "info" };
     },
   });
 }

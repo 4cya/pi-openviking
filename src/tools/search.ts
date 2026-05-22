@@ -2,8 +2,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
-import { notifyOnce } from "../shared/notify";
-import { searchOp } from "../operations/search";
 
 const SEARCH_PARAMS = Type.Object({
   query: Type.String({ description: "Search query to find relevant memories and resources" }),
@@ -30,37 +28,32 @@ export function registerMemsearchTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
     ],
     parameters: SEARCH_PARAMS,
 
-    async execute({ params, deps, signal, ctx }) {
-      try {
-        const sessionId = deps.sync.getOvSessionId();
-        const results = await searchOp(deps.client, {
-          query: params.query,
-          limit: params.limit ?? 10,
-          mode: params.mode ?? "auto",
-          uri: params.uri,
-          sessionId: sessionId ?? undefined,
-        }, signal);
+    async execute({ params, deps, signal }) {
+      const sessionId = deps.sync.getOvSessionId();
+      const results = await deps.knowledge.search(
+        sessionId ?? undefined,
+        params.query,
+        params.limit ?? 10,
+        params.mode ?? "auto",
+        params.uri,
+        signal,
+      );
 
-        if (results.total === 0) {
-          return { text: "No results found." };
-        }
-
-        const payload: Record<string, unknown> = {
-          total: results.total,
-          memories: results.memories,
-          resources: results.resources,
-          skills: results.skills ?? [],
-        };
-        if (results.query_plan) {
-          payload.query_plan = results.query_plan;
-        }
-
-        return { text: JSON.stringify(payload, null, 2) };
-      } catch (err) {
-        const msg = (err as Error).message;
-        notifyOnce(ctx, `OpenViking error: ${msg}`, "error");
-        return { text: msg, isError: true };
+      if (results.total === 0) {
+        return { text: "No results found." };
       }
+
+      const payload: Record<string, unknown> = {
+        total: results.total,
+        memories: results.memories,
+        resources: results.resources,
+        skills: results.skills ?? [],
+      };
+      if (results.query_plan) {
+        payload.query_plan = results.query_plan;
+      }
+
+      return { text: JSON.stringify(payload, null, 2) };
     },
   });
 }
