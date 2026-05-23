@@ -30,7 +30,7 @@ Pi coding agent is stateless between sessions. pi-openviking gives it persistent
 | `membrowse` | Browse the `viking://` filesystem — list, tree, or stat entries. |
 | `memcommit` | Commit current session to OpenViking. Triggers async memory extraction. Returns `task_id`. |
 | `memimport` | Import URL, local file, or directory (zipped) as a resource or skill. |
-| `memdelete` | Delete a resource, skill, or memory by `viking://` URI. |
+| `memdelete` | Delete a resource or skill by `viking://` URI. |
 
 ### Commands (user-facing)
 
@@ -48,11 +48,11 @@ Pi coding agent is stateless between sessions. pi-openviking gives it persistent
 Before each agent turn, the plugin:
 
 1. Searches OpenViking with the user's prompt.
-2. Ranks results with multi-factor scoring (relevance + recency + preference + lexical overlap).
+2. Ranks results with multi-factor scoring (relevance + leaf boost + temporal + preference + lexical overlap).
 3. Deduplicates and trims to token budget.
 4. Injects top results as `<relevant-memories>` XML block into the system prompt.
 
-Uses **deep** mode when an OV session exists, **fast** mode otherwise.
+Uses **deep** mode for complex queries (questions, long prompts, ≥8 words) when an OV session exists, **fast** mode for simple queries or when no session exists.
 
 ## Content Levels (L0 / L1 / L2)
 
@@ -64,7 +64,7 @@ OpenViking uses tiered content loading to manage context window budget:
 | L1 | Overview | ~2k tokens | Summary — understand without loading full content. |
 | L2 | Read | Full content | Deep read — retrieve complete document. |
 
-`memread` auto-detects level: directories → L1 overview, files → L2 full content. Override with `level` parameter.
+`memread` defaults to `auto` level: directories → L1 overview, files → L2 full content. Override with `level` parameter (`auto`, `abstract`, `overview`, `read`).
 
 ## Configuration
 
@@ -80,7 +80,8 @@ All settings cascade: **`.pi/settings.json` → environment variables → defaul
   "openVikingAutoRecallLimit": 10,
   "openVikingAutoRecallTimeout": 5000,
   "openVikingAutoRecallTopN": 5,
-  "openVikingAutoRecallTokenBudget": 500
+  "openVikingAutoRecallTokenBudget": 700
+  // ...see full settings reference below
 }
 ```
 
@@ -95,15 +96,16 @@ All settings cascade: **`.pi/settings.json` → environment variables → defaul
 | `openVikingTimeout` | `OPENVIKING_TIMEOUT` | `30000` | HTTP timeout (ms) for general requests |
 | `openVikingCommitTimeout` | `OPENVIKING_COMMIT_TIMEOUT` | `60000` | HTTP timeout (ms) for commit operations |
 | `openVikingHealthPath` | `OPENVIKING_HEALTH_PATH` | `/health` | Server health check endpoint |
-| `openVikingAutoRecall` | — | `true` | Enable/disable auto-recall |
-| `openVikingAutoRecallLimit` | — | `10` | Max search results from OV |
-| `openVikingAutoRecallTimeout` | — | `5000` | Auto-recall timeout (ms) |
-| `openVikingAutoRecallTopN` | — | `5` | Max memories injected into prompt |
-| `openVikingAutoRecallTokenBudget` | — | `500` | Token budget for auto-recall block |
-| `openVikingAutoRecallScoreThreshold` | — | `0.15` | Minimum relevance score |
-| `openVikingAutoRecallMaxContentChars` | — | `500` | Max chars per recalled item |
-| `openVikingAutoRecallPreferAbstract` | — | `true` | Prefer L0 abstract over full content |
+| `openVikingAutoRecall` | `OPENVIKING_AUTO_RECALL` | `true` | Enable/disable auto-recall |
+| `openVikingAutoRecallLimit` | `OPENVIKING_AUTO_RECALL_LIMIT` | `10` | Max search results from OV |
+| `openVikingAutoRecallTimeout` | `OPENVIKING_AUTO_RECALL_TIMEOUT` | `5000` | Auto-recall timeout (ms) |
+| `openVikingAutoRecallTopN` | `OPENVIKING_AUTO_RECALL_TOPN` | `5` | Max memories injected into prompt |
+| `openVikingAutoRecallTokenBudget` | `OPENVIKING_AUTO_RECALL_TOKEN_BUDGET` | `700` | Token budget for auto-recall block |
+| `openVikingAutoRecallScoreThreshold` | `OPENVIKING_AUTO_RECALL_SCORE_THRESHOLD` | `0.15` | Minimum relevance score |
+| `openVikingAutoRecallMaxContentChars` | `OPENVIKING_AUTO_RECALL_MAX_CONTENT_CHARS` | `500` | Max chars per recalled item |
+| `openVikingAutoRecallPreferAbstract` | `OPENVIKING_AUTO_RECALL_PREFER_ABSTRACT` | `true` | Prefer L0 abstract over full content |
 | — | `OV_LOG_FILE` | `~/.pi/agent/pi-openviking.log` | Log file path |
+| — | `OV_DEBUG` | `true` | Enable/disable debug logging |
 
 ## Design Decisions
 
@@ -113,7 +115,7 @@ Pi maintains its own session history. OpenViking does **not** reassemble it. The
 
 ### Commit is explicit
 
-Sessions are committed only when the user (or agent) explicitly calls `/ov-commit` or `memcommit`. No auto-commit on shutdown — `onShutdown()` is synchronous with zero I/O to avoid blocking Pi exit.
+Sessions are committed only when the user (or agent) explicitly calls `/ov-commit` or `memcommit`. No auto-commit on shutdown — `onShutdown()` does zero I/O (only resets in-memory state) to avoid blocking Pi exit.
 
 ### Health check with graceful degradation
 
@@ -227,6 +229,12 @@ Or set custom log path:
 
 ```bash
 export OV_LOG_FILE=/tmp/pi-ov.log
+```
+
+Enable debug logging:
+
+```bash
+export OV_DEBUG=true
 ```
 
 ### Auto-recall not working

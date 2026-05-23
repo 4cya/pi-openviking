@@ -105,11 +105,10 @@ export class SessionSync implements SessionSyncLike {
     this.consecutiveFailures = 0;
   }
 
-  onShutdown(): Promise<void> {
+  onShutdown(): void {
     this.pendingChain = Promise.resolve();
     this.ovSessionId = undefined;
     this.consecutiveFailures = 0;
-    return Promise.resolve();
   }
 
   private serializeContent(content: string | (TextContent | ImageContent | ThinkingContent | ToolCall)[]): string | Part[] | undefined {

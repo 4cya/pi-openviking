@@ -59,16 +59,17 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 - **Commands surface**: 6 slash commands (`/ov-search`, `/ov-ls`, `/ov-import`, `/ov-delete`, `/ov-recall`, `/ov-commit`) — each calls the Client Adapter (or operation for commit/import) and formats output for humans.
 - **Unified deps**: Tools use `ToolRegisterDeps`, commands use `CommandRegisterDeps`. Bootstrap wires both from shared `client` + `sessionSync` + `autoRecallState`.
 - Session sync is incremental: each `message_end` sends enriched content to OV session — text, tool calls as `Part[]`, and truncated tool results with metadata prefix. (ADR-003)
-- Tool calls in assistant messages are sent as structured `Part[]` (native OV `tool_use`). Tool results are sent with `role: "toolResult"`, prefixed with `[tool: {name}, error: {bool}]`, truncated to 500 chars. Thinking content is discarded. (ADR-003)
+- Tool calls + tool results are merged into a single `assistant` message via **buffer-and-merge** (ADR-006): assistant message with tool calls is buffered until matching `toolResult`(s) arrive (matched by tool call ID), then sent as one `sendMessage` with `Part[]` containing both call and result `ToolPart`s. No more `role: "toolResult"`. (ADR-003, ADR-006)
+- Tool output truncation: 2000 chars (up from 500). When exceeded, `tool_output_truncated: true`. Full externalization via `tool_output_ref` deferred. (ADR-006)
 - Async operations (commit, import) are fire-and-forget by default — return task_id. `memcommit` supports optional `wait: true` to poll `GET /api/v1/tasks/{task_id}` until completed/failed (timeout 15s).
-- **Enriched Content Serialization** (`serializeContent`): replaces old `extractText`. Handles three message types: (1) user messages → text only, (2) assistant messages → mixed `Part[]` (TextPart + ToolPart for tool calls, thinking discarded), (3) tool result messages → metadata prefix + truncated content with `role: "toolResult"`. Truncation: hardcoded 500 chars. (ADR-003)
+- **Enriched Content Serialization** (`serializeContent`): replaces old `extractText`. Handles three message types: (1) user messages → text only, (2) assistant messages → mixed `Part[]` (TextPart + ToolPart for tool calls, thinking discarded), (3) tool result messages → paired with their tool call via buffer-and-merge, sent as single `assistant` message with `ToolPart(tool_input + tool_output + tool_status)`. Truncation: hardcoded 500 chars. (ADR-003, ADR-006)
 - **Health check with graceful degradation**: bootstrap probes `GET /health`. If unreachable, registers everything but disables auto-recall (`serverAvailable = false`). Recovery is on-demand — next auto-recall or tool call retries health check. Circuit breaker in session sync: 3 consecutive failures → stop trying until next recovery. (ADR-004)
 - No reranking in plugin — trust OV's internal pipeline.
 - No grep/glob search — semantic search covers coding agent use cases.
 
 ## Deferred
 
-- `session.used()` — track which contexts/skills agent consumed. Low priority, easy to add later.
+- **ContextPart + `session.used()`** — track which injected resources the agent consumed. `ContextPart` (OV's `type: "context"` part) and `session.used()` solve the same problem (resource consumption tracking). Implement together as a coherent feature. `ContextPart` without `session.used()` is half the solution; `session.used()` is the proper OV API for this. Key integration points: auto-recall injects `<relevant-memories>` with URIs → agent responds → track which URIs influenced the response → send `ContextPart(uri, context_type, abstract)` in assistant message + call `session.used(contexts=[...])`. Detection heuristic TBD (scan response for URI/abstract matches, or send all injected resources). Revisit after ToolPart fix ships.
 - `grep`/`glob` search — can add if real need arises.
 - Multi-namespace parallel search (user + agent memories) — single global search for now.
 
@@ -102,3 +103,4 @@ OpenViking ships an official OpenClaw (Claude) plugin. This table documents the 
 - **ADR-002**: Logging file-based — `appendFileSync` to log file. No `console.*` in src/.
 - **ADR-003**: Enriched session sync — tool calls as structured `Part[]`, tool results truncated with metadata prefix, thinking discarded. Replaces text-only `extractText` with `serializeContent`.
 - **ADR-004**: Health check com graceful degradation — bootstrap probes `/health`, disables auto-recall se server down, recovery on-demand, circuit breaker no session sync (3 falhas).
+- **ADR-005**: Embedding `max_input_tokens: 7168` no `ov.conf` — OV trunca internamente antes de embeddar. Previne circuit breaker loop em Docker Model Runner (bge-m3, batch size 8192). Fix server-side only, zero código.
