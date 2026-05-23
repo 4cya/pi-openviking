@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { importOp } from "../operations/import";
+import { renderGenericCall, renderGenericResult } from "../shared/render";
 
 const MEMIMPORT_PARAMS = Type.Object({
   source: Type.String({ description: "URL (http://, https://, git://) or local file path to import" }),
@@ -24,6 +25,8 @@ export function registerMemimportTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
       "Use kind=skill to import as a skill. Optional reason and to params control metadata and placement.",
     promptSnippet: "Import a URL or local file into OpenViking",
     parameters: MEMIMPORT_PARAMS,
+    renderCall: (args: any, theme: any) => renderGenericCall("memimport", args, theme),
+    renderResult: renderGenericResult as any,
 
     async execute({ params, deps, signal }) {
       const result = await importOp(deps.knowledge, {

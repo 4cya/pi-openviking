@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
+import { renderMemreadCall, renderMemreadResult } from "../shared/render";
 
 const MEMREAD_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to read" }),
@@ -23,6 +24,8 @@ export function registerMemreadTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
     promptSnippet: "Read content from a viking:// URI",
     parameters: MEMREAD_PARAMS,
     validateUri: true,
+    renderCall: renderMemreadCall as any,
+    renderResult: renderMemreadResult as any,
 
     async execute({ params, deps, signal }) {
       const level = params.level ?? "auto";

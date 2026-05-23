@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
+import { renderGenericCall, renderGenericResult } from "../shared/render";
 
 const MEMDELETE_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to delete" }),
@@ -17,6 +18,8 @@ export function registerMemdeleteTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
     promptSnippet: "Delete a resource from OpenViking by viking:// URI",
     parameters: MEMDELETE_PARAMS,
     validateUri: true,
+    renderCall: (args: any, theme: any) => renderGenericCall("memdelete", args, theme),
+    renderResult: renderGenericResult as any,
 
     async execute({ params, deps, signal }) {
       const result = await deps.knowledge.verifiedDelete(params.uri, signal);

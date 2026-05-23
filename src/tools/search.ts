@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
+import { renderMemsearchCall, renderMemsearchResult } from "../shared/render";
 
 const SEARCH_PARAMS = Type.Object({
   query: Type.String({ description: "Search query to find relevant memories and resources" }),
@@ -27,6 +28,8 @@ export function registerMemsearchTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
       "memsearch returns memories and resources with relevance scores — use the highest-scored results to inform your response.",
     ],
     parameters: SEARCH_PARAMS,
+    renderCall: renderMemsearchCall as any,
+    renderResult: renderMemsearchResult as any,
 
     async execute({ params, deps, signal }) {
       const sessionId = deps.sync.getOvSessionId();

@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
+import { renderGenericCall, renderGenericResult } from "../shared/render";
 
 const MEMBROWSE_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to browse" }),
@@ -24,6 +25,8 @@ export function registerMembrowseTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
     promptSnippet: "Browse the OpenViking filesystem at a viking:// URI",
     parameters: MEMBROWSE_PARAMS,
     validateUri: true,
+    renderCall: (args: any, theme: any) => renderGenericCall("membrowse", args, theme),
+    renderResult: renderGenericResult as any,
 
     async execute({ params, deps, signal }) {
       let result;

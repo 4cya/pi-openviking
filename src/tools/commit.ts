@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { commitOp } from "../operations/commit";
+import { renderGenericCall, renderGenericResult } from "../shared/render";
 
 export function registerMemcommitTool(
   pi: ExtensionAPI,
@@ -23,6 +24,8 @@ export function registerMemcommitTool(
     parameters: Type.Object({
       wait: Type.Optional(Type.Boolean({ description: "Poll until extraction completes (default: false)" })),
     }),
+    renderCall: (args: any, theme: any) => renderGenericCall("memcommit", args, theme),
+    renderResult: renderGenericResult as any,
 
     async execute({ deps, params, onUpdate, signal }) {
       try {

@@ -1,4 +1,5 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Theme, ToolRenderResultOptions, ToolRenderContext } from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
 import type { TSchema, Static } from "typebox";
 import type { SessionClient, FsClient, KnowledgeClient } from "../ov-client/client";
 import type { SessionSyncLike } from "../session-sync/session";
@@ -36,6 +37,8 @@ export interface ToolDef<P extends TSchema> {
     details?: Record<string, unknown>;
     isError?: boolean;
   }>;
+  renderCall?: (args: Static<P>, theme: Theme, context: ToolRenderContext<any, Static<P>>) => Component;
+  renderResult?: (result: any, options: ToolRenderResultOptions, theme: Theme, context: ToolRenderContext<any, Static<P>>) => Component;
 }
 
 export function defineTool<P extends TSchema>(
@@ -50,6 +53,8 @@ export function defineTool<P extends TSchema>(
     promptSnippet: def.promptSnippet,
     promptGuidelines: def.promptGuidelines,
     parameters: def.parameters,
+    ...(def.renderCall ? { renderCall: def.renderCall } : {}),
+    ...(def.renderResult ? { renderResult: def.renderResult } : {}),
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       try {
