@@ -5,6 +5,7 @@ import { curate, DEFAULT_CURATE_OPTIONS, type CurateOptions, type RecallItem } f
 
 export interface AutoRecallState {
   enabled: boolean;
+  lastInjectedItems?: RecallItem[];
 }
 
 export interface AutoRecallConfig {
@@ -30,13 +31,13 @@ export function createAutoRecall(
   client: KnowledgeClient,
   sessionSync: SessionSyncLike,
   config: AutoRecallConfig,
-): (event: AutoRecallEvent) => Promise<{ systemPrompt?: string }> {
+): (event: AutoRecallEvent) => Promise<{ systemPrompt?: string; injectedItems: RecallItem[] }> {
   const limit = config.limit;
   const timeoutMs = config.timeout;
   const curateOptions = config.curator;
 
-  return async function autoRecall(event: AutoRecallEvent): Promise<{ systemPrompt?: string }> {
-    if (!config.enabled) return {};
+  return async function autoRecall(event: AutoRecallEvent): Promise<{ systemPrompt?: string; injectedItems: RecallItem[] }> {
+    if (!config.enabled) return { injectedItems: [] };
 
     const sessionId = sessionSync.getOvSessionId();
     const controller = new AbortController();
@@ -45,12 +46,12 @@ export function createAutoRecall(
     try {
       const results = await client.search(sessionId, event.prompt, limit, "auto", undefined, controller.signal);
       const items = curate(results, event.prompt, curateOptions);
-      if (items.length === 0) return {};
+      if (items.length === 0) return { injectedItems: [] };
       const block = renderBlock(items);
-      return { systemPrompt: `${event.systemPrompt}\n\n${block}` };
+      return { systemPrompt: `${event.systemPrompt}\n\n${block}`, injectedItems: items };
     } catch (err) {
       logger.error("auto-recall failed:", (err as Error).message);
-      return {};
+      return { injectedItems: [] };
     } finally {
       clearTimeout(timeout);
     }

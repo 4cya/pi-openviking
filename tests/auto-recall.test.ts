@@ -2,6 +2,7 @@ import { describe, test, expect, vi } from "vitest";
 import type { SearchResult } from "../src/ov-client/client";
 import { createAutoRecall, DEFAULT_AUTO_RECALL_CONFIG } from "../src/auto-recall/auto-recall";
 import { DEFAULT_CURATE_OPTIONS } from "../src/auto-recall/recall-curator";
+import type { RecallItem } from "../src/auto-recall/recall-curator";
 import { createMockClient, createMockSessionSync } from "./mocks";
 
 const defaultConfig = { ...DEFAULT_AUTO_RECALL_CONFIG };
@@ -281,4 +282,49 @@ describe("createAutoRecall", () => {
     expect(result.systemPrompt).toBeUndefined();
     expect(search).not.toHaveBeenCalled();
   });
+
+  // --- injectedItems ---
+  test("returns injectedItems alongside systemPrompt", async () => {
+    const client = createMockClient({
+      knowledge: {
+        search: vi.fn(async () => ({
+          memories: [{ text: "mem one", score: 0.9, uri: "viking://user/memories/m1" }],
+          resources: [{ uri: "viking://docs/api", score: 0.8, abstract: "api docs" }],
+          skills: [],
+          total: 2,
+        } as SearchResult)),
+      } as any,
+    });
+    const sync = createMockSessionSync();
+    const autoRecall = createAutoRecall(client.knowledge, sync, defaultConfig);
+
+    const result = await autoRecall({ prompt: "hello", systemPrompt: "base" });
+    expect(result.injectedItems).toBeDefined();
+    expect(result.injectedItems!.length).toBe(2);
+    expect(result.injectedItems![0].uri).toBe("viking://user/memories/m1");
+    expect(result.injectedItems![1].uri).toBe("viking://docs/api");
+  });
+
+  test("returns empty injectedItems when no results", async () => {
+    const client = createMockClient();
+    const sync = createMockSessionSync();
+    const autoRecall = createAutoRecall(client.knowledge, sync, defaultConfig);
+
+    const result = await autoRecall({ prompt: "hello", systemPrompt: "base" });
+    expect(result.injectedItems).toEqual([]);
+  });
+
+  test("returns empty injectedItems on error", async () => {
+    const client = createMockClient({
+      knowledge: {
+        search: vi.fn(async () => { throw new Error("boom"); }),
+      } as any,
+    });
+    const sync = createMockSessionSync();
+    const autoRecall = createAutoRecall(client.knowledge, sync, defaultConfig);
+
+    const result = await autoRecall({ prompt: "hello", systemPrompt: "base" });
+    expect(result.injectedItems).toEqual([]);
+  });
+
 });

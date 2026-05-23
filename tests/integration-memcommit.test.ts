@@ -15,7 +15,7 @@ beforeAll(async () => {
   if (!serverUp) return;
   try {
     sessionId = await client.session.createSession();
-    await client.session.sendMessage(sessionId, "user", "hello from integration test");
+    await client.session.sendMessage(sessionId, "user", [{ type: "text", text: "hello from integration test" }]);
   } catch {
     serverUp = false;
   }

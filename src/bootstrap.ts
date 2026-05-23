@@ -72,18 +72,19 @@ export function bootstrapExtension(
     logger.debug("initial health check:", ok ? "available" : "unavailable");
   });
 
+  const autoRecallState: { enabled: boolean; lastInjectedItems: import("./auto-recall/recall-curator").RecallItem[] } = { ...recallConfig, lastInjectedItems: [] };
+
   const sessionSync = new SessionSync(sessionClient, {
     getSessionFile: () => ctx.sessionManager.getSessionFile(),
     getBranch: () => ctx.sessionManager.getBranch(),
     appendEntry: (type, data) => pi.appendEntry(type, data),
+    autoRecallState,
   });
 
   logger.debug("session sync created");
 
   const toolDeps: ToolRegisterDeps = { session: sessionClient, fs: fsClient, knowledge: knowledgeClient, sync: sessionSync, healthChecker };
   for (const register of TOOLS) register(pi, toolDeps);
-
-  const autoRecallState: { enabled: boolean } = recallConfig;
 
   const cmdDeps: CommandRegisterDeps = { session: sessionClient, fs: fsClient, knowledge: knowledgeClient, sync: sessionSync, autoRecallState, healthChecker };
   for (const register of COMMANDS) register(pi, cmdDeps);
@@ -99,7 +100,9 @@ export function bootstrapExtension(
       }
     }
     if (!healthChecker.isAvailable()) return;
-    return autoRecall(event);
+    const result = await autoRecall(event);
+    autoRecallState.lastInjectedItems = result.injectedItems ?? [];
+    return result;
   });
 
   return { sessionSync, healthChecker };

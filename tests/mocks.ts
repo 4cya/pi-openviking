@@ -5,9 +5,10 @@ import type { SessionSyncLike } from "../src/session-sync/session";
 function defaultSessionClient(): SessionClient {
   return {
     createSession: vi.fn(async () => "ov-sess-1"),
-    sendMessage: vi.fn(async (_sessionId: string, _role: string, _content: string | Part[]) => {}),
+    sendMessage: vi.fn(async (_sessionId: string, _role: string, _content: Part[]) => {}),
     commit: vi.fn(async () => ({ session_id: "sess-1", status: "committed", task_id: "task-1", archive_uri: "viking://archived/sess-1", archived: true, trace_id: "trace-1" })),
     getTaskStatus: vi.fn(async () => ({ task_id: "task-1", status: "completed" })),
+    sessionUsed: vi.fn(async () => {}),
   };
 }
 

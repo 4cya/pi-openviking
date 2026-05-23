@@ -4,7 +4,15 @@ Session sync para OV era text-only: `extractText` filtrava apenas `type === "tex
 
 Decisão: enviar tool calls como `Part[]` estruturado (nativo do OV), enviar tool results truncados (500 chars) com metadata prefix (`[tool: {name}, error: {bool}]`), descartar thinking content, e usar `role: "toolResult"` para resultados. Assistant messages com blocos mistos (texto + tool calls) viram uma única chamada `sendMessage` com `Part[]`.
 
-**Status**: accepted
+**Status**: superseded by ADR-006
+
+ADR-006 corrige os problemas deste ADR:
+- `type: "tool_use"` → `type: "tool"` (OV canonical)
+- `role: "toolResult"` → eliminado; tool results mesclados via buffer-and-merge
+- ToolPart fields alinhados 1:1 com OV (`tool_id`, `tool_name`, `tool_input`, `tool_output`, `tool_status`)
+- Truncation aumentada de 500 → 2000 chars
+- `sendMessage` narrowed para `Part[]` apenas (sem string)
+- Sempre `Part[]` para todas as mensagens (user e assistant)
 
 **Considered Options**:
 - Text serialization de tool calls → rejeitado: OV não distingue tool call de texto, extração de memória menos precisa

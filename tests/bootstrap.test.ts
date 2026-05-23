@@ -179,4 +179,74 @@ describe("bootstrap health check", () => {
     expect(result.healthChecker).toBeDefined();
     expect(result.healthChecker.isAvailable()).toBe(false);
   });
+
+  // --- Resource consumption tracking wiring ---
+  test("auto-recall stores injectedItems and SessionSync sends ContextParts", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const transport = createMockTransport({
+      request: vi.fn(async (label: string, _path: string, opts?: any) => {
+        if (label === "healthCheck") return { status: "ok" };
+        if (label === "search") return {
+          memories: [{ text: "test memory", score: 0.9, uri: "viking://user/memories/m1" }],
+          resources: [],
+          skills: [],
+          total: 1,
+        };
+        if (label === "createSession") return { session_id: "sess-e2e" };
+        return {};
+      }),
+    });
+
+    const result = bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    }, transport);
+
+    // Fire auto-recall → stores injectedItems in autoRecallState
+    const handler = pi.getHandler("before_agent_start");
+    await handler({ prompt: "test query", systemPrompt: "base" });
+
+    // User message → creates session
+    result.sessionSync.onMessageEnd({
+      role: "user",
+      content: [{ type: "text", text: "user msg" }],
+      timestamp: Date.now(),
+    } as any);
+
+    await vi.waitFor(() => {
+      const createCalls = (transport.request as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (c: any[]) => c[0] === "createSession",
+      );
+      expect(createCalls.length).toBe(1);
+    });
+
+    // Assistant message → should include ContextParts from injected items
+    result.sessionSync.onMessageEnd({
+      role: "assistant",
+      content: [{ type: "text", text: "response" }],
+      timestamp: Date.now(),
+    } as any);
+
+    await vi.waitFor(() => {
+      const sendCalls = (transport.request as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (c: any[]) => c[0] === "sendMessage",
+      );
+      expect(sendCalls.length).toBe(2); // user + assistant
+      const assistantBody = sendCalls[1][2]?.body as any;
+      const parts = assistantBody?.parts as any[];
+      const ctxParts = parts?.filter((p: any) => p.type === "context");
+      expect(ctxParts.length).toBe(1);
+      expect(ctxParts[0].uri).toBe("viking://user/memories/m1");
+      expect(ctxParts[0].context_type).toBe("memory");
+    });
+
+    // sessionUsed called
+    await vi.waitFor(() => {
+      const usedCalls = (transport.request as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (c: any[]) => c[0] === "sessionUsed",
+      );
+      expect(usedCalls.length).toBe(1);
+    });
+  });
 });

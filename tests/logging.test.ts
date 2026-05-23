@@ -26,6 +26,7 @@ function mockSessionClient(overrides?: Partial<SessionClient>): SessionClient {
     sendMessage: vi.fn().mockResolvedValue(undefined),
     commit: vi.fn().mockResolvedValue({ session_id: "s1", status: "committed", task_id: "t1", archive_uri: "viking://a/s1", archived: true, trace_id: "tr1" }),
     getTaskStatus: vi.fn().mockResolvedValue({ task_id: "t1", status: "completed" }),
+    sessionUsed: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

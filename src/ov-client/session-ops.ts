@@ -8,16 +8,28 @@ export function createSessionOps(t: Transport, commitTimeout: number) {
       return result.session_id;
     },
 
-    async sendMessage(sessionId: string, role: string, content: string | Part[], signal?: AbortSignal): Promise<void> {
-      const body: Record<string, unknown> = typeof content === "string"
-        ? { role, content }
-        : { role, parts: content };
+    async sendMessage(sessionId: string, role: string, content: Part[], signal?: AbortSignal): Promise<void> {
+      const body: Record<string, unknown> = { role, parts: content };
       await t.request(
         "sendMessage",
         `/api/v1/sessions/${sessionId}/messages`,
         { body },
         signal,
       );
+    },
+
+    async sessionUsed(sessionId: string, contexts: string[], signal?: AbortSignal): Promise<void> {
+      try {
+        await t.request(
+          "sessionUsed",
+          `/api/v1/sessions/${sessionId}/used`,
+          { body: { contexts }, httpMethod: "POST" },
+          signal,
+        );
+      } catch (err) {
+        const { logger } = await import("../shared/logger");
+        logger.error("sessionUsed failed:", (err as Error).message);
+      }
     },
 
     async commit(sessionId: string, signal?: AbortSignal): Promise<CommitResult> {

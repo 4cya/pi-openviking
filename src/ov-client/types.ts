@@ -51,13 +51,29 @@ export interface TextPart {
 }
 
 export interface ToolPart {
-  type: "tool_use";
-  id: string;
-  name: string;
-  input: Record<string, unknown>;
+  type: "tool";
+  tool_id: string;
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  tool_output: string;
+  tool_status: string;  // "success" | "error" — never "pending" when sent
+  tool_output_truncated: boolean;
+  tool_uri: string;
+  skill_uri: string;
+  duration_ms: number | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  tool_output_ref: string;
 }
 
-export type Part = TextPart | ToolPart;
+export interface ContextPart {
+  type: "context";
+  uri: string;
+  context_type: "memory" | "resource" | "skill";
+  abstract: string;
+}
+
+export type Part = TextPart | ToolPart | ContextPart;
 
 export interface CommitResult {
   session_id: string;
@@ -82,9 +98,10 @@ export interface TaskStatus {
 
 export interface SessionClient {
   createSession(signal?: AbortSignal): Promise<string>;
-  sendMessage(sessionId: string, role: string, content: string | Part[], signal?: AbortSignal): Promise<void>;
+  sendMessage(sessionId: string, role: string, content: Part[], signal?: AbortSignal): Promise<void>;
   commit(sessionId: string, signal?: AbortSignal): Promise<CommitResult>;
   getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus>;
+  sessionUsed(sessionId: string, contexts: string[], signal?: AbortSignal): Promise<void>;
 }
 
 export interface FsClient {

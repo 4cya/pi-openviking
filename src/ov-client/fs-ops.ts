@@ -12,13 +12,15 @@ interface OVFsEntry {
   [k: string]: unknown;
 }
 
-/** Raw OV fs/stat response */
+/** Raw OV fs/stat response — verified against OV server 2026-05-23 */
 interface OVStatResult {
   name: string;
   size?: number;
   mode?: number;
   modTime?: string;
   isDir?: boolean;
+  isLocked?: boolean;
+  count?: number; // dirs only — number of children
   [k: string]: unknown;
 }
 

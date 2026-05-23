@@ -4,10 +4,7 @@ import type { SessionClient } from "../src/ov-client/client";
 import { createMockClient } from "./mocks";
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-
-function msg(m: Partial<AgentMessage> & { role: string }): AgentMessage {
-  return m as AgentMessage;
-}
+import type { Part } from "../src/ov-client/types";
 
 function createSync(sessionClient: SessionClient, opts?: {
   getSessionFile?: () => string | undefined;
@@ -28,14 +25,14 @@ describe("SessionSync circuit breaker", () => {
     const client = createMockClient({ session: { createSession: vi.fn(async () => { throw new Error("ECONNREFUSED"); }) } as any });
     const sync = createSync(client.session);
 
-    sync.onMessageEnd(msg({ role: "user", content: "msg1", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "msg1", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.createSession).toHaveBeenCalledTimes(1));
-    sync.onMessageEnd(msg({ role: "user", content: "msg2", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "msg2", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.createSession).toHaveBeenCalledTimes(2));
-    sync.onMessageEnd(msg({ role: "user", content: "msg3", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "msg3", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.createSession).toHaveBeenCalledTimes(3));
 
-    sync.onMessageEnd(msg({ role: "user", content: "msg4", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "msg4", timestamp: Date.now() } as any as AgentMessage);
     await new Promise(r => setTimeout(r, 50));
     expect(client.session.createSession).toHaveBeenCalledTimes(3);
   });
@@ -55,20 +52,20 @@ describe("SessionSync circuit breaker", () => {
     const sync = createSync(client.session);
 
     for (let i = 0; i < 3; i++) {
-      sync.onMessageEnd(msg({ role: "user", content: `fail-${i}`, timestamp: Date.now() }));
+      sync.onMessageEnd({ role: "user", content: `fail-${i}`, timestamp: Date.now() } as any as AgentMessage);
     }
     await vi.waitFor(() => expect(client.session.createSession).toHaveBeenCalledTimes(3));
 
-    sync.onMessageEnd(msg({ role: "user", content: "skipped", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "skipped", timestamp: Date.now() } as any as AgentMessage);
     await new Promise(r => setTimeout(r, 50));
     expect(client.session.createSession).toHaveBeenCalledTimes(3);
 
     sync.recover();
 
-    sync.onMessageEnd(msg({ role: "user", content: "after-recover", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "after-recover", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => {
       expect(client.session.createSession).toHaveBeenCalledTimes(4);
-      expect(client.session.sendMessage).toHaveBeenCalledWith("ov-sess-recovered", "user", "after-recover");
+      expect(client.session.sendMessage).toHaveBeenCalledWith("ov-sess-recovered", "user", [{ type: "text", text: "after-recover" } satisfies Part]);
     });
   });
 
@@ -76,14 +73,14 @@ describe("SessionSync circuit breaker", () => {
     const client = createMockClient({ session: { sendMessage: vi.fn(async () => { throw new Error("timeout"); }) } as any });
     const sync = createSync(client.session, { maxConsecutiveFailures: 2 });
 
-    sync.onMessageEnd(msg({ role: "user", content: "msg1", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "msg1", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.createSession).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(client.session.sendMessage).toHaveBeenCalledTimes(1));
 
-    sync.onMessageEnd(msg({ role: "user", content: "msg2", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "msg2", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.sendMessage).toHaveBeenCalledTimes(2));
 
-    sync.onMessageEnd(msg({ role: "user", content: "msg3", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "msg3", timestamp: Date.now() } as any as AgentMessage);
     await new Promise(r => setTimeout(r, 50));
     expect(client.session.sendMessage).toHaveBeenCalledTimes(2);
   });
@@ -100,22 +97,22 @@ describe("SessionSync circuit breaker", () => {
     });
     const sync = createSync(client.session);
 
-    sync.onMessageEnd(msg({ role: "user", content: "fail", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "fail", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.sendMessage).toHaveBeenCalledTimes(1));
 
-    sync.onMessageEnd(msg({ role: "user", content: "ok", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "ok", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.sendMessage).toHaveBeenCalledTimes(2));
 
     (client.session.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("down"));
-    sync.onMessageEnd(msg({ role: "user", content: "fail2", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "fail2", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.sendMessage).toHaveBeenCalledTimes(3));
-    sync.onMessageEnd(msg({ role: "user", content: "fail3", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "fail3", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.sendMessage).toHaveBeenCalledTimes(4));
 
-    sync.onMessageEnd(msg({ role: "user", content: "fail4", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "fail4", timestamp: Date.now() } as any as AgentMessage);
     await vi.waitFor(() => expect(client.session.sendMessage).toHaveBeenCalledTimes(5));
 
-    sync.onMessageEnd(msg({ role: "user", content: "fail5", timestamp: Date.now() }));
+    sync.onMessageEnd({ role: "user", content: "fail5", timestamp: Date.now() } as any as AgentMessage);
     await new Promise(r => setTimeout(r, 50));
     expect(client.session.sendMessage).toHaveBeenCalledTimes(5);
   });

@@ -39,6 +39,16 @@ Rationale: custo zero em adicionar campos com defaults. Future-proof para `sessi
 
 ### D2: Buffer-and-merge para tool calls + results
 
+#### Incomplete buffer flush
+
+Quando nova assistant message chega enquanto buffer ainda tem tool calls pendentes (resultados não recebidos):
+1. Sintetiza `ToolPart(tool_status: "error", tool_output: "[interrompido - resultado não recebido]")` para cada call pendente
+2. Flushed mensagem inteira — ToolParts com resultados reais + sintéticos — como única `sendMessage(role: "assistant")`
+3. `logger.warn("flushing incomplete buffer: ${pendingIds}")` para observabilidade
+4. Inicia novo buffer para nova assistant message
+
+Rationale: pi-core garante call-result pairing (sempre emite ToolResultMessage real ou sintético para erro/block). Cenário de buffer incompleto é raro (crash, edge case do agent loop). Mas foco em não perder conteúdo — dados parciais que já temos são preservados, calls pendentes ficam com status explícito de interrupção. OV extractor sempre vê arcos completos call→result, nunca status "pending" em dados persisted.
+
 Quando `onMessageEnd` recebe assistant message com tool calls:
 1. Buffer a message (parts + tool call IDs)
 2. Quando `toolResult` chega (match por tool call ID), adiciona `ToolPart(tool_output, tool_status)` ao buffer
@@ -63,6 +73,45 @@ ContextPart (`type: "context"`) e `session.used()` resolvem o mesmo problema (tr
 ### D5: Sessões existentes — não migrar
 
 Sessões OV existentes com formato `tool_use` já perderam estrutura (stored como string). Dano já feito. Sem API interna do OV para reescrever. Fix going forward only.
+
+### D6: Sempre `Part[]` — user e assistant
+
+Todas as mensagens enviadas como `Part[]`, sem exceção. User messages → `Part[TextPart]`. Assistant messages → `Part[TextPart, ToolPart, ...]`. Elimina `string | Part[]` branching em `sendMessage`. Consistência para OV extractor. Future-proof para ContextPart.
+
+### D7: `sendMessage` narrowed para `content: Part[]` apenas
+
+`SessionClient.sendMessage(sessionId, role, content: Part[], signal?)` — string eliminada do tipo. Impossível enviar formato errado.
+
+### D8: Buffer único
+
+Um slot: `pendingBuffer: { parts: Part[], pendingToolIds: Set<string> } | null`. Agente pi é sequencial por turno — nunca duas assistant messages em buffer simultaneamente. Se buffer ocupado quando nova assistant chega, dispara incomplete flush (D2) e substitui.
+
+### D9: Orphan tool results descartados
+
+`toolResult` com buffer vazio → descartar + `logger.warn`. Sem buffer, não temos `tool_input` para construir ToolPart completo. Pi-core garante call-result pairing — órfãos são bugs, não fluxo normal.
+
+### D10: Thinking descartado (unchanged from ADR-003)
+
+Metacognição não é ação. Infla sessão com ruído.
+
+### D11: `tool_status` values
+
+- `isError: false` → `"success"`
+- `isError: true` → `"error"`
+- Synthetic (missing result) → `"error"` + `"[interrompido - resultado não recebido]"`
+- `"pending"` nunca enviado — default only, always overwritten
+
+### D12: Ordem natural dos Parts
+
+Parts preservados em ordem de aparição no `AssistantMessage.content`. TextParts e ToolCalls já intercalados. Resultos merged nos ToolParts existentes. Sem reordering.
+
+### D13: Apenas `message_end` processado
+
+Buffer opera em `message_end` apenas. `message_start` e `message_update` ignorados. Streaming deltas são parciais — buffer precisa mensagem completa.
+
+### D14: `duration_ms`, `prompt_tokens`, `completion_tokens` sempre null
+
+Extrair `duration_ms` requereria hook em `tool_execution_start`/`tool_execution_end` (novo event listener). Token counts requerem provider-level access. Deferido — revisit se OV extractor usar estes campos.
 
 ## Considered Options
 

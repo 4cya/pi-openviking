@@ -32,6 +32,7 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 | **Resource** | External knowledge (docs, code, URLs) stored under `viking://resources/` |
 | **Skill** | Structured agent capability stored under `viking://agent/skills/` |
 | **Memory** | Long-term knowledge extracted from sessions (profile, preferences, entities, events, cases, patterns) |
+| **Resource Consumption Tracking** | Mechanism to inform OV which resources the agent consumed. Two channels: (1) `ContextPart` in assistant message `Part[]`, (2) `session_used()` HTTP call (`POST /api/v1/sessions/{id}/used`). Both send the same data — URIs + abstracts. Detection: **over-report** — all auto-recall injected items are marked as used (curated by Recall Curator already, score ≥ 0.15). No text scanning, no explicit tool. False positives (mild ranking inflation) cost less than false negatives (permanent ranking degradation). Timing: per assistant turn on `message_end`. Placement: inline in assistant message `Part[]` alongside TextPart/ToolParts. Scope: all types — memories, resources, skills. |
 
 ## Tool Surface
 
@@ -61,15 +62,30 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 - Session sync is incremental: each `message_end` sends enriched content to OV session — text, tool calls as `Part[]`, and truncated tool results with metadata prefix. (ADR-003)
 - Tool calls + tool results are merged into a single `assistant` message via **buffer-and-merge** (ADR-006): assistant message with tool calls is buffered until matching `toolResult`(s) arrive (matched by tool call ID), then sent as one `sendMessage` with `Part[]` containing both call and result `ToolPart`s. No more `role: "toolResult"`. (ADR-003, ADR-006)
 - Tool output truncation: 2000 chars (up from 500). When exceeded, `tool_output_truncated: true`. Full externalization via `tool_output_ref` deferred. (ADR-006)
+- **Incomplete buffer flush**: quando nova assistant message chega enquanto buffer ainda tem tool calls pendentes (resultado não recebido), sintetiza `ToolPart(status: "error", output: "[interrompido]")` para calls pendentes, flusha mensagem inteira (resultados reais + sintéticos), então inicia novo buffer. Zero dados perdidos. `logger.warn` para observabilidade. (ADR-006)
+- **Known limitation**: `onShutdown()` é sync zero-I/O (ADR-001) — não faz flush do buffer pendente. Se Pi encerra com tool calls em buffer, dados parciais são perdidos. Aceitável: shutdown é borda rara, commit é manual via `/ov-commit`, e Pi mantém sessão completa — dados podem ser re-sincronizados na próxima sessão.
 - Async operations (commit, import) are fire-and-forget by default — return task_id. `memcommit` supports optional `wait: true` to poll `GET /api/v1/tasks/{task_id}` until completed/failed (timeout 15s).
-- **Enriched Content Serialization** (`serializeContent`): replaces old `extractText`. Handles three message types: (1) user messages → text only, (2) assistant messages → mixed `Part[]` (TextPart + ToolPart for tool calls, thinking discarded), (3) tool result messages → paired with their tool call via buffer-and-merge, sent as single `assistant` message with `ToolPart(tool_input + tool_output + tool_status)`. Truncation: hardcoded 500 chars. (ADR-003, ADR-006)
+- **Enriched Content Serialization** (`serializeContent`): replaces old `extractText`. All messages sent as `Part[]` — user and assistant alike. `sendMessage` narrowed to `content: Part[]` only (no string). Simplifies client (no type branching), consistency for OV memory extractor, future-proof for ContextPart. User messages → `Part[TextPart]`. Assistant messages (text + tool calls) → buffered whole, flushed as single `Part[TextPart, ToolPart, ...]` when results arrive. Thinking discarded. Truncation: 2000 chars. (ADR-003, ADR-006)
 - **Health check with graceful degradation**: bootstrap probes `GET /health`. If unreachable, registers everything but disables auto-recall (`serverAvailable = false`). Recovery is on-demand — next auto-recall or tool call retries health check. Circuit breaker in session sync: 3 consecutive failures → stop trying until next recovery. (ADR-004)
 - No reranking in plugin — trust OV's internal pipeline.
 - No grep/glob search — semantic search covers coding agent use cases.
 
+## Audit Resolution (2026-05-23)
+
+All P0/P1 items resolved. Remaining P2 gaps grilled and decided:
+
+| Gap | Decision | Rationale |
+|-----|----------|-----------|
+| INC-4 (`fsStat` abstract) | **Wontfix** | OV `/api/v1/fs/stat` never returns `abstract`. `raw.name` is correct and best available. Type `OVStatResult` updated with real fields (`isLocked`, `count`). |
+| GAP-5 (`query_plan`) | **Wontfix** | Already accessible in memsearch tool JSON output. No human-facing need in `/ov-search`. |
+| GAP-2 (grep/lexical) | **Deferred** | Semantic search covers coding agent use case. No user request. |
+| GAP-3 (watches) | **Deferred** | `memimport` manual covers common case. No user request. |
+| GAP-4 (duration_ms/tokens) | **Deferred** | Requires events not available in plugin hooks. OV ignores null fields. |
+
 ## Deferred
 
-- **ContextPart + `session.used()`** — track which injected resources the agent consumed. `ContextPart` (OV's `type: "context"` part) and `session.used()` solve the same problem (resource consumption tracking). Implement together as a coherent feature. `ContextPart` without `session.used()` is half the solution; `session.used()` is the proper OV API for this. Key integration points: auto-recall injects `<relevant-memories>` with URIs → agent responds → track which URIs influenced the response → send `ContextPart(uri, context_type, abstract)` in assistant message + call `session.used(contexts=[...])`. Detection heuristic TBD (scan response for URI/abstract matches, or send all injected resources). Revisit after ToolPart fix ships.
+- **Resource Consumption Tracking** — **Shipped (ADR-007)**. Over-report all auto-recall injected items via dual channel: ContextParts in assistant `Part[]` + `session_used()` per turn. Abstract cascade `abstract → overview → text`. Scope: memories + resources (skills deferred). Wiring: `autoRecall` returns `injectedItems`, stored in `AutoRecallState.lastInjectedItems`, consumed by `SessionSync` on assistant flush. Prototype files in `prototype/` deleted.
+- **`duration_ms` / `prompt_tokens` / `completion_tokens`** — OV ToolPart fields for tool execution metrics. Currently always `null`. Could extract `duration_ms` by hooking `tool_execution_start`/`tool_execution_end` events (requires new event listener, not just `message_end`). Token counts require provider-level access (not available in plugin). Revisit if OV extractor starts using these fields for ranking or if observability becomes a priority.
 - `grep`/`glob` search — can add if real need arises.
 - Multi-namespace parallel search (user + agent memories) — single global search for now.
 
@@ -86,7 +102,7 @@ OpenViking ships an official OpenClaw (Claude) plugin. This table documents the 
 | Multi-namespace search | Parallel search `user/` + `agent/` memories | Single global search | OV ranks across namespaces; separate searches add latency for marginal gain |
 | Tool call sync | Preserves tool calls | Structured `Part[]` (ADR-003) | OV-native format; tool results prefixed with metadata |
 | Reranking | Server-side via API | OV pipeline + local curator | No need for plugin-side reranking; curator handles dedup + budget |
-| Session used tracking | `session.used()` | Deferred | Low priority |
+| Session used tracking | `session.used()` | **Shipped (ADR-007)** | Dual channel: ContextPart + `session_used()` |
 
 ## Out of Scope (from OpenClaw plugin)
 

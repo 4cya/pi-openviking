@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from "vitest";
 import { createClient } from "../src/ov-client/client";
 import type { OpenVikingConfig } from "../src/shared/config";
+import type { Part } from "../src/ov-client/types";
 
 const defaultConfig: OpenVikingConfig = {
   endpoint: "http://localhost:1933",
@@ -69,11 +70,11 @@ describe("SessionClient", () => {
       transport.request.mockResolvedValue({});
 
       const client = createClient(defaultConfig, transport);
-      await client.session.sendMessage("sess-1", "user", "hello");
+      await client.session.sendMessage("sess-1", "user", [{ type: "text", text: "hello" }]);
       expect(transport.request).toHaveBeenCalledWith(
         "sendMessage",
         "/api/v1/sessions/sess-1/messages",
-        { body: { role: "user", content: "hello" } },
+        { body: { role: "user", parts: [{ type: "text", text: "hello" }] } },
         undefined,
       );
     });
@@ -83,7 +84,7 @@ describe("SessionClient", () => {
       transport.request.mockResolvedValue({});
 
       const client = createClient(defaultConfig, transport);
-      const parts = [{ type: "text" as const, text: "hello" }, { type: "tool_use" as const, id: "t1", name: "search", input: { query: "q" } }];
+      const parts: Part[] = [{ type: "text", text: "hello" }, { type: "tool", tool_id: "t1", tool_name: "search", tool_input: { query: "q" }, tool_output: "", tool_status: "success", tool_output_truncated: false, tool_uri: "", skill_uri: "", duration_ms: null, prompt_tokens: null, completion_tokens: null, tool_output_ref: "" }];
       await client.session.sendMessage("sess-1", "user", parts);
       expect(transport.request).toHaveBeenCalledWith(
         "sendMessage",

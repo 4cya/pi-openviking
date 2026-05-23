@@ -25,6 +25,10 @@ export const logger = {
     write("DEBUG", args);
   },
 
+  warn(...args: unknown[]) {
+    write("WARN", args);
+  },
+
   error(...args: unknown[]) {
     write("ERROR", args);
   },
