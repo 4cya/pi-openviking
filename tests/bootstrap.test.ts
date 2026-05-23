@@ -3,6 +3,7 @@ import type { Transport } from "../src/ov-client/transport";
 import type { OpenVikingConfig } from "../src/shared/config";
 import { DEFAULT_AUTO_RECALL_CONFIG } from "../src/auto-recall/auto-recall";
 import { bootstrapExtension } from "../src/bootstrap";
+import { resolveBudget } from "../src/auto-recall/resolve-budget";
 
 const defaultConfig: OpenVikingConfig = {
   endpoint: "http://localhost:1933",
@@ -248,5 +249,56 @@ describe("bootstrap health check", () => {
       );
       expect(usedCalls.length).toBe(1);
     });
+  });
+
+  // --- Adaptive token budget integration ---
+  test("before_agent_start resolves budget from context usage", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const transport = createMockTransport({
+      request: vi.fn(async (label: string) => {
+        if (label === "healthCheck") return { status: "ok" };
+        if (label === "search") return {
+          memories: Array.from({ length: 5 }, (_, i) => ({
+            text: `mem-${i}-` + "x".repeat(400),
+            score: 0.9 - i * 0.05,
+            uri: `viking://user/memories/m${i}`,
+          })),
+          resources: [],
+          skills: [],
+          total: 5,
+        };
+        return {};
+      }),
+    });
+
+    bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    }, transport);
+
+    const handler = pi.getHandler("before_agent_start");
+
+    // Call with context usage at 90% → budget should be 300 → fewer items
+    const mockCtx = {
+      getContextUsage: vi.fn(() => ({ tokens: 180000, contextWindow: 200000, percent: 90 })),
+    };
+    const highUsageResult = await handler(
+      { prompt: "test query", systemPrompt: "base" },
+      mockCtx,
+    );
+
+    // Call with context usage at 20% → budget should be 1000 → more items
+    const mockCtxLow = {
+      getContextUsage: vi.fn(() => ({ tokens: 40000, contextWindow: 200000, percent: 20 })),
+    };
+    const lowUsageResult = await handler(
+      { prompt: "test query", systemPrompt: "base" },
+      mockCtxLow,
+    );
+
+    expect(highUsageResult.injectedItems.length).toBeLessThan(lowUsageResult.injectedItems.length);
+    expect(mockCtx.getContextUsage).toHaveBeenCalled();
+    expect(mockCtxLow.getContextUsage).toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ import { SessionSync } from "./session-sync/session";
 import { createAutoRecall } from "./auto-recall/auto-recall";
 import type { AutoRecallState } from "./auto-recall/auto-recall";
 import { createHealthChecker, type HealthChecker } from "./shared/health";
+import { resolveBudget } from "./auto-recall/resolve-budget";
 
 export const TOOLS = [
   registerMemsearchTool,
@@ -90,7 +91,7 @@ export function bootstrapExtension(
   for (const register of COMMANDS) register(pi, cmdDeps);
 
   const autoRecall = createAutoRecall(knowledgeClient, sessionSync, recallConfig);
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", async (event, ctx) => {
     // On-demand recovery: re-check health if previously unavailable
     if (!healthChecker.isAvailable()) {
       const recovered = await healthChecker.check();
@@ -100,7 +101,10 @@ export function bootstrapExtension(
       }
     }
     if (!healthChecker.isAvailable()) return;
-    const result = await autoRecall(event);
+
+    const usage = ctx?.getContextUsage?.();
+    const tokenBudget = resolveBudget(usage);
+    const result = await autoRecall({ ...event, tokenBudget });
     autoRecallState.lastInjectedItems = result.injectedItems ?? [];
     return result;
   });

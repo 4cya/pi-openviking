@@ -327,4 +327,35 @@ describe("createAutoRecall", () => {
     expect(result.injectedItems).toEqual([]);
   });
 
+  test("passes tokenBudget from event to curate", async () => {
+    // 5 items, each ~100 tokens after truncation. Budget=200 should trim to ~2.
+    const client = createMockClient({
+      knowledge: {
+        search: vi.fn(async () => ({
+          memories: Array.from({ length: 5 }, (_, i) => ({
+            text: `item-${i}-` + "x".repeat(400),
+            score: 0.9 - i * 0.05,
+            uri: `viking://user/memories/m${i}`,
+          })),
+          resources: [],
+          skills: [],
+          total: 5,
+        } as SearchResult)),
+      } as any,
+    });
+    const sync = createMockSessionSync();
+    const autoRecall = createAutoRecall(client.knowledge, sync, {
+      ...defaultConfig,
+      curator: { ...DEFAULT_CURATE_OPTIONS, maxContentChars: 1000, scoreThreshold: 0 },
+    });
+
+    // Without tokenBudget — uses default maxTokens=700, should fit ~3-4 items
+    const defaultResult = await autoRecall({ prompt: "q", systemPrompt: "base" });
+    const defaultCount = defaultResult.injectedItems!.length;
+
+    // With small tokenBudget — should trim more aggressively
+    const tightResult = await autoRecall({ prompt: "q", systemPrompt: "base", tokenBudget: 200 });
+    expect(tightResult.injectedItems!.length).toBeLessThan(defaultCount);
+  });
+
 });

@@ -333,4 +333,36 @@ describe("curate", () => {
       expect(texts).toContain("leaf-2");
     });
   });
+
+  describe("tokenBudget override", () => {
+    test("tokenBudget param overrides options.maxTokens when provided", () => {
+      const items = Array.from({ length: 5 }, (_, i) =>
+        makeMemory({ text: `item-${i}-` + "a".repeat(400), score: 0.9 - i * 0.01, uri: `viking://m${i}` })
+      );
+      // options.maxTokens = 2000 (would allow all), but tokenBudget = 200 overrides it
+      const result = curate(
+        makeResult({ memories: items, total: 5 }),
+        "test",
+        { ...DEFAULT_CURATE_OPTIONS, maxTokens: 2000, maxContentChars: 1000, topN: 5, scoreThreshold: 0 },
+        200,
+      );
+      // Should trim aggressively — fewer items than 5
+      expect(result.length).toBeLessThan(5);
+      // Highest score survives
+      expect(result[0].text).toContain("item-0");
+    });
+
+    test("uses options.maxTokens when tokenBudget is not provided", () => {
+      const result = curate(
+        makeResult({
+          memories: [makeMemory({ text: "a".repeat(10000), score: 0.9, uri: "viking://m1" })],
+          total: 1,
+        }),
+        "test",
+        { ...DEFAULT_CURATE_OPTIONS, maxTokens: 10, maxContentChars: 100000, scoreThreshold: 0 },
+      );
+      // No tokenBudget → uses options.maxTokens=10 → item too big → empty
+      expect(result).toEqual([]);
+    });
+  });
 });

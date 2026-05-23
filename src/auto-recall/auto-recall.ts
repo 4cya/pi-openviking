@@ -25,6 +25,7 @@ export const DEFAULT_AUTO_RECALL_CONFIG: AutoRecallConfig = {
 export interface AutoRecallEvent {
   prompt: string;
   systemPrompt: string;
+  tokenBudget?: number;
 }
 
 export function createAutoRecall(
@@ -45,7 +46,7 @@ export function createAutoRecall(
 
     try {
       const results = await client.search(sessionId, event.prompt, limit, "auto", undefined, controller.signal);
-      const items = curate(results, event.prompt, curateOptions);
+      const items = curate(results, event.prompt, curateOptions, event.tokenBudget);
       if (items.length === 0) return { injectedItems: [] };
       const block = renderBlock(items);
       return { systemPrompt: `${event.systemPrompt}\n\n${block}`, injectedItems: items };

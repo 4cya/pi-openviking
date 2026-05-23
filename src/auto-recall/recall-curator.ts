@@ -272,9 +272,10 @@ export function curate(
   results: SearchResult,
   query: string,
   options: CurateOptions = DEFAULT_CURATE_OPTIONS,
+  tokenBudget?: number,
 ): RecallItem[] {
   const merged = mergeResults(results);
   const picked = pickItems(merged, options.topN, query, options.scoreThreshold);
   const truncated = truncateItems(picked, options.maxContentChars, options.preferAbstract);
-  return trimToBudget(truncated, options.maxTokens);
+  return trimToBudget(truncated, tokenBudget ?? options.maxTokens);
 }
