@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { TSchema, Static } from "typebox";
 import type { SessionClient, FsClient, KnowledgeClient } from "../ov-client/client";
 import type { SessionSyncLike } from "../session-sync/session";

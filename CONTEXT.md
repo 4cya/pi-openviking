@@ -69,6 +69,16 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 - **Health check with graceful degradation**: bootstrap probes `GET /health`. If unreachable, registers everything but disables auto-recall (`serverAvailable = false`). Recovery is on-demand — next auto-recall or tool call retries health check. Circuit breaker in session sync: 3 consecutive failures → stop trying until next recovery. (ADR-004)
 - No reranking in plugin — trust OV's internal pipeline.
 - No grep/glob search — semantic search covers coding agent use cases.
+- **Peer dependency namespace**: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui` — canonical Pi namespace. Legacy `@mariozechner` references in package.json are incorrect and must be fixed.
+- **Status line scope**: `ctx.ui.setStatus("ov-status", ...)` shows health + last recall count — e.g. `● OV · 3 recalled` or `○ OV`. Updated on health change and after each `before_agent_start`. Recall count is last-injected count, persists between turns until overwritten.
+- **Tool rendering**: generic renderCall/renderResult for 4 tools (browse, commit, delete, import). Custom for memsearch (query + mode) and memread (URI + level). Collapsed: icon + count/status. Expanded: first 3-5 lines of formatted content. Renderers optional in ToolDef — omitted = generic fallback.
+- **`/ov-setup` scope**: grouped wizard with 3 sections — (1) Connection: endpoint + apiKey (required), (2) Auto-recall: enabled/limit/token budget (defaults: true/10/700), (3) Log path (default: `~/.pi/agent/pi-openviking.log`). Transport timeout, health path, circuit breaker limits excluded — internal defaults suffice. Persisted to project scope (`{cwd}/.pi/settings.json`).
+- **`memdelete` gate**: always block via `tool_call` event — `ctx.ui.confirm("Delete?", uri)` before execution. No config opt-out. Irreversible, no undo, no trash. `memimport` ungated — uploads are non-destructive.
+- **Async factory**: convert `index.ts` factory to `async function`. `await healthChecker.check()` with 2s timeout. Blocks Pi startup briefly but guarantees status line shows correct state from first frame. On timeout — degraded mode, same as current fire-and-forget behavior.
+- **Autocomplete**: fully recursive `viking://` URI completion via `addAutocompleteProvider`. Each path segment triggers `fsList` on prefix. Aggressive cache: 30s TTL per path, invalidated on `memimport`/`memdelete`. Only triggers when text contains `viking://` — no overhead on normal typing.
+- **Adaptive recall**: stepped token budget via `ctx.getContextUsage()`. `<50%` context used → 1000 tokens. `50-80%` → 700 tokens. `>80%` → 300 tokens. No model contextWindow lookup needed — ratios only. Applied in Recall Curator before curation.
+- **ADR governance**: new ADRs get `Status: accepted` header. Superseded ADRs get `Status: superseded` + reference to replacement. Existing 7 ADRs left untouched (implicitly accepted). No YAML frontmatter, no tooling.
+- **Distribution**: git-only via `pi install git:github.com/dslara/pi-openviking`. No npm publish. Pre-alpha (`0.1.0`), no external users. Migrate to npm when API stabilizes and users exist.
 
 ## Audit Resolution (2026-05-23)
 
@@ -120,3 +130,5 @@ OpenViking ships an official OpenClaw (Claude) plugin. This table documents the 
 - **ADR-003**: Enriched session sync — tool calls as structured `Part[]`, tool results truncated with metadata prefix, thinking discarded. Replaces text-only `extractText` with `serializeContent`.
 - **ADR-004**: Health check com graceful degradation — bootstrap probes `/health`, disables auto-recall se server down, recovery on-demand, circuit breaker no session sync (3 falhas).
 - **ADR-005**: Embedding `max_input_tokens: 7168` no `ov.conf` — OV trunca internamente antes de embeddar. Previne circuit breaker loop em Docker Model Runner (bge-m3, batch size 8192). Fix server-side only, zero código.
+- **ADR-008**: Async factory with health check timeout — 2s await on startup guarantees status line state from first frame.
+- **ADR-009**: Adaptive auto-recall budget — stepped thresholds via `getContextUsage()` instead of fixed 700 tokens.

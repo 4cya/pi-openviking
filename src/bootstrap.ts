@@ -15,7 +15,7 @@ import { registerImportCommand } from "./commands/import";
 import { registerDeleteCommand } from "./commands/delete";
 import { registerRecallCommand } from "./commands/recall";
 import { registerCommitCommand } from "./commands/commit";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { CommandRegisterDeps } from "./commands/types";
 import { SessionSync } from "./session-sync/session";
 import { createAutoRecall } from "./auto-recall/auto-recall";

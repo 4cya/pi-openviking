@@ -3,7 +3,7 @@ import type { SessionClient } from "../src/ov-client/client";
 import { SessionSync } from "../src/session-sync/session";
 import { createMockClient } from "./mocks";
 
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Part, ContextPart } from "../src/ov-client/types";
 import type { RecallItem } from "../src/auto-recall/recall-curator";
 

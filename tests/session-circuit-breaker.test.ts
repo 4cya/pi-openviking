@@ -3,7 +3,7 @@ import { SessionSync } from "../src/session-sync/session";
 import type { SessionClient } from "../src/ov-client/client";
 import { createMockClient } from "./mocks";
 
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Part } from "../src/ov-client/types";
 
 function createSync(sessionClient: SessionClient, opts?: {
