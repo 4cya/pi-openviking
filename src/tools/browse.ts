@@ -3,6 +3,8 @@ import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderGenericCall, renderGenericResult } from "../shared/render";
+import { browseOp } from "../operations/browse";
+import { formatBrowse } from "../shared/format-browse";
 
 const MEMBROWSE_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to browse" }),
@@ -29,32 +31,15 @@ export function registerMembrowseTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
     renderResult: renderGenericResult as any,
 
     async execute({ params, deps, signal }) {
-      let result;
-      switch (params.view ?? "list") {
-        case "tree":
-          result = await deps.fs.fsTree(params.uri, signal);
-          break;
-        case "stat":
-          result = await deps.fs.fsStat(params.uri, signal);
-          break;
-        default:
-          result = await deps.fs.fsList(params.uri, signal, params.recursive, params.simple);
-          break;
-      }
+      const result = await browseOp(deps.fs, {
+        uri: params.uri,
+        view: params.view ?? "list",
+        recursive: params.recursive,
+        simple: params.simple,
+      }, signal);
 
-      const parts: string[] = [];
-      parts.push(`URI: ${result.uri}`);
-      if (result.children && result.children.length > 0) {
-        parts.push("Children:");
-        for (const child of result.children) {
-          parts.push(`- ${child.uri} (${child.type})`);
-          if (child.abstract) parts.push(`  ${child.abstract}`);
-        }
-      } else {
-        parts.push("No children.");
-      }
-
-      return { text: parts.join("\n") };
+      const text = formatBrowse(result, params.view ?? "list");
+      return { text };
     },
   });
 }

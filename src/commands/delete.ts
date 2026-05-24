@@ -3,6 +3,7 @@ import type { CommandRegisterDeps } from "./types";
 import type { CommandResult } from "../shared/command-def";
 import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
+import { deleteOp } from "../operations/delete";
 
 export function registerDeleteCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
   defineCommand(pi, deps, {
@@ -18,7 +19,7 @@ export function registerDeleteCommand(pi: ExtensionAPI, deps: CommandRegisterDep
         return { type: "notify", message: "Usage: /ov-delete <viking://uri>", level: "error" };
       }
 
-      const result = await d.knowledge.verifiedDelete(uri);
+      const result = await deleteOp(d.knowledge, { uri });
       const message = result.verified
         ? `✓ Deleted: ${result.uri}`
         : `✓ Deleted: ${result.uri} (warning: resource may still appear in search due to async index sync)`;

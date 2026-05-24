@@ -47,7 +47,7 @@ Pi owns session history, prompt orchestration, and tool execution. OpenViking ow
 
 ## Design Decisions
 
-- **Operations layer** (`src/operations/`): business logic written once, called by both tools and commands. Only deep operations deserve a separate module: `commitOp` (flush + commit + polling loop + timeout) and `importOp` (source resolution + file/directory branching). Shallow passthroughs (search, browse, read, delete) call the Client Adapter directly — no operation wrapper needed. This avoids shallow modules where the interface matches the implementation.
+- **Operations layer** (`src/operations/`): business logic written once, called by both tools and commands. All six domain concepts have an Operation module. Deep operations contain multi-step logic: `commitOp` (flush + commit + polling loop + timeout) and `importOp` (source resolution + file/directory branching). Shallow operations are thin wrappers that call the Client Adapter and return raw data: `searchOp`, `browseOp`, `readOp`, `deleteOp`. Tools and commands are thin adapters that call an Operation and format output for their consumer (JSON for agent, text for human).
 - Auto-recall and memsearch tool format search results differently **by design**: auto-recall produces compressed XML (`<relevant-memories>`) with dedup and token budget for system prompt injection; memsearch returns full JSON for agent reasoning. No shared formatter.
 
 - Pi keeps its own session history. OV does **not** reassemble it (no `assemble()` / `compact()` pattern).

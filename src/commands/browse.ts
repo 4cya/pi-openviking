@@ -4,6 +4,7 @@ import type { CommandResult } from "../shared/command-def";
 import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
 import { formatBrowse } from "../shared/format-browse";
+import { browseOp } from "../operations/browse";
 
 export function registerBrowseCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
   defineCommand(pi, deps, {
@@ -20,19 +21,7 @@ export function registerBrowseCommand(pi: ExtensionAPI, deps: CommandRegisterDep
       const recursive = "recursive" in parsed.flags || undefined;
       const simple = "simple" in parsed.flags || undefined;
 
-      let result;
-      switch (view) {
-        case "tree":
-          result = await d.fs.fsTree(uri);
-          break;
-        case "stat":
-          result = await d.fs.fsStat(uri);
-          break;
-        default:
-          result = await d.fs.fsList(uri, undefined, recursive, simple);
-          break;
-      }
-
+      const result = await browseOp(d.fs, { uri, view, recursive, simple });
       const text = formatBrowse(result, view);
       return { type: "steer", customType: "ov-ls", text, details: { uri } };
     },

@@ -83,7 +83,7 @@ describe("COMMANDS registry", () => {
       const ctx = createMockCmdCtx();
 
       await cmd.handler("how does auth work", ctx);
-      expect(search).toHaveBeenCalledWith("ov-sess-1", "how does auth work", 10, "auto", undefined);
+      expect(search).toHaveBeenCalledWith("ov-sess-1", "how does auth work", 10, "auto", undefined, undefined);
       expect(pi.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({ customType: "ov-search", display: true }),
         expect.objectContaining({ triggerTurn: true, deliverAs: "steer" }),
@@ -97,7 +97,7 @@ describe("COMMANDS registry", () => {
       const ctx = createMockCmdCtx();
 
       await cmd.handler("--deep --limit 20 --uri viking://docs auth flow", ctx);
-      expect(search).toHaveBeenCalledWith("ov-sess-1", "auth flow", 20, "deep", "viking://docs");
+      expect(search).toHaveBeenCalledWith("ov-sess-1", "auth flow", 20, "deep", "viking://docs", undefined);
     });
 
     test("notifies on missing query", async () => {
@@ -143,7 +143,7 @@ describe("COMMANDS registry", () => {
       const ctx = createMockCmdCtx();
 
       await cmd.handler("--tree viking://resources", ctx);
-      expect(fsTree).toHaveBeenCalledWith("viking://resources");
+      expect(fsTree).toHaveBeenCalledWith("viking://resources", undefined);
     });
 
     test("uses stat flag", async () => {
@@ -153,7 +153,7 @@ describe("COMMANDS registry", () => {
       const ctx = createMockCmdCtx();
 
       await cmd.handler("--stat viking://resources/file.md", ctx);
-      expect(fsStat).toHaveBeenCalledWith("viking://resources/file.md");
+      expect(fsStat).toHaveBeenCalledWith("viking://resources/file.md", undefined);
     });
 
     test("defaults to viking://", async () => {
@@ -197,7 +197,7 @@ describe("COMMANDS registry", () => {
       const ctx = createMockCmdCtx();
 
       await cmd.handler("viking://resources/old", ctx);
-      expect(verifiedDelete).toHaveBeenCalledWith("viking://resources/old");
+      expect(verifiedDelete).toHaveBeenCalledWith("viking://resources/old", undefined);
       expect(ctx.ui.notify).toHaveBeenCalledWith("✓ Deleted: viking://resources/old", "info");
     });
 

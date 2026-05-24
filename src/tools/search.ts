@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderMemsearchCall, renderMemsearchResult } from "../shared/render";
+import { searchOp } from "../operations/search";
 
 const SEARCH_PARAMS = Type.Object({
   query: Type.String({ description: "Search query to find relevant memories and resources" }),
@@ -33,14 +34,13 @@ export function registerMemsearchTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
 
     async execute({ params, deps, signal }) {
       const sessionId = deps.sync.getOvSessionId();
-      const results = await deps.knowledge.search(
-        sessionId ?? undefined,
-        params.query,
-        params.limit ?? 10,
-        params.mode ?? "auto",
-        params.uri,
-        signal,
-      );
+      const results = await searchOp(deps.knowledge, {
+        sessionId: sessionId ?? undefined,
+        query: params.query,
+        limit: params.limit ?? 10,
+        mode: params.mode ?? "auto",
+        uri: params.uri,
+      }, signal);
 
       if (results.total === 0) {
         return { text: "No results found." };

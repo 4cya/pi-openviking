@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderMemreadCall, renderMemreadResult } from "../shared/render";
+import { readOp } from "../operations/read";
 
 const MEMREAD_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to read" }),
@@ -28,15 +29,7 @@ export function registerMemreadTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
     renderResult: renderMemreadResult as any,
 
     async execute({ params, deps, signal }) {
-      const level = params.level ?? "auto";
-
-      let resolvedLevel = level;
-      if (resolvedLevel === "auto") {
-        const stat = await deps.fs.fsStat(params.uri, signal);
-        const entry = stat.children?.[0];
-        resolvedLevel = entry?.type === "directory" ? "overview" : "read";
-      }
-      const result = await deps.fs.read(params.uri, resolvedLevel, signal);
+      const result = await readOp(deps.fs, params.uri, { level: params.level }, signal);
       return { text: result.content };
     },
   });

@@ -4,6 +4,7 @@ import type { CommandResult } from "../shared/command-def";
 import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
 import { formatSearch } from "../shared/format-search";
+import { searchOp } from "../operations/search";
 
 export function registerSearchCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
   defineCommand(pi, deps, {
@@ -26,7 +27,7 @@ export function registerSearchCommand(pi: ExtensionAPI, deps: CommandRegisterDep
       const uri = parsed.flags.uri;
       const sessionId = d.sync.getOvSessionId();
 
-      const results = await d.knowledge.search(sessionId, query, limit, mode, uri);
+      const results = await searchOp(d.knowledge, { sessionId, query, limit, mode, uri });
       const text = formatSearch(results, query);
 
       return { type: "steer", customType: "ov-search", text, details: { total: results.total } };

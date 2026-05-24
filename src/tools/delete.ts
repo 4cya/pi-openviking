@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderGenericCall, renderGenericResult } from "../shared/render";
+import { deleteOp } from "../operations/delete";
 
 const MEMDELETE_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to delete" }),
@@ -22,7 +23,7 @@ export function registerMemdeleteTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
     renderResult: renderGenericResult as any,
 
     async execute({ params, deps, signal }) {
-      const result = await deps.knowledge.verifiedDelete(params.uri, signal);
+      const result = await deleteOp(deps.knowledge, { uri: params.uri }, signal);
       const text = result.verified
         ? `Deleted: ${result.uri}`
         : `Deleted: ${result.uri} (warning: resource may still appear in search due to async index sync)`;
