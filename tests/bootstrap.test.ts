@@ -163,6 +163,22 @@ describe("bootstrap health check", () => {
     expect(searchCalls.length).toBeGreaterThan(0);
   });
 
+  test("returns fs client in result", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const transport = createMockTransport({
+      request: vi.fn(async () => { throw new Error("down"); }),
+    });
+
+    const result = await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    }, transport);
+
+    expect(result.fs).toBeDefined();
+    expect(typeof result.fs.fsList).toBe("function");
+  });
+
   test("returns healthChecker in result", async () => {
     const pi = createMockPi();
     const sm = createMockSessionManager();

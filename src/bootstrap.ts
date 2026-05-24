@@ -53,6 +53,7 @@ export interface BootstrapContext {
 export interface BootstrapResult {
   sessionSync: SessionSync;
   healthChecker: HealthChecker;
+  fs: import("./ov-client/types").FsClient;
 }
 
 function formatStatus(available: boolean, recallCount?: number): string {
@@ -147,5 +148,5 @@ export async function bootstrapExtension(
     }
   });
 
-  return { sessionSync, healthChecker };
+  return { sessionSync, healthChecker, fs: fsClient };
 }

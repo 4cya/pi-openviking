@@ -457,6 +457,7 @@ describe("memimport tool", () => {
     const result = await tool.execute("tc-1", { source: "https://example.com/doc.md" });
     expect(addResource).toHaveBeenCalledWith({ path: "https://example.com/doc.md", kind: "resource" }, undefined);
     expect(result.content[0].text).toBe("Imported: viking://resources/github.md (status: success)");
+    expect(result.details).toEqual({ root_uri: "viking://resources/github.md" });
   });
 
   test("forwards kind=skill, reason, and to params", async () => {

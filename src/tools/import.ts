@@ -35,7 +35,10 @@ export function registerMemimportTool(pi: ExtensionAPI, deps: ToolRegisterDeps) 
         reason: params.reason,
         to: params.to,
       }, signal);
-      return { text: `Imported: ${result.root_uri} (status: ${result.status})` };
+      return {
+        text: `Imported: ${result.root_uri} (status: ${result.status})`,
+        details: { root_uri: result.root_uri },
+      };
     },
   });
 }
