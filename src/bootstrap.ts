@@ -47,6 +47,7 @@ export interface BootstrapContext {
     getSessionFile(): string | undefined;
     getBranch(): Array<{ type: string; customType?: string; data?: unknown }>;
   };
+  setStatus?: (key: string, text: string | undefined) => void;
 }
 
 export interface BootstrapResult {
@@ -54,11 +55,20 @@ export interface BootstrapResult {
   healthChecker: HealthChecker;
 }
 
-export function bootstrapExtension(
+function formatStatus(available: boolean, recallCount?: number): string {
+  const icon = available ? "\u25cf" : "\u25cb";
+  let text = `${icon} OV`;
+  if (available && recallCount && recallCount > 0) {
+    text += ` \u00b7 ${recallCount} recalled`;
+  }
+  return text;
+}
+
+export async function bootstrapExtension(
   pi: ExtensionAPI,
   ctx: BootstrapContext,
   transport?: Transport,
-): BootstrapResult {
+): Promise<BootstrapResult> {
   const config = loadConfig(ctx.cwd);
   const recallConfig = loadAutoRecallConfig(ctx.cwd);
   const t = transport ?? createTransport(config);
@@ -66,12 +76,23 @@ export function bootstrapExtension(
   const { session: sessionClient, fs: fsClient, knowledge: knowledgeClient } = client;
 
   // Health check with graceful degradation
-  const healthChecker = createHealthChecker(t, config.healthPath);
-
-  // Fire-and-forget initial health probe
-  void healthChecker.check().then((ok) => {
-    logger.debug("initial health check:", ok ? "available" : "unavailable");
+  const updateStatus = ctx.setStatus;
+  const healthChecker = createHealthChecker(t, config.healthPath, {
+    onChange(available) {
+      updateStatus?.("ov-status", formatStatus(available));
+    },
   });
+
+  // Await initial health check with 2-second timeout
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  try {
+    const ok = await healthChecker.check(controller.signal);
+    updateStatus?.("ov-status", formatStatus(ok));
+    logger.debug("initial health check:", ok ? "available" : "unavailable");
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const autoRecallState: { enabled: boolean; lastInjectedItems: import("./auto-recall/recall-curator").RecallItem[] } = { ...recallConfig, lastInjectedItems: [] };
 
@@ -100,12 +121,21 @@ export function bootstrapExtension(
         sessionSync.recover();
       }
     }
-    if (!healthChecker.isAvailable()) return;
+
+    if (!healthChecker.isAvailable()) {
+      ctx?.ui?.setStatus("ov-status", formatStatus(false));
+      return;
+    }
 
     const usage = ctx?.getContextUsage?.();
     const tokenBudget = resolveBudget(usage);
     const result = await autoRecall({ ...event, tokenBudget });
     autoRecallState.lastInjectedItems = result.injectedItems ?? [];
+
+    // Update status with recall count
+    const count = result.injectedItems?.length ?? 0;
+    ctx?.ui?.setStatus("ov-status", formatStatus(true, count));
+
     return result;
   });
 

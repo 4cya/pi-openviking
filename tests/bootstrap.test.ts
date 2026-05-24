@@ -53,14 +53,14 @@ vi.mock("../src/shared/config", () => ({
 }));
 
 describe("bootstrap health check", () => {
-  test("registers all tools even when server unreachable", () => {
+  test("registers all tools even when server unreachable", async () => {
     const pi = createMockPi();
     const sm = createMockSessionManager();
     const transport = createMockTransport({
       request: vi.fn(async () => { throw new Error("ECONNREFUSED"); }),
     });
 
-    const result = bootstrapExtension(pi as any, {
+    const result = await bootstrapExtension(pi as any, {
       cwd: "/test",
       sessionManager: sm,
     }, transport);
@@ -78,7 +78,7 @@ describe("bootstrap health check", () => {
       request: vi.fn(async () => { throw new Error("ECONNREFUSED"); }),
     });
 
-    bootstrapExtension(pi as any, {
+    await bootstrapExtension(pi as any, {
       cwd: "/test",
       sessionManager: sm,
     }, transport);
@@ -87,7 +87,7 @@ describe("bootstrap health check", () => {
     expect(handler).toBeDefined();
 
     // Simulate auto-recall trigger — should skip without error
-    const result = await handler({ userMessage: { content: "test" } });
+    const result = await handler({ userMessage: { content: "test" } }, { ui: { setStatus: vi.fn() } });
     expect(result).toBeUndefined(); // auto-recall skipped
   });
 
@@ -103,20 +103,20 @@ describe("bootstrap health check", () => {
       }),
     });
 
-    bootstrapExtension(pi as any, {
+    await bootstrapExtension(pi as any, {
       cwd: "/test",
       sessionManager: sm,
     }, transport);
 
     const handler = pi.getHandler("before_agent_start");
-    const result = await handler({ userMessage: { content: "test query" } });
+    const result = await handler({ userMessage: { content: "test query" } }, { ui: { setStatus: vi.fn() } });
     // auto-recall ran (returns systemPrompt injection or undefined if no results)
     // We just verify it didn't throw and the search was attempted
     expect(transport.request).toHaveBeenCalledWith(
       "healthCheck",
       "/health",
       undefined,
-      undefined,
+      expect.any(AbortSignal),
     );
   });
 
@@ -135,7 +135,7 @@ describe("bootstrap health check", () => {
       }),
     });
 
-    bootstrapExtension(pi as any, {
+    await bootstrapExtension(pi as any, {
       cwd: "/test",
       sessionManager: sm,
     }, transport);
@@ -143,7 +143,7 @@ describe("bootstrap health check", () => {
     const handler = pi.getHandler("before_agent_start");
 
     // First call: server down → skip auto-recall
-    await handler({ userMessage: { content: "test" } });
+    await handler({ userMessage: { content: "test" } }, { ui: { setStatus: vi.fn() } });
     // healthCheck was called during bootstrap + before_agent_start
     const healthCalls = (transport.request as ReturnType<typeof vi.fn>).mock.calls.filter(
       (c: any[]) => c[0] === "healthCheck",
@@ -154,7 +154,7 @@ describe("bootstrap health check", () => {
     healthy = true;
 
     // Second call: server up → auto-recall runs
-    await handler({ userMessage: { content: "test query" } });
+    await handler({ userMessage: { content: "test query" } }, { ui: { setStatus: vi.fn() } });
 
     // Should have done a search
     const searchCalls = (transport.request as ReturnType<typeof vi.fn>).mock.calls.filter(
@@ -170,7 +170,7 @@ describe("bootstrap health check", () => {
       request: vi.fn(async () => { throw new Error("down"); }),
     });
 
-    const result = bootstrapExtension(pi as any, {
+    const result = await bootstrapExtension(pi as any, {
       cwd: "/test",
       sessionManager: sm,
     }, transport);
@@ -199,14 +199,14 @@ describe("bootstrap health check", () => {
       }),
     });
 
-    const result = bootstrapExtension(pi as any, {
+    const result = await bootstrapExtension(pi as any, {
       cwd: "/test",
       sessionManager: sm,
     }, transport);
 
     // Fire auto-recall → stores injectedItems in autoRecallState
     const handler = pi.getHandler("before_agent_start");
-    await handler({ prompt: "test query", systemPrompt: "base" });
+    await handler({ prompt: "test query", systemPrompt: "base" }, { ui: { setStatus: vi.fn() } });
 
     // User message → creates session
     result.sessionSync.onMessageEnd({
@@ -272,7 +272,7 @@ describe("bootstrap health check", () => {
       }),
     });
 
-    bootstrapExtension(pi as any, {
+    await bootstrapExtension(pi as any, {
       cwd: "/test",
       sessionManager: sm,
     }, transport);
@@ -300,5 +300,170 @@ describe("bootstrap health check", () => {
     expect(highUsageResult.injectedItems.length).toBeLessThan(lowUsageResult.injectedItems.length);
     expect(mockCtx.getContextUsage).toHaveBeenCalled();
     expect(mockCtxLow.getContextUsage).toHaveBeenCalled();
+  });
+
+  // --- Async factory with health timeout + status line ---
+  describe("async factory with health timeout", () => {
+    test("bootstrapExtension is async and awaits health check", async () => {
+      const pi = createMockPi();
+      const sm = createMockSessionManager();
+      const setStatus = vi.fn();
+      const transport = createMockTransport({
+        request: vi.fn(async (label: string) => {
+          if (label === "healthCheck") return { status: "ok" };
+          return {};
+        }),
+      });
+
+      const result = await bootstrapExtension(pi as any, {
+        cwd: "/test",
+        sessionManager: sm,
+        setStatus,
+      }, transport);
+
+      expect(result.healthChecker.isAvailable()).toBe(true);
+      expect(setStatus).toHaveBeenCalledWith("ov-status", "\u25cf OV");
+    });
+
+    test("sets status line to \u25cb OV on health timeout", async () => {
+      const pi = createMockPi();
+      const sm = createMockSessionManager();
+      const setStatus = vi.fn();
+      const transport = createMockTransport({
+        request: vi.fn(async (label: string) => {
+          if (label === "healthCheck") throw new Error("timeout");
+          return {};
+        }),
+      });
+
+      const result = await bootstrapExtension(pi as any, {
+        cwd: "/test",
+        sessionManager: sm,
+        setStatus,
+      }, transport);
+
+      expect(result.healthChecker.isAvailable()).toBe(false);
+      expect(setStatus).toHaveBeenCalledWith("ov-status", "\u25cb OV");
+    });
+
+    test("uses 2-second AbortController timeout for health check", async () => {
+      const pi = createMockPi();
+      const sm = createMockSessionManager();
+      const setStatus = vi.fn();
+      let abortSignal: AbortSignal | undefined;
+      const transport = createMockTransport({
+        request: vi.fn(async (_label: string, _path: string, _body: any, signal?: AbortSignal) => {
+          abortSignal = signal;
+          await new Promise(resolve => setTimeout(resolve, 10));
+          if (signal?.aborted) throw new Error("aborted");
+          return { status: "ok" };
+        }),
+      });
+
+      await bootstrapExtension(pi as any, {
+        cwd: "/test",
+        sessionManager: sm,
+        setStatus,
+      }, transport);
+
+      expect(setStatus).toHaveBeenCalledWith("ov-status", "\u25cf OV");
+    });
+
+    test("status line shows \u25cf OV \u00b7 N recalled after auto-recall with items", async () => {
+      const pi = createMockPi();
+      const sm = createMockSessionManager();
+      const setStatus = vi.fn();
+      const transport = createMockTransport({
+        request: vi.fn(async (label: string, _path: string, opts?: any) => {
+          if (label === "healthCheck") return { status: "ok" };
+          if (label === "search") return {
+            memories: [{ text: "test memory", score: 0.9, uri: "viking://user/memories/m1" }],
+            resources: [],
+            skills: [],
+            total: 1,
+          };
+          return {};
+        }),
+      });
+
+      await bootstrapExtension(pi as any, {
+        cwd: "/test",
+        sessionManager: sm,
+        setStatus,
+      }, transport);
+
+      const handler = pi.getHandler("before_agent_start");
+      const mockCtx = {
+        getContextUsage: vi.fn(() => ({ tokens: 50000, contextWindow: 200000, percent: 25 })),
+        ui: { setStatus: vi.fn() },
+      };
+      await handler({ prompt: "test", systemPrompt: "base" }, mockCtx);
+
+      expect(mockCtx.ui.setStatus).toHaveBeenCalledWith("ov-status", "\u25cf OV \u00b7 1 recalled");
+    });
+
+    test("status line reverts to \u25cf OV when no items injected", async () => {
+      const pi = createMockPi();
+      const sm = createMockSessionManager();
+      const setStatus = vi.fn();
+      const transport = createMockTransport({
+        request: vi.fn(async (label: string) => {
+          if (label === "healthCheck") return { status: "ok" };
+          if (label === "search") return { memories: [], resources: [], skills: [], total: 0 };
+          return {};
+        }),
+      });
+
+      await bootstrapExtension(pi as any, {
+        cwd: "/test",
+        sessionManager: sm,
+        setStatus,
+      }, transport);
+
+      const handler = pi.getHandler("before_agent_start");
+      const mockCtx = {
+        getContextUsage: vi.fn(() => ({ tokens: 50000, contextWindow: 200000, percent: 25 })),
+        ui: { setStatus: vi.fn() },
+      };
+      await handler({ prompt: "test", systemPrompt: "base" }, mockCtx);
+
+      expect(mockCtx.ui.setStatus).toHaveBeenCalledWith("ov-status", "\u25cf OV");
+    });
+
+    test("status line updates on health recovery via onChange", async () => {
+      const pi = createMockPi();
+      const sm = createMockSessionManager();
+      const setStatus = vi.fn();
+      let healthy = false;
+      const transport = createMockTransport({
+        request: vi.fn(async (label: string) => {
+          if (label === "healthCheck") {
+            if (!healthy) throw new Error("down");
+            return { status: "ok" };
+          }
+          return {};
+        }),
+      });
+
+      await bootstrapExtension(pi as any, {
+        cwd: "/test",
+        sessionManager: sm,
+        setStatus,
+      }, transport);
+
+      // Initially unavailable
+      expect(setStatus).toHaveBeenCalledWith("ov-status", "\u25cb OV");
+
+      // Simulate recovery — before_agent_start re-checks and updates via ctx.ui.setStatus
+      const handler = pi.getHandler("before_agent_start");
+      healthy = true;
+      const mockCtx = {
+        getContextUsage: vi.fn(() => ({ tokens: 50000, contextWindow: 200000, percent: 25 })),
+        ui: { setStatus: vi.fn() },
+      };
+      await handler({ prompt: "test", systemPrompt: "base" }, mockCtx);
+
+      expect(mockCtx.ui.setStatus).toHaveBeenCalledWith("ov-status", "\u25cf OV");
+    });
   });
 });

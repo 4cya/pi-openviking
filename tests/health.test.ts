@@ -91,4 +91,44 @@ describe("HealthChecker", () => {
       undefined,
     );
   });
+
+  describe("onChange callback", () => {
+    test("fires onChange when state transitions from false to true", async () => {
+      const transport = mockTransport();
+      const onChange = vi.fn();
+      transport.request.mockResolvedValue({ status: "ok" });
+
+      const hc = createHealthChecker(transport, "/health", { onChange });
+      await hc.check();
+
+      expect(onChange).toHaveBeenCalledWith(true);
+    });
+
+    test("fires onChange when state transitions from true to false", async () => {
+      const transport = mockTransport();
+      const onChange = vi.fn();
+      transport.request.mockResolvedValueOnce({ status: "ok" });
+      transport.request.mockRejectedValueOnce(new Error("down"));
+
+      const hc = createHealthChecker(transport, "/health", { onChange });
+      await hc.check(); // true
+      await hc.check(); // false
+
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect(onChange).toHaveBeenNthCalledWith(1, true);
+      expect(onChange).toHaveBeenNthCalledWith(2, false);
+    });
+
+    test("does not fire onChange when state stays the same", async () => {
+      const transport = mockTransport();
+      const onChange = vi.fn();
+      transport.request.mockResolvedValue({ status: "ok" });
+
+      const hc = createHealthChecker(transport, "/health", { onChange });
+      await hc.check(); // false→true: fires
+      await hc.check(); // true→true: no fire
+
+      expect(onChange).toHaveBeenCalledTimes(1);
+    });
+  });
 });
