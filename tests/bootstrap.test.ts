@@ -467,3 +467,195 @@ describe("bootstrap health check", () => {
     });
   });
 });
+
+describe("memdelete confirmation gate", () => {
+  function createHandlerCtx(overrides?: Record<string, unknown>) {
+    const confirm = vi.fn();
+    return {
+      ui: {
+        confirm,
+        notify: vi.fn(),
+        setStatus: vi.fn(),
+      },
+      ...overrides,
+    } as any;
+  }
+
+  function createToolCallEvent(toolName: string, input: Record<string, unknown> = {}) {
+    return {
+      toolName,
+      toolCallId: "call-1",
+      input: { ...input },
+    };
+  }
+
+  test("registers tool_call event handler", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    expect(handler).toBeDefined();
+    expect(typeof handler).toBe("function");
+  });
+
+  test("prompts confirmation for memdelete with URI", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const confirm = vi.fn().mockResolvedValue(true);
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    const event = createToolCallEvent("memdelete", { uri: "viking://user/test" });
+    const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+
+    await handler(event, ctx);
+
+    expect(confirm).toHaveBeenCalledWith("Delete from OpenViking?", "viking://user/test");
+  });
+
+  test("returns block when user declines memdelete", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const confirm = vi.fn().mockResolvedValue(false);
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    const event = createToolCallEvent("memdelete", { uri: "viking://user/test" });
+    const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+
+    const result = await handler(event, ctx);
+
+    expect(result).toEqual({ block: true, reason: "Cancelled by user" });
+  });
+
+  test("allows execution when user confirms memdelete", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const confirm = vi.fn().mockResolvedValue(true);
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    const event = createToolCallEvent("memdelete", { uri: "viking://user/test" });
+    const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+
+    const result = await handler(event, ctx);
+
+    expect(result).toBeUndefined();
+  });
+
+  test("does not prompt for memsearch", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const confirm = vi.fn();
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    const event = createToolCallEvent("memsearch", { query: "test" });
+    const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+
+    await handler(event, ctx);
+
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  test("does not prompt for memimport", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const confirm = vi.fn();
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    const event = createToolCallEvent("memimport", { source: "/tmp/test" });
+    const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+
+    await handler(event, ctx);
+
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  test("does not prompt for memread or membrowse", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const confirm = vi.fn();
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+
+    for (const tool of ["memread", "membrowse"]) {
+      const event = createToolCallEvent(tool, { uri: "viking://user/test" });
+      const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+      await handler(event, ctx);
+    }
+
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  test("does not prompt for memcommit", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+    const confirm = vi.fn();
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    const event = createToolCallEvent("memcommit", {});
+    const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+
+    await handler(event, ctx);
+
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  test("gate is always active — no config option to disable", async () => {
+    const pi = createMockPi();
+    const sm = createMockSessionManager();
+
+    await bootstrapExtension(pi as any, {
+      cwd: "/test",
+      sessionManager: sm,
+    });
+
+    const handler = pi.getHandler("tool_call");
+    expect(handler).toBeDefined();
+
+    // Verify gate is always registered, regardless of config
+    const event = createToolCallEvent("memdelete", { uri: "viking://user/test" });
+    const confirm = vi.fn().mockResolvedValue(false);
+    const ctx = createHandlerCtx({ ui: { confirm, notify: vi.fn(), setStatus: vi.fn() } });
+
+    const result = await handler(event, ctx);
+    expect(result).toEqual({ block: true, reason: "Cancelled by user" });
+  });
+});

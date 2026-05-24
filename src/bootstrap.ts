@@ -139,5 +139,13 @@ export async function bootstrapExtension(
     return result;
   });
 
+  // Memdelete confirmation gate — always active, no config opt-out
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName === "memdelete") {
+      const ok = await ctx.ui.confirm("Delete from OpenViking?", String(event.input.uri));
+      if (!ok) return { block: true, reason: "Cancelled by user" };
+    }
+  });
+
   return { sessionSync, healthChecker };
 }
