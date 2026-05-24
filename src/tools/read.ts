@@ -1,9 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderMemreadCall, renderMemreadResult } from "../shared/render";
 import { readOp } from "../operations/read";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
 const MEMREAD_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to read" }),
@@ -15,7 +15,7 @@ const MEMREAD_PARAMS = Type.Object({
   ], { description: "Content level (auto detects from fs/stat)", default: "auto" })),
 });
 
-export function registerMemreadTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
+export function registerMemreadTool(pi: ExtensionAPI, deps: RuntimeDeps) {
   defineTool(pi, deps, {
     name: "memread",
     label: "Memory Read",

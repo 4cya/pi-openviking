@@ -1,12 +1,12 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { CommandRegisterDeps } from "./types";
 import type { CommandResult } from "../shared/command-def";
 import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
 import { formatBrowse } from "../shared/format-browse";
 import { browseOp } from "../operations/browse";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
-export function registerBrowseCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
+export function registerBrowseCommand(pi: ExtensionAPI, deps: RuntimeDeps): void {
   defineCommand(pi, deps, {
     name: "ov-ls",
     label: "Browse",

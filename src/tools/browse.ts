@@ -1,10 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderGenericCall, renderGenericResult } from "../shared/render";
 import { browseOp } from "../operations/browse";
 import { formatBrowse } from "../shared/format-browse";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
 const MEMBROWSE_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to browse" }),
@@ -17,7 +17,7 @@ const MEMBROWSE_PARAMS = Type.Object({
   simple: Type.Optional(Type.Boolean({ description: "Return URI-only output" })),
 });
 
-export function registerMembrowseTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
+export function registerMembrowseTool(pi: ExtensionAPI, deps: RuntimeDeps) {
   defineTool(pi, deps, {
     name: "membrowse",
     label: "Memory Browse",

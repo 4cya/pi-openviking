@@ -1,11 +1,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { CommandRegisterDeps } from "./types";
 import type { CommandResult } from "../shared/command-def";
 import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
 import { deleteOp } from "../operations/delete";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
-export function registerDeleteCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
+export function registerDeleteCommand(pi: ExtensionAPI, deps: RuntimeDeps): void {
   defineCommand(pi, deps, {
     name: "ov-delete",
     label: "Delete",

@@ -22,7 +22,7 @@ function makeTheme() {
       thinkingOff: "#888888", thinkingMinimal: "#888888", thinkingLow: "#ffff00",
       thinkingMedium: "#ffff00", thinkingHigh: "#ffff00", thinkingXhigh: "#ffff00",
       bashMode: "#00ffff",
-    },
+    } as any,
     // bgColors — hex values
     {
       selectedBg: "#ffffff", userMessageBg: "#000000", customMessageBg: "#000000",
@@ -42,7 +42,7 @@ describe("memsearch renderers", () => {
       details: {},
     };
 
-    const component = renderMemsearchCall(args, theme);
+    const component: any = renderMemsearchCall(args, theme);
 
     expect(component.text).toContain("auth middleware");
     expect(component.text).toContain("deep");
@@ -54,7 +54,7 @@ describe("memsearch renderers", () => {
       details: {},
     };
 
-    const component = renderMemsearchResult(result, { expanded: false, isPartial: false }, theme);
+    const component: any = renderMemsearchResult(result, { expanded: false, isPartial: false }, theme);
 
     expect(component.text).toContain("3");
   });
@@ -66,7 +66,7 @@ describe("memsearch renderers", () => {
       details: {},
     };
 
-    const component = renderMemsearchResult(result, { expanded: true, isPartial: false }, theme);
+    const component: any = renderMemsearchResult(result, { expanded: true, isPartial: false }, theme);
 
     expect(component.text).toContain("mem1");
     expect(component.text).toContain("viking://x");
@@ -79,7 +79,7 @@ describe("memread renderers", () => {
   test("collapsed call shows URI + level", () => {
     const args = { uri: "viking://resources/docs.md", level: "overview" };
 
-    const component = renderMemreadCall(args, theme);
+    const component: any = renderMemreadCall(args, theme);
 
     expect(component.text).toContain("viking://resources/docs.md");
     expect(component.text).toContain("overview");
@@ -91,7 +91,7 @@ describe("memread renderers", () => {
       details: {},
     };
 
-    const component = renderMemreadResult(result, { expanded: false, isPartial: false }, theme);
+    const component: any = renderMemreadResult(result, { expanded: false, isPartial: false }, theme);
 
     expect(component.text).toContain("1 lines");
   });
@@ -102,7 +102,7 @@ describe("memread renderers", () => {
       details: {},
     };
 
-    const component = renderMemreadResult(result, { expanded: true, isPartial: false }, theme);
+    const component: any = renderMemreadResult(result, { expanded: true, isPartial: false }, theme);
 
     expect(component.text).toContain("Line 1");
     expect(component.text).toContain("Line 3");
@@ -113,7 +113,7 @@ describe("generic renderers (membrowse/memcommit/memdelete/memimport)", () => {
   const theme = makeTheme();
 
   test("collapsed call shows tool name + key arg", () => {
-    const component = renderGenericCall("membrowse", { uri: "viking://resources/", view: "list" }, theme);
+    const component: any = renderGenericCall("membrowse", { uri: "viking://resources/", view: "list" }, theme);
     expect(component.text).toContain("membrowse");
     expect(component.text).toContain("viking://resources/");
   });
@@ -123,7 +123,7 @@ describe("generic renderers (membrowse/memcommit/memdelete/memimport)", () => {
       content: [{ type: "text" as const, text: "URI: viking://resources/\nChildren:\n- viking://resources/docs.md (file)" }],
       details: {},
     };
-    const component = renderGenericResult(result, { expanded: false, isPartial: false }, theme);
+    const component: any = renderGenericResult(result, { expanded: false, isPartial: false }, theme);
     expect(component.text).toContain("URI: viking://resources/");
   });
 
@@ -132,7 +132,7 @@ describe("generic renderers (membrowse/memcommit/memdelete/memimport)", () => {
       content: [{ type: "text" as const, text: "URI: viking://resources/\nChildren:\n- viking://resources/docs.md (file)" }],
       details: {},
     };
-    const component = renderGenericResult(result, { expanded: true, isPartial: false }, theme);
+    const component: any = renderGenericResult(result, { expanded: true, isPartial: false }, theme);
     expect(component.text).toContain("Children");
     expect(component.text).toContain("docs.md");
   });
@@ -143,23 +143,23 @@ describe("generic renderers (membrowse/memcommit/memdelete/memimport)", () => {
       details: {},
       isError: true,
     };
-    const component = renderGenericResult(result, { expanded: false, isPartial: false }, theme);
+    const component: any = renderGenericResult(result, { expanded: false, isPartial: false }, theme);
     expect(component.text).toContain("unavailable");
   });
 
   test("memcommit generic call shows tool name", () => {
-    const component = renderGenericCall("memcommit", { wait: true }, theme);
+    const component: any = renderGenericCall("memcommit", { wait: true }, theme);
     expect(component.text).toContain("memcommit");
   });
 
   test("memdelete generic call shows URI", () => {
-    const component = renderGenericCall("memdelete", { uri: "viking://resources/old.md" }, theme);
+    const component: any = renderGenericCall("memdelete", { uri: "viking://resources/old.md" }, theme);
     expect(component.text).toContain("memdelete");
     expect(component.text).toContain("viking://resources/old.md");
   });
 
   test("memimport generic call shows source", () => {
-    const component = renderGenericCall("memimport", { source: "https://example.com/doc.md" }, theme);
+    const component: any = renderGenericCall("memimport", { source: "https://example.com/doc.md" }, theme);
     expect(component.text).toContain("memimport");
     expect(component.text).toContain("https://example.com/doc.md");
   });
@@ -181,7 +181,7 @@ describe("defineTool renderer passthrough", () => {
     const mockRenderCall = vi.fn();
     const mockRenderResult = vi.fn();
 
-    defineTool(pi, deps, {
+    defineTool(pi, deps as any, {
       name: "test-tool",
       label: "Test",
       description: "test",
@@ -210,7 +210,7 @@ describe("defineTool renderer passthrough", () => {
       sync: { getOvSessionId: vi.fn() } as any,
     };
 
-    defineTool(pi, deps, {
+    defineTool(pi, deps as any, {
       name: "bare-tool",
       label: "Bare",
       description: "bare",

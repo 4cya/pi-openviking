@@ -5,7 +5,7 @@ import { curate, DEFAULT_CURATE_OPTIONS, type CurateOptions, type RecallItem } f
 
 export interface AutoRecallState {
   enabled: boolean;
-  lastInjectedItems?: RecallItem[];
+  lastInjectedItems: RecallItem[];
 }
 
 export interface AutoRecallConfig {

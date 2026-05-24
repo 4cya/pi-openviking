@@ -6,7 +6,9 @@
     "pi-package"
   ],
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "scripts": {
     "test": "vitest run"
@@ -21,6 +23,7 @@
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-agent-core": "^0.75.5",
     "@earendil-works/pi-tui": "*",
     "@sinclair/typebox": "*"
   }

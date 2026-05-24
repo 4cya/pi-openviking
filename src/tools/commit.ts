@@ -1,13 +1,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { commitOp } from "../operations/commit";
 import { renderGenericCall, renderGenericResult } from "../shared/render";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
 export function registerMemcommitTool(
   pi: ExtensionAPI,
-  deps: ToolRegisterDeps,
+  deps: RuntimeDeps,
 ) {
   defineTool(pi, deps, {
     name: "memcommit",

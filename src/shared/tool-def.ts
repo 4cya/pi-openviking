@@ -1,24 +1,21 @@
-import type { ExtensionAPI, Theme, ToolRenderResultOptions, ToolRenderContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Theme, ToolRenderResultOptions } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 import type { TSchema, Static } from "typebox";
-import type { SessionClient, FsClient, KnowledgeClient } from "../ov-client/client";
-import type { SessionSyncLike } from "../session-sync/session";
-import type { HealthChecker } from "../shared/health";
+import type { RuntimeDeps } from "../bootstrap/runtime";
 import { notifyOnce } from "../shared/notify";
 
-export interface ToolRegisterDeps {
-  session: SessionClient;
-  fs: FsClient;
-  knowledge: KnowledgeClient;
-  sync: SessionSyncLike;
-  healthChecker?: HealthChecker;
+// ToolRenderContext is not exported from @earendil-works/pi-coding-agent yet.
+// Defined locally from the internal types file.
+export interface ToolRenderContext<TState = any, TArgs = any> {
+  /** Current tool call arguments. Shared across call/result renders for the same tool call. */
+  args: TArgs;
+  /** The current state object. Persisted between renderCall and renderResult for the same call. */
+  state: TState;
 }
-
-export type ToolDeps = ToolRegisterDeps;
 
 export interface ExecuteArgs<P extends TSchema> {
   params: Static<P>;
-  deps: ToolRegisterDeps;
+  deps: RuntimeDeps;
   signal?: AbortSignal;
   onUpdate?: ((result: any) => void);
   ctx?: unknown;
@@ -43,7 +40,7 @@ export interface ToolDef<P extends TSchema> {
 
 export function defineTool<P extends TSchema>(
   pi: ExtensionAPI,
-  deps: ToolRegisterDeps,
+  deps: RuntimeDeps,
   def: ToolDef<P>,
 ): void {
   pi.registerTool({

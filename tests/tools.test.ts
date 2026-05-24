@@ -55,7 +55,7 @@ function makeDeps(overrides?: {
   );
   const sync = overrides?.sync ?? createMockSessionSync();
   const hc = overrides?.healthChecker;
-  return { session, fs, knowledge, sync, healthChecker: hc };
+  return { session, fs, knowledge, sync, healthChecker: hc, autoRecallState: { enabled: true, lastInjectedItems: ([] as any) } } as any;
 }
 
 describe("memsearch tool", () => {

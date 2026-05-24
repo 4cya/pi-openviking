@@ -1,12 +1,12 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { CommandRegisterDeps } from "./types";
 import type { CommandResult } from "../shared/command-def";
 import { defineCommand } from "../shared/command-def";
 import { parseArgs } from "../shared/parse-args";
 import { formatSearch } from "../shared/format-search";
 import { searchOp } from "../operations/search";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
-export function registerSearchCommand(pi: ExtensionAPI, deps: CommandRegisterDeps): void {
+export function registerSearchCommand(pi: ExtensionAPI, deps: RuntimeDeps): void {
   defineCommand(pi, deps, {
     name: "ov-search",
     label: "Search",

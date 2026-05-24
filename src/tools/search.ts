@@ -1,9 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderMemsearchCall, renderMemsearchResult } from "../shared/render";
 import { searchOp } from "../operations/search";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
 const SEARCH_PARAMS = Type.Object({
   query: Type.String({ description: "Search query to find relevant memories and resources" }),
@@ -16,7 +16,7 @@ const SEARCH_PARAMS = Type.Object({
   uri: Type.Optional(Type.String({ description: "Optional viking:// URI to scope search to a specific namespace" })),
 });
 
-export function registerMemsearchTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
+export function registerMemsearchTool(pi: ExtensionAPI, deps: RuntimeDeps) {
   defineTool(pi, deps, {
     name: "memsearch",
     label: "Memory Search",

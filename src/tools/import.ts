@@ -1,9 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { importOp } from "../operations/import";
 import { renderGenericCall, renderGenericResult } from "../shared/render";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
 const MEMIMPORT_PARAMS = Type.Object({
   source: Type.String({ description: "URL (http://, https://, git://) or local file path to import" }),
@@ -15,7 +15,7 @@ const MEMIMPORT_PARAMS = Type.Object({
   to: Type.Optional(Type.String({ description: "Optional target URI controlling where resource lands in the viking:// tree" })),
 });
 
-export function registerMemimportTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
+export function registerMemimportTool(pi: ExtensionAPI, deps: RuntimeDeps) {
   defineTool(pi, deps, {
     name: "memimport",
     label: "Memory Import",

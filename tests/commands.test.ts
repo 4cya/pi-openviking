@@ -1,7 +1,7 @@
 import { describe, test, expect, vi } from "vitest";
 import { COMMANDS } from "../src/bootstrap";
-import type { CommandRegisterDeps } from "../src/commands/types";
 import { createMockClient, createMockSessionSync } from "./mocks";
+import { RuntimeDeps } from "../src/bootstrap/runtime";
 
 function createMockPi() {
   const commands: Record<string, { description?: string; handler: (...args: any[]) => any }> = {};
@@ -31,7 +31,7 @@ function registerAll(pi: ReturnType<typeof createMockPi>, overrides?: {
   fs?: Record<string, unknown>;
   knowledge?: Record<string, unknown>;
   sync?: ReturnType<typeof createMockSessionSync>;
-  autoRecallState?: { enabled: boolean };
+  autoRecallState?: { enabled: boolean; lastInjectedItems: import("../src/auto-recall/recall-curator").RecallItem[] };
 }) {
   const { session, fs, knowledge } = createMockClient(
     overrides
@@ -39,9 +39,9 @@ function registerAll(pi: ReturnType<typeof createMockPi>, overrides?: {
       : undefined,
   );
   const sync = overrides?.sync ?? createMockSessionSync();
-  const autoRecallState = overrides?.autoRecallState ?? { enabled: true };
+  const autoRecallState = overrides?.autoRecallState ?? { enabled: true, lastInjectedItems: [] };
 
-  const deps: CommandRegisterDeps = { session, fs, knowledge, sync, autoRecallState };
+  const deps: RuntimeDeps = { session, fs, knowledge, sync, autoRecallState: autoRecallState as any };
   for (const register of COMMANDS) register(pi as any, deps);
 
   return { pi, session, fs, knowledge, sync, autoRecallState };
@@ -52,7 +52,7 @@ function makeDeps(overrides?: {
   fs?: Record<string, unknown>;
   knowledge?: Record<string, unknown>;
   sync?: ReturnType<typeof createMockSessionSync>;
-  autoRecallState?: { enabled: boolean };
+  autoRecallState?: { enabled: boolean; lastInjectedItems: import("../src/auto-recall/recall-curator").RecallItem[] };
 }) {
   const pi = createMockPi();
   return registerAll(pi, overrides);
@@ -213,7 +213,7 @@ describe("COMMANDS registry", () => {
 
   describe("/ov-recall", () => {
     test("toggles state", async () => {
-      const autoRecallState = { enabled: true };
+      const autoRecallState = { enabled: true, lastInjectedItems: [] as import("../src/auto-recall/recall-curator").RecallItem[] };
       const pi = createMockPi();
       registerAll(pi, { autoRecallState });
       const cmd = pi.getCommand("ov-recall");
@@ -226,7 +226,7 @@ describe("COMMANDS registry", () => {
     });
 
     test("shows status", async () => {
-      const autoRecallState = { enabled: false };
+      const autoRecallState = { enabled: false, lastInjectedItems: [] as import("../src/auto-recall/recall-curator").RecallItem[] };
       const pi = createMockPi();
       registerAll(pi, { autoRecallState });
       const cmd = pi.getCommand("ov-recall");

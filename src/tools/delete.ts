@@ -1,15 +1,15 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { ToolRegisterDeps } from "../shared/tool-def";
 import { defineTool } from "../shared/tool-def";
 import { renderGenericCall, renderGenericResult } from "../shared/render";
 import { deleteOp } from "../operations/delete";
+import { RuntimeDeps } from "../bootstrap/runtime";
 
 const MEMDELETE_PARAMS = Type.Object({
   uri: Type.String({ description: "viking:// URI to delete" }),
 });
 
-export function registerMemdeleteTool(pi: ExtensionAPI, deps: ToolRegisterDeps) {
+export function registerMemdeleteTool(pi: ExtensionAPI, deps: RuntimeDeps) {
   defineTool(pi, deps, {
     name: "memdelete",
     label: "Memory Delete",

@@ -38,7 +38,7 @@ describe("memcommit integration", () => {
       registerTool: vi.fn((def: unknown) => { tools.push(def); }),
       get tools() { return tools; },
     };
-    registerMemcommitTool(pi as any, { session: client.session, fs: client.fs, knowledge: client.knowledge, sync });
+    registerMemcommitTool(pi as any, { session: client.session, fs: client.fs, knowledge: client.knowledge, sync, autoRecallState: { enabled: true, lastInjectedItems: [] } });
 
     const toolDef = pi.tools[0] as any;
     expect(toolDef).toBeDefined();

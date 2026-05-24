@@ -1,45 +1,11 @@
 import { loadConfig, loadAutoRecallConfig } from "./shared/config";
-import type { ToolRegisterDeps } from "./shared/tool-def";
-import { createClient } from "./ov-client/client";
-import { createTransport, type Transport } from "./ov-client/transport";
-import { logger } from "./shared/logger";
-import { registerMemsearchTool } from "./tools/search";
-import { registerMemreadTool } from "./tools/read";
-import { registerMembrowseTool } from "./tools/browse";
-import { registerMemcommitTool } from "./tools/commit";
-import { registerMemdeleteTool } from "./tools/delete";
-import { registerMemimportTool } from "./tools/import";
-import { registerSearchCommand } from "./commands/search";
-import { registerBrowseCommand } from "./commands/browse";
-import { registerImportCommand } from "./commands/import";
-import { registerDeleteCommand } from "./commands/delete";
-import { registerRecallCommand } from "./commands/recall";
-import { registerCommitCommand } from "./commands/commit";
+export { COMMANDS } from "./bootstrap/register";
+import { createRuntime } from "./bootstrap/runtime";
+import { registerAll } from "./bootstrap/register";
+import { wireHooks } from "./bootstrap/hooks";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { CommandRegisterDeps } from "./commands/types";
-import { SessionSync } from "./session-sync/session";
-import { createAutoRecall } from "./auto-recall/auto-recall";
-import type { AutoRecallState } from "./auto-recall/auto-recall";
-import { createHealthChecker, type HealthChecker } from "./shared/health";
-import { resolveBudget } from "./auto-recall/resolve-budget";
-
-export const TOOLS = [
-  registerMemsearchTool,
-  registerMemreadTool,
-  registerMembrowseTool,
-  registerMemcommitTool,
-  registerMemdeleteTool,
-  registerMemimportTool,
-];
-
-export const COMMANDS: Array<(pi: ExtensionAPI, deps: CommandRegisterDeps) => void> = [
-  registerSearchCommand,
-  registerBrowseCommand,
-  registerImportCommand,
-  registerDeleteCommand,
-  registerRecallCommand,
-  registerCommitCommand,
-];
+import type { HealthChecker } from "./shared/health";
+import type { SessionSync } from "./session-sync/session";
 
 export interface BootstrapContext {
   cwd: string;
@@ -56,97 +22,26 @@ export interface BootstrapResult {
   fs: import("./ov-client/types").FsClient;
 }
 
-function formatStatus(available: boolean, recallCount?: number): string {
-  const icon = available ? "\u25cf" : "\u25cb";
-  let text = `${icon} OV`;
-  if (available && recallCount && recallCount > 0) {
-    text += ` \u00b7 ${recallCount} recalled`;
-  }
-  return text;
-}
-
 export async function bootstrapExtension(
   pi: ExtensionAPI,
   ctx: BootstrapContext,
-  transport?: Transport,
+  transport?: import("./ov-client/transport").Transport,
 ): Promise<BootstrapResult> {
   const config = loadConfig(ctx.cwd);
   const recallConfig = loadAutoRecallConfig(ctx.cwd);
-  const t = transport ?? createTransport(config);
-  const client = createClient(config, t);
-  const { session: sessionClient, fs: fsClient, knowledge: knowledgeClient } = client;
 
-  // Health check with graceful degradation
-  const updateStatus = ctx.setStatus;
-  const healthChecker = createHealthChecker(t, config.healthPath, {
-    onChange(available) {
-      updateStatus?.("ov-status", formatStatus(available));
-    },
-  });
-
-  // Await initial health check with 2-second timeout
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2000);
-  try {
-    const ok = await healthChecker.check(controller.signal);
-    updateStatus?.("ov-status", formatStatus(ok));
-    logger.debug("initial health check:", ok ? "available" : "unavailable");
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  const autoRecallState: { enabled: boolean; lastInjectedItems: import("./auto-recall/recall-curator").RecallItem[] } = { ...recallConfig, lastInjectedItems: [] };
-
-  const sessionSync = new SessionSync(sessionClient, {
+  const runtime = await createRuntime({
+    config,
+    recallConfig,
+    transport,
+    setStatus: ctx.setStatus,
     getSessionFile: () => ctx.sessionManager.getSessionFile(),
     getBranch: () => ctx.sessionManager.getBranch(),
     appendEntry: (type, data) => pi.appendEntry(type, data),
-    autoRecallState,
   });
 
-  logger.debug("session sync created");
+  registerAll(pi, runtime);
+  wireHooks(pi, runtime, ctx);
 
-  const toolDeps: ToolRegisterDeps = { session: sessionClient, fs: fsClient, knowledge: knowledgeClient, sync: sessionSync, healthChecker };
-  for (const register of TOOLS) register(pi, toolDeps);
-
-  const cmdDeps: CommandRegisterDeps = { session: sessionClient, fs: fsClient, knowledge: knowledgeClient, sync: sessionSync, autoRecallState, healthChecker };
-  for (const register of COMMANDS) register(pi, cmdDeps);
-
-  const autoRecall = createAutoRecall(knowledgeClient, sessionSync, recallConfig);
-  pi.on("before_agent_start", async (event, ctx) => {
-    // On-demand recovery: re-check health if previously unavailable
-    if (!healthChecker.isAvailable()) {
-      const recovered = await healthChecker.check();
-      if (recovered) {
-        logger.debug("health check recovered");
-        sessionSync.recover();
-      }
-    }
-
-    if (!healthChecker.isAvailable()) {
-      ctx?.ui?.setStatus("ov-status", formatStatus(false));
-      return;
-    }
-
-    const usage = ctx?.getContextUsage?.();
-    const tokenBudget = resolveBudget(usage);
-    const result = await autoRecall({ ...event, tokenBudget });
-    autoRecallState.lastInjectedItems = result.injectedItems ?? [];
-
-    // Update status with recall count
-    const count = result.injectedItems?.length ?? 0;
-    ctx?.ui?.setStatus("ov-status", formatStatus(true, count));
-
-    return result;
-  });
-
-  // Memdelete confirmation gate — always active, no config opt-out
-  pi.on("tool_call", async (event, ctx) => {
-    if (event.toolName === "memdelete") {
-      const ok = await ctx.ui.confirm("Delete from OpenViking?", String(event.input.uri));
-      if (!ok) return { block: true, reason: "Cancelled by user" };
-    }
-  });
-
-  return { sessionSync, healthChecker, fs: fsClient };
+  return { sessionSync: runtime.sessionSync, healthChecker: runtime.healthChecker, fs: runtime.client.fs };
 }
