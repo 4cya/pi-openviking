@@ -1,0 +1,78 @@
+import { describe, test, expect, vi } from "vitest";
+import { notifyOnce } from "../../src/_legacy/shared/notify";
+
+describe("notifyOnce", () => {
+  test("notifies when ctx hasUI and ui.notify", () => {
+    const notified: Array<{ msg: string; level: string }> = [];
+    const ctx = {
+      hasUI: true,
+      ui: {
+        notify: (msg: string, level: "info" | "warning" | "error") => {
+          notified.push({ msg, level });
+        },
+      },
+    };
+
+    notifyOnce(ctx, "test error", "error");
+    expect(notified).toEqual([{ msg: "test error", level: "error" }]);
+  });
+
+  test("notifies only once per context object", () => {
+    const notified: string[] = [];
+    const ctx = {
+      hasUI: true,
+      ui: {
+        notify: (msg: string) => {
+          notified.push(msg);
+        },
+      },
+    };
+
+    notifyOnce(ctx, "first", "error");
+    notifyOnce(ctx, "second", "error");
+    notifyOnce(ctx, "third", "error");
+
+    expect(notified).toEqual(["first"]);
+  });
+
+  test("notifies different context objects independently", () => {
+    const notified: string[] = [];
+    const makeCtx = () => ({
+      hasUI: true,
+      ui: { notify: (msg: string) => { notified.push(msg); } },
+    });
+
+    const ctx1 = makeCtx();
+    const ctx2 = makeCtx();
+
+    notifyOnce(ctx1, "for ctx1", "error");
+    notifyOnce(ctx2, "for ctx2", "error");
+
+    expect(notified).toEqual(["for ctx1", "for ctx2"]);
+  });
+
+  test("skips when ctx is null, undefined, or non-object", () => {
+    notifyOnce(null, "should not throw", "error");
+    notifyOnce(undefined, "should not throw", "error");
+    notifyOnce("not an object", "should not throw", "error");
+  });
+
+  test("skips when hasUI is false or ui is missing", () => {
+    const spy = vi.fn();
+    notifyOnce({ hasUI: false, ui: { notify: spy } }, "should not notify", "error");
+    notifyOnce({ hasUI: true }, "should not throw", "error");
+    notifyOnce({ hasUI: true, ui: {} }, "should not throw", "error");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test("defaults level to error", () => {
+    const notified: Array<{ msg: string; level: string }> = [];
+    const ctx = {
+      hasUI: true,
+      ui: { notify: (msg: string, level: "info" | "warning" | "error") => { notified.push({ msg, level }); } },
+    };
+
+    notifyOnce(ctx, "test");
+    expect(notified[0].level).toBe("error");
+  });
+});

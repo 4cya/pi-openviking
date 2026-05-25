@@ -1,14 +1,22 @@
-# Async factory with health check timeout
+# Init assíncrono com timeout
 
-Status: accepted
+Status: accepted (carried forward from legacy)
 
-Convert the extension factory from synchronous to `async function`. The factory `await`s the initial OpenViking health check with a 2-second timeout. This guarantees the status line shows the correct OV state (`● OV` or `○ OV`) from the first frame. Without this, the fire-and-forget health probe resolves asynchronously — the status line stays blank for the first turn.
+## Context
 
-On timeout, behavior is identical to the previous fire-and-forget approach: degraded mode, auto-recall disabled, recovery on next tool call or `before_agent_start`.
+A Fase 1 do Reborn precisa de um `init()` assíncrono que carregue config, crie logger, instancie o DI container e registre dependências. O `shutdown()` permanece síncrono e zero I/O.
 
-The trade-off is a 2-second delay on Pi startup when OV is unreachable. Acceptable because Pi is already loading extensions during this phase — the user sees no perceptible difference. The previous approach of a fire-and-forget probe meant the status line was unreliable on first render, which defeats its purpose.
+Fases futuras (3+) vão adicionar health check contra o OV server — o `init()` async prepara esse caminho.
 
-**Considered options:**
-- Sync factory + fire-and-forget (status quo) — status line blank on first frame
-- Async factory + no timeout — blocks Pi indefinitely if OV hangs. Rejected.
-- Async factory + 2s timeout — chosen. Brief, bounded delay, reliable first-frame state.
+## Decision
+
+- `init(config?)` é `async` — retorna `Promise<void>`
+- Carrega config via `Config Cascade`, cria `FileLogger`, instancia `DIContainer`, registra tudo
+- `shutdown()` é `sync` — reseta estado apenas, sem I/O
+- Entry point (`index.ts`) chama `await init()` e exporta handle
+
+## Consequences
+
+- Positivo: bootstrap não bloqueia startup do Pi (se usado com async registration)
+- Positivo: health check futuro (Fase 3+) pode ser `await` dentro do `init()` com timeout
+- Negativo: módulo precisa de async handling no ponto de entrada
