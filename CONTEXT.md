@@ -23,7 +23,7 @@ Fase 1 (Foundation) em andamento. Módulos entregues:
 | Logger Interface tests | ✅ Entregue | `src/domain/ports/logger.test.ts` |
 | File Logger | ✅ Entregue | `src/adapters/driven/logger/file-logger.ts` |
 | File Logger tests | ✅ Entregue | `src/adapters/driven/logger/file-logger.test.ts` |
-| DI Container | ⬜ Pendente | `src/infrastructure/di/container.ts` |
+| DI Container | ✅ Entregue | `src/infrastructure/di/container.ts` |
 | Lifecycle + Bootstrap | ⬜ Pendente | `src/infrastructure/lifecycle.ts`, `src/bootstrap.ts` |
 
 Próximas fases: Domain Ports (2), OV Adapter (3), Operations (4), Tools+Commands (5), Auto-Recall (6), Profiles (7), Features (8).
@@ -54,8 +54,8 @@ src/
 │   ├── path-resolver.ts           # ✅ resolveHome() — shared utility
 │   ├── path-resolver.test.ts      # ✅ 3 testes
 │   ├── di/
-│   │   ├── container.ts       # ⬜ DI container manual (~40 linhas)
-│   │   └── container.test.ts  # ⬜
+│   │   ├── container.ts       # ✅ DI container manual (21 linhas)
+│   │   └── container.test.ts  # ✅ 4 testes
 │   └── lifecycle.ts           # ⬜ init() + shutdown()
 ├── bootstrap.ts               # ⬜ orquestra init()
 ├── index.ts                   # entry point
@@ -76,7 +76,7 @@ tests/
 | **Profile** | Preset nomeado de config. 4 built-in: `default`, `web-dev`, `docs`, `learning`. Apenas `name` + `description` na Fase 1 |
 | **Logger** | Interface em `domain/ports/` com métodos `info`, `warn`, `error`, `debug`, `isEnabled` + `ctx` opcional. `LogLevel` type (`"debug"|"info"|"warn"|"error"`) definido no domínio |
 | **File Logger** | Implementação em `adapters/driven/logger/`. JSON lines via `appendFileSync`. Rotação por tamanho (10MB) e idade (7 dias), até 5 arquivos |
-| **DI Container** | Container manual (~40 linhas). Registro por string token. Suporte a singleton e factory. Erro claro se token não registrado |
+| **DI Container** | Container manual (21 linhas, 4 testes). Registro por string token. Suporte a singleton e factory. Erro claro se token não registrado |
 | **Lifecycle** | `init()` async (cria logger, container, registra tudo) e `shutdown()` sync (reseta estado, zero I/O) |
 
 ## Design Decisions (Foundation)
@@ -86,7 +86,7 @@ tests/
 - **Perfis** são extensíveis por design — campos OV-specific (endpoint, target_uri, etc.) entram na Fase 4 sem quebrar o schema.
 - **Logger interface** em domain/ports garante que o core nunca dependa de implementação concreta. A interface é pura — zero dependências externas.
 - **File Logger** mantém a estratégia de `appendFileSync` do ADR-002, mas agora por trás da interface Logger. Rotação por tamanho + idade. Gzip de arquivos antigos.
-- **DI Container** é manual (~40 linhas) e sem dependências externas. Substituível por Awilix se a complexidade crescer (decidir depois da Fase 5).
+- **DI Container** é manual (21 linhas, 4 testes) e sem dependências externas. Substituível por Awilix se a complexidade crescer (decidir depois da Fase 5).
 - **Bootstrap** (`init()`) é async (prepara para health check na Fase 2/3). `shutdown()` é sync (ADR-001 — zero I/O no shutdown).
 - **Zod v4** usado (versão do peer dependency `@earendil-works/pi-ai`). Atenção: `z.record()` exige 2 argumentos (key + value schema). `.default({})` em schemas aninhados não resolve defaults recursivos — usar factory `default(() => ChildSchema.parse({}))`.
 - **ADR-002** (file-based logging) respeitado e reformulado: agora com interface + implementação + rotação.

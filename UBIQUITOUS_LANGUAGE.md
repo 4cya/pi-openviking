@@ -30,7 +30,7 @@
 | **Built-in Profile** | One of 4 shipped profiles: `default`, `web-dev`, `docs`, `learning` | stock profile, system profile |
 | **Logger** | Interface in `domain/ports/logger.ts` with methods `info`, `warn`, `error`, `debug`. Implemented by `FileLogger` in `adapters/driven/logger/` | log, console |
 | **File Logger** | Outputs JSON lines via `appendFileSync`. Rotates by size (10MB) and age (7 days), keeps up to 5 gzipped historical files | file logging, persistent logger |
-| **DI Container** | Manual dependency injection container (~40 lines). Registers dependencies by `string` token; supports singleton and factory lifetime. Throws clear error on unregistered token | container, ioc |
+| **DI Container** | Manual dependency injection container (21 lines). Registers dependencies by `string` token; supports singleton and factory lifetime. Throws clear error on unregistered token. 4 tests at `container.test.ts` | container, ioc |
 | **Lifecycle** | The `init()` (async, creates logger+container+wires everything) and `shutdown()` (sync, resets state) entry points for the Foundation layer | bootstrap lifecycle, module lifecycle |
 | **Bootstrap** | One-time startup that runs **Config Cascade**, creates **Logger**, instantiates **DI Container**, registers all dependencies, and returns a ready extension handle | init, startup |
 
