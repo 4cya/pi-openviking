@@ -18,7 +18,7 @@ Fase 1 (Foundation) em andamento. Módulos entregues:
 | Logger Config Schema | ✅ Entregue | `src/infrastructure/config/logger-schema.ts` |
 | Profile Config Schema | ✅ Entregue | `src/infrastructure/config/profile-schema.ts` |
 | Config Schema tests | ✅ Entregue | `src/infrastructure/config/schema.test.ts` |
-| Config Cascade + Loader | ⬜ Pendente | `src/infrastructure/config/cascade.ts`, `loader.ts` |
+| Config Cascade + Loader | ✅ Entregue | `src/infrastructure/config/cascade.ts`, `loader.ts` |
 | Logger Interface + LogLevel type | ✅ Entregue | `src/domain/ports/logger.ts` |
 | Logger Interface tests | ✅ Entregue | `src/domain/ports/logger.test.ts` |
 | File Logger | ✅ Entregue | `src/adapters/driven/logger/file-logger.ts` |
@@ -46,11 +46,11 @@ src/
 │   │   ├── schema.ts              # ✅ Facade — compõe logger + profile
 │   │   ├── logger-schema.ts       # ✅ Zod schema + LoggerConfig type
 │   │   ├── profile-schema.ts      # ✅ Zod schema + ProfileConfig + built-ins
-│   │   ├── cascade.ts             # ⬜ default → env → settings.json → profile
-│   │   ├── loader.ts              # ⬜ safeParse, erro claro
+│   │   ├── cascade.ts             # ✅ default → env → settings.json → profile
+│   │   ├── loader.ts              # ✅ safe parse, {} on error
 │   │   ├── schema.test.ts         # ✅ 13 testes
-│   │   ├── cascade.test.ts        # ⬜
-│   │   └── loader.test.ts         # ⬜
+│   │   ├── cascade.test.ts        # ✅ 7 testes
+│   │   └── loader.test.ts         # ✅ 3 testes
 │   ├── path-resolver.ts           # ✅ resolveHome() — shared utility
 │   ├── path-resolver.test.ts      # ✅ 3 testes
 │   ├── di/

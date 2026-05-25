@@ -1,17 +1,9 @@
 import { describe, it, expect } from "vitest";
-import type { Logger } from "./logger";
-
-const noopLogger = (): Logger => ({
-  info() {},
-  warn() {},
-  error() {},
-  debug() {},
-  isEnabled() { return true; },
-});
+import { NullLogger } from "../../adapters/driven/logger/null-logger";
 
 describe("Logger interface contract", () => {
   it("defines all five Logger methods", () => {
-    const log = noopLogger();
+    const log = new NullLogger();
     expect(typeof log.info).toBe("function");
     expect(typeof log.warn).toBe("function");
     expect(typeof log.error).toBe("function");
@@ -20,7 +12,7 @@ describe("Logger interface contract", () => {
   });
 
   it("accepts ctx as optional second parameter on all methods", () => {
-    const log = noopLogger();
+    const log = new NullLogger();
     // Without ctx
     log.info("hello");
     log.warn("warning");
@@ -34,7 +26,7 @@ describe("Logger interface contract", () => {
   });
 
   it("isEnabled returns boolean", () => {
-    const log = noopLogger();
+    const log = new NullLogger();
     expect(typeof log.isEnabled("info")).toBe("boolean");
     expect(typeof log.isEnabled("debug")).toBe("boolean");
   });
