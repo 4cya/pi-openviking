@@ -14,11 +14,15 @@ Fase 1 (Foundation) em andamento. Módulos entregues:
 
 | Módulo | Status | Localização |
 |--------|--------|-------------|
-| Config Schema (Zod) | ✅ Entregue | `src/infrastructure/config/schema.ts` |
+| Config Schema (Zod) — facade | ✅ Entregue | `src/infrastructure/config/schema.ts` |
+| Logger Config Schema | ✅ Entregue | `src/infrastructure/config/logger-schema.ts` |
+| Profile Config Schema | ✅ Entregue | `src/infrastructure/config/profile-schema.ts` |
 | Config Schema tests | ✅ Entregue | `src/infrastructure/config/schema.test.ts` |
 | Config Cascade + Loader | ⬜ Pendente | `src/infrastructure/config/cascade.ts`, `loader.ts` |
-| Logger Interface | ⬜ Pendente | `src/domain/ports/logger.ts` |
-| File Logger | ⬜ Pendente | `src/adapters/driven/logger/file-logger.ts` |
+| Logger Interface + LogLevel type | ✅ Entregue | `src/domain/ports/logger.ts` |
+| Logger Interface tests | ✅ Entregue | `src/domain/ports/logger.test.ts` |
+| File Logger | ✅ Entregue | `src/adapters/driven/logger/file-logger.ts` |
+| File Logger tests | ✅ Entregue | `src/adapters/driven/logger/file-logger.test.ts` |
 | DI Container | ⬜ Pendente | `src/infrastructure/di/container.ts` |
 | Lifecycle + Bootstrap | ⬜ Pendente | `src/infrastructure/lifecycle.ts`, `src/bootstrap.ts` |
 
@@ -30,21 +34,25 @@ Próximas fases: Domain Ports (2), OV Adapter (3), Operations (4), Tools+Command
 src/
 ├── domain/                    # Enterprise logic + port interfaces
 │   └── ports/                 # Interfaces (Logger, KnowledgeBase, etc.)
-│       ├── logger.ts
-│       └── logger.test.ts
+│       ├── logger.ts              # ✅ Logger interface
+│       └── logger.test.ts         # ✅ 5 tests
 ├── adapters/
 │   └── driven/                # Implementações de portas
 │       └── logger/
-│           ├── file-logger.ts
-│           └── file-logger.test.ts
+│           ├── file-logger.ts          # ✅ FileLogger com rotação + gzip
+│           └── file-logger.test.ts     # ✅ 8 testes
 ├── infrastructure/            # Config, DI, lifecycle
 │   ├── config/
-│   │   ├── schema.ts          # ✅ Zod schema + tipos + perfis built-in
-│   │   ├── cascade.ts         # ⬜ default → env → settings.json → profile
-│   │   ├── loader.ts          # ⬜ safeParse, erro claro
-│   │   ├── schema.test.ts     # ✅ 13 testes
-│   │   ├── cascade.test.ts    # ⬜
-│   │   └── loader.test.ts     # ⬜
+│   │   ├── schema.ts              # ✅ Facade — compõe logger + profile
+│   │   ├── logger-schema.ts       # ✅ Zod schema + LoggerConfig type
+│   │   ├── profile-schema.ts      # ✅ Zod schema + ProfileConfig + built-ins
+│   │   ├── cascade.ts             # ⬜ default → env → settings.json → profile
+│   │   ├── loader.ts              # ⬜ safeParse, erro claro
+│   │   ├── schema.test.ts         # ✅ 13 testes
+│   │   ├── cascade.test.ts        # ⬜
+│   │   └── loader.test.ts         # ⬜
+│   ├── path-resolver.ts           # ✅ resolveHome() — shared utility
+│   ├── path-resolver.test.ts      # ✅ 3 testes
 │   ├── di/
 │   │   ├── container.ts       # ⬜ DI container manual (~40 linhas)
 │   │   └── container.test.ts  # ⬜
@@ -66,7 +74,7 @@ tests/
 | **Config Schema** | Zod schema que define, valida e fornece defaults para toda config do plugin. Fonte única de verdade. Exporta tipo `PiOVConfig` inferido via `z.infer` |
 | **Config Cascade** | Ordem de resolução: defaults compilados → env vars (`OV_*`) → `.pi/settings.json` → perfil ativo. Merge raso encadeado |
 | **Profile** | Preset nomeado de config. 4 built-in: `default`, `web-dev`, `docs`, `learning`. Apenas `name` + `description` na Fase 1 |
-| **Logger** | Interface em `domain/ports/` com métodos `info`, `warn`, `error`, `debug` + `ctx` opcional |
+| **Logger** | Interface em `domain/ports/` com métodos `info`, `warn`, `error`, `debug`, `isEnabled` + `ctx` opcional. `LogLevel` type (`"debug"|"info"|"warn"|"error"`) definido no domínio |
 | **File Logger** | Implementação em `adapters/driven/logger/`. JSON lines via `appendFileSync`. Rotação por tamanho (10MB) e idade (7 dias), até 5 arquivos |
 | **DI Container** | Container manual (~40 linhas). Registro por string token. Suporte a singleton e factory. Erro claro se token não registrado |
 | **Lifecycle** | `init()` async (cria logger, container, registra tudo) e `shutdown()` sync (reseta estado, zero I/O) |

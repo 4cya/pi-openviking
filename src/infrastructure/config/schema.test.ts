@@ -3,24 +3,25 @@ import { ZodError } from "zod";
 import { ConfigSchema, DEFAULT_CONFIG, BUILTIN_PROFILES } from "./schema";
 import type { PiOVConfig } from "./schema";
 
+function expectLoggerDefaults(logger: { path: string; maxSize: number; maxFiles: number; maxAge: number }) {
+  expect(logger.path).toBe("~/.pi/agent/pi-openviking.log");
+  expect(logger.maxSize).toBe(10 * 1024 * 1024);
+  expect(logger.maxFiles).toBe(5);
+  expect(logger.maxAge).toBe(7 * 24 * 60 * 60 * 1000);
+}
+
 describe("ConfigSchema", () => {
   it("parse({}) returns valid config with all defaults filled", () => {
     const config = ConfigSchema.parse({});
-    expect(config.logger.path).toBe("~/.pi/agent/pi-openviking.log");
     expect(config.logger.level).toBe("info");
-    expect(config.logger.maxSize).toBe(10 * 1024 * 1024);
-    expect(config.logger.maxFiles).toBe(5);
-    expect(config.logger.maxAge).toBe(7 * 24 * 60 * 60 * 1000);
+    expectLoggerDefaults(config.logger);
     expect(config.profile.activeProfile).toBe("default");
   });
 
   it("partial override keeps other defaults", () => {
     const config = ConfigSchema.parse({ logger: { level: "debug" } });
     expect(config.logger.level).toBe("debug");
-    expect(config.logger.path).toBe("~/.pi/agent/pi-openviking.log");
-    expect(config.logger.maxSize).toBe(10 * 1024 * 1024);
-    expect(config.logger.maxFiles).toBe(5);
-    expect(config.logger.maxAge).toBe(7 * 24 * 60 * 60 * 1000);
+    expectLoggerDefaults(config.logger);
     expect(config.profile.activeProfile).toBe("default");
   });
 
@@ -49,11 +50,8 @@ describe("DEFAULT_CONFIG", () => {
   });
 
   it("logger defaults match expected values", () => {
-    expect(DEFAULT_CONFIG.logger.path).toBe("~/.pi/agent/pi-openviking.log");
     expect(DEFAULT_CONFIG.logger.level).toBe("info");
-    expect(DEFAULT_CONFIG.logger.maxSize).toBe(10 * 1024 * 1024);
-    expect(DEFAULT_CONFIG.logger.maxFiles).toBe(5);
-    expect(DEFAULT_CONFIG.logger.maxAge).toBe(7 * 24 * 60 * 60 * 1000);
+    expectLoggerDefaults(DEFAULT_CONFIG.logger);
   });
 
   it("profile defaults to 'default'", () => {
