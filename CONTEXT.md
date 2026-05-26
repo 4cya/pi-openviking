@@ -24,7 +24,7 @@ Fase 1 (Foundation) em andamento. Módulos entregues:
 | File Logger | ✅ Entregue | `src/adapters/driven/logger/file-logger.ts` |
 | File Logger tests | ✅ Entregue | `src/adapters/driven/logger/file-logger.test.ts` |
 | DI Container | ✅ Entregue | `src/infrastructure/di/container.ts` |
-| Lifecycle + Bootstrap | ⬜ Pendente | `src/infrastructure/lifecycle.ts`, `src/bootstrap.ts` |
+| Lifecycle + Entry point | ✅ Entregue | `src/infrastructure/lifecycle.ts`, `src/index.ts` |
 
 Próximas fases: Domain Ports (2), OV Adapter (3), Operations (4), Tools+Commands (5), Auto-Recall (6), Profiles (7), Features (8).
 
@@ -56,9 +56,8 @@ src/
 │   ├── di/
 │   │   ├── container.ts       # ✅ DI container manual (21 linhas)
 │   │   └── container.test.ts  # ✅ 4 testes
-│   └── lifecycle.ts           # ⬜ init() + shutdown()
-├── bootstrap.ts               # ⬜ orquestra init()
-├── index.ts                   # entry point
+│   └── lifecycle.ts           # ✅ init() + shutdown() + lifecycle.test.ts
+├── index.ts                   # ✅ entry point (chama lifecycle.init())
 └── _legacy/                   # Código original intacto
 tests/
 ├── global-setup.ts            # Infra compartilhada (docker compose OV test)
