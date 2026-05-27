@@ -46,6 +46,21 @@
 - The **File Logger** is registered in the **DI Container** as a singleton and consumed by all layers through its **Port** interface
 - The **Config Schema** exports `PiOVConfig` type (inferred via `z.infer`) and `DEFAULT_CONFIG` constant — these are used by the **Config Cascade** as the base layer
 
+## Shared Kernel (domain/common)
+
+| Term | Definition | Aliases to avoid |
+| ---- | ---------- | ---------------- |
+| **Uri** | Value object class representing a `viking://` URI. Validates prefix in constructor, implements `.toString()` and `.equals()` (value comparison). Lives in `domain/common/uri.ts` | path, string identifier |
+| **SessionId** | Opaque value object class for an OpenViking session. Guards against empty string, implements `.toString()`. Created by `SessionStore.create()`. Lives in `domain/common/session-id.ts` | session token, session key |
+| **ContentLevel** | String literal union: `"abstract" \| "overview" \| "read"`. Used by `FsStore.read()` to control response detail. Lives in `domain/common/content-level.ts` | level, detail |
+| **WriteMode** | String literal union: `"replace" \| "append" \| "create"`. Used by `FsStore.write()` to control overwrite behavior. Lives in `domain/common/write-mode.ts` | mode, write strategy |
+| **SearchMode** | String literal union: `"auto" \| "fast" \| "deep"`. Used by `SearchQuery.mode`. Lives in `domain/common/search-query.ts` | mode |
+| **SearchQuery** | Interface with required `query: string` and optional `limit`, `mode`, `targetUri`, `sessionId`. Data object, no methods. Lives in `domain/common/search-query.ts` | query, search params |
+| **Part** | Discriminated union of `TextPart \| ToolPart \| ContextPart`. Represents a piece of content in an OV session message. Lives in `domain/common/part.ts` | message part, content part |
+| **TextPart** | Interface `{ type: "text"; text: string }`. A plain text message part. | text segment |
+| **ToolPart** | Interface `{ type: "tool"; toolId; toolName; toolInput; toolOutput; toolStatus; toolOutputTruncated; toolUri; skillUri; durationMs | null; promptTokens | null; completionTokens | null; toolOutputRef }`. A tool execution record. `toolStatus` is `string` (not enum) to support future OV values. | tool result |
+| **ContextPart** | Interface `{ type: "context"; uri: string; contextType: "memory" \| "resource" \| "skill"; abstract: string }`. A referenced context item. | context reference |
+
 ## Example dialogue
 
 > **Dev:** "How does **Config Cascade** work at startup?"

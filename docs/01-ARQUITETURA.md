@@ -11,11 +11,12 @@
 | Fase | Status | Artefatos |
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
-| **F2 Domain + Ports** | 🔶 Em progresso | Logger port em `domain/ports/`. Demais ports, modelos de domínio e erros pendentes. |
+| **F2 Domain + Ports** | 🔶 Em progresso | `domain/ports/logger.ts` ✅ · `domain/common/` (Uri, SessionId, ContentLevel, WriteMode, SearchQuery, Part) ✅ · Demais ports, modelos de domínio e erros pendentes. |
 | **F3+** | ⏳ Planejado | Ver `02-PLANO.md` |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
+> Para tipos compartilhados já implementados (`domain/common/`), veja [2. F2 — Ordem de Implementação](#2-f2--ordem-de-implementação).
 
 ---
 
@@ -132,7 +133,7 @@ A ordem de criação dos artefatos de domínio segue dependências entre eles:
 
 | Passo | Artefato | Depende |
 |-------|----------|---------|
-| 1 | `domain/common/` — Uri (class), SessionId (class), ContentLevel, ResourceKind | — |
+| 1 | `domain/common/` — Uri (class), SessionId (class), ContentLevel, WriteMode, SearchQuery (interface), Part (discriminated union) | — |
 | 2 | `domain/errors/` — DomainError class + subtipos (NotFoundError, ConnectionError, etc.) | — |
 | 3 | `domain/{knowledge,recall,profile}/model/` — value objects + aggregates | common, errors |
 | 4 | `domain/ports/` — KnowledgeBase, FsStore, GraphStore, SessionStore, CacheStore, EventBus | models (tipos de retorno) |
@@ -201,7 +202,7 @@ Mapeamento OV: `POST /api/v1/content/write`, `GET /api/v1/fs/{read|abstract|over
 ```typescript
 interface FsStore {
   read(uri: Uri, level?: ContentLevel): Promise<Content>;
-  write(uri: Uri, content: string, mode?: WriteMode, wait?: boolean): Promise<WriteResult>;
+  write(uri: Uri, content: string, mode?: WriteMode): Promise<WriteResult>;
   list(uri: Uri, recursive?: boolean): Promise<FsEntry[]>;
   tree(uri: Uri): Promise<FsEntry[]>;
   stat(uri: Uri): Promise<FsEntry>;
@@ -211,31 +212,53 @@ interface FsStore {
 }
 ```
 
+> `write()` não expõe `wait` no domínio — espera síncrona é detalhe de transporte OV,
+> resolvido no adapter (F3) via timeout padrão. Domínio não sabe de async processing.
+
 **Tipos de suporte (definidos em `domain/common/`):**
 
 ```typescript
+// domain/common/content-level.ts
 type ContentLevel = "abstract" | "overview" | "read";
+
+// domain/common/write-mode.ts
 type WriteMode = "replace" | "append" | "create";
+
+// domain/common/search-query.ts
+type SearchMode = "auto" | "fast" | "deep";
 
 interface SearchQuery {
   query: string;
   limit?: number;
-  mode?: "auto" | "fast" | "deep";
+  mode?: SearchMode;
   targetUri?: Uri;
   sessionId?: SessionId;
 }
 
+// domain/common/part.ts
+interface TextPart { type: "text"; text: string }
+interface ToolPart {
+  type: "tool";
+  toolId: string; toolName: string;
+  toolInput: Record<string, unknown>;
+  toolOutput: string; toolStatus: string;
+  toolOutputTruncated: boolean;
+  toolUri: string; skillUri: string;
+  durationMs: number | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  toolOutputRef: string;
+}
+interface ContextPart { type: "context"; uri: string; contextType: "memory" | "resource" | "skill"; abstract: string }
 type Part = TextPart | ToolPart | ContextPart;
 ```
 
-> **Nota:** OV v3 não possui endpoint `reindex`. `write()` sempre atualiza semântica/vectors
-automaticamente. `ResourceKind` foi removido — escrita de conteúdo textual é via
-`write()`, adição de resources via `POST /api/v1/resources` (adaptador OV, não port).
+> **Nota:** `ResourceKind` foi removido — escrita de conteúdo textual é via `write()`,
+> adição de resources via `POST /api/v1/resources` (adaptador OV, não port).
+> OV v3 não possui endpoint `reindex`. `write()` sempre atualiza semântica/vectors automaticamente.
 
 > `SearchQuery` e `Part` vivem em `domain/common/` por serem consumidos por múltiplas ports
-e adaptadores. Não são private de port nenhuma. `write()` sempre atualiza semântica/vectors
-automaticamente. `ResourceKind` foi removido — escrita de conteúdo textual é via
-`write()`, adição de resources via `POST /api/v1/resources` (adaptador OV, não port).
+e adaptadores. Não são private de port nenhuma.
 
 ### CacheStore — cache de operações repetidas
 
@@ -425,7 +448,7 @@ sequenceDiagram
 ```
 src/
 ├── domain/                    # Pure TS. Sem imports externos.
-│   ├── common/                # (futuro) Shared kernel: Uri, SessionId, DomainError
+│   ├── common/                # ✅ Shared kernel: Uri, SessionId, ContentLevel, WriteMode, SearchQuery, Part
 │   ├── knowledge/             # (futuro F2) Contexto: armazenamento e busca
 │   │   ├── model/             # KnowledgeItem, Resource, Relation
 │   │   └── service/           # SemanticSearch
@@ -477,6 +500,8 @@ src/
 ```
 
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
+
+> F2 — domain/common/ (Uri, SessionId, ContentLevel, WriteMode, SearchQuery, Part) implementado em 2026-05-27.
 
 ---
 

@@ -96,6 +96,41 @@ A stack of cross-cutting concerns (Logging → Cache → Metrics) that wraps app
 
 ### Shared Types (shared kernel)
 
+**Part**:
+A discriminated union (`TextPart | ToolPart | ContextPart`) that represents a piece of content in an OV session message.
+Maps to OV v3 `part` types. Lives in `domain/common/part.ts`.
+
+**SearchQuery**:
+A data object with `query`, optional `limit`, `mode` (`auto` | `fast` | `deep`), `targetUri`, and `sessionId`.
+Lives in `domain/common/search-query.ts`. Mode is resolved by the adapter (F3), not the domain.
+
+**ContentLevel**:
+A string literal union: `"abstract" | "overview" | "read"`. Controls response detail level for `FsStore.read()`.
+Lives in `domain/common/content-level.ts`.
+
+**WriteMode**:
+A string literal union: `"replace" | "append" | "create"`. Controls overwrite behavior for `FsStore.write()`.
+Lives in `domain/common/write-mode.ts`.
+
+**SearchMode**:
+A string literal union: `"auto" | "fast" | "deep"`. Used by `SearchQuery.mode` to hint search strategy.
+Lives in `domain/common/search-query.ts`.
+
+**EventBus** (synchronous):
+An in-memory publish/subscribe mechanism for domain events (ADR-011). Dispatch is synchronous — handlers
+run in the same tick. Errors are logged but never propagated (one handler failure does not break others).
+Event log accumulated for debugging. Lives in `domain/ports/event-bus.ts` and `infrastructure/event-bus/in-memory.ts`.
+
+**Curate Pipeline**:
+A pure function: `(SearchResult, CurateOpts) => CuratedResult`. No side effects, no TokenBudget mutation.
+Token count returned but not deducted — caller (`RecallService`, F4) manages budget.
+
+**FsStore.write mode**:
+Does NOT expose `wait` in the domain interface. Synchronous wait is an OV transport detail resolved
+by the adapter with a default timeout. Domain operates on the concept of "write and be done".
+
+
+
 **Uri** (class — value object):
 A `viking://` URI identifying a resource or location in the OpenViking filesystem. Used across all bounded contexts. Implemented as class with validation in constructor — not a type alias.
 _Avoid_: path, string identifier

@@ -85,7 +85,7 @@ Profiles registrados. Tudo testado sem OV.
 
 | Passo | Tarefa | Artefato | Descrição |
 |-------|--------|----------|-----------|
-| 1 | F2.0a | `domain/common/{uri,session-id,content-level,resource-kind}.ts` | Shared kernel: Uri (class), SessionId (class), ContentLevel, ResourceKind |
+| 1 | F2.0a | `domain/common/{uri,session-id,content-level,write-mode,search-query,part,index}.ts` | ✅ Shared kernel: Uri (class), SessionId (class), ContentLevel, WriteMode, SearchQuery (interface), Part (discriminated union) |
 | 2 | F2.0b | `domain/errors/{domain-error,not-found,connection,validation}.ts` | DomainError hierarchy |
 | 3 | F2.1 | `domain/{knowledge,recall,profile}/model/*.ts` | Value Objects + Aggregates por bounded context |
 | 4 | F2.2 | `domain/ports/knowledge-base.ts` | Interface KnowledgeBase |
@@ -102,6 +102,9 @@ Profiles registrados. Tudo testado sem OV.
 - `ContentStore` foi fundida em `FsStore` — OV trata content e fs como o mesmo sistema.
   FsStore tem `write()`, `delete()`, `read()` + navegação. **Sem `reindex()`** — OV v3 não expõe esse endpoint; write() sempre refresca semântica automaticamente.
 - `Uri` e `SessionId` são **classes** (value objects com validação), não type aliases.
+- `SearchQuery` é interface, não classe — objeto de dados simples.
+- `Part` é união discriminada de interfaces `TextPart | ToolPart | ContextPart`.
+- `ContentLevel`, `WriteMode`, `SearchMode` são type aliases (string literal union).
 - ProfileManager (esqueleto) deferido para F7a. Profile é value object (`name` + `description`) em F2.
 
 **Mapeamento OV v3 confirmado (2026-05):**
