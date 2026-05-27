@@ -510,13 +510,15 @@ src/
 │   │   ├── status-bar.ts       # ctx.ui.setStatus()
 │   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
 │   └── driven/
-│       ├── openviking/        # 🔶 F3: Transport + all FsStore + FsMapper + ContentMapper + ErrorMapper (✅)
-│       │   ├── transport.ts    # ✅ HTTP client c/ auth, retry, timeout, abort
-│       │   ├── fs-store.ts     # ✅ FsStoreAdapter (read + write + list + tree + stat + mkdir + mv + delete)
+│       ├── openviking/        # 🔶 F3: Transport + FsStore + KnowledgeBase + all mappers (✅)
+│       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort
+│       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read+write+list+tree+stat+mkdir+mv+delete)
+│       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find+search+glob+grep)
 │       │   └── mappers/
 │       │       ├── error-mapper.ts   # ✅ toDomainError(): HTTP status → DomainError
 │       │       ├── content-mapper.ts # ✅ toContent(): OV JSON → domain Content
-│       │       └── fs-mapper.ts      # ✅ toFsEntry/toFsEntries/toWriteResult
+│       │       ├── fs-mapper.ts      # ✅ toFsEntry/toFsEntries/toWriteResult
+│       │       └── search-mapper.ts  # ✅ toSearchResult/toGlobResult/toGrepResult
 │       ├── cache/             # (futuro F3+) InMemoryCache / RedisCache
 │       └── logger/
 │           ├── file-logger.ts # ✅ FileLogger (JSON lines + rotação)
@@ -542,7 +544,7 @@ src/
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
-> F3 — Transport (#52) + ContentMapper + FsStore.read (#53) + FsMapper + FsStore completo (#54) implementados 2026-05-27. Próximo: session+search+relation mappers + adapter factory.
+> F3 — Transport (#52) + ContentMapper + FsStore.read (#53) + FsStore completo (#54) + SearchMapper + KnowledgeBase (#55) implementados 2026-05-27. Próximo: session+relation mappers + adapter factory.
 
 ---
 

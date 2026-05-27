@@ -71,6 +71,13 @@ A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-st
 **FsMapper**:
 Pure functions in `adapters/driven/openviking/mappers/fs-mapper.ts`: `toFsEntry(raw)` validates type (`file|directory`) and returns domain `FsEntry`; `toFsEntries(raw)` maps arrays; `toWriteResult(raw, expectedUri)` infers success from `success` flag or `status` field.
 
+**SearchMapper**:
+Pure functions in `adapters/driven/openviking/mappers/search-mapper.ts`: `toSearchResult(raw)` maps OV search response (memories/resources/skills arrays) into domain `SearchResult`; `toGlobResult(raw)` maps glob entries; `toGrepResult(raw)` maps grep matches with line numbers. All null-safe.
+_Avoid_: search parser, search response mapper
+
+**KnowledgeBaseAdapter**:
+An implementation of the `KnowledgeBase` port in `adapters/driven/openviking/knowledge-base.ts`. `find()` calls `POST /api/v1/search/find` (no session). `search()` calls `POST /api/v1/search/search` with optional `session_id`. `glob()` calls `POST /api/v1/search/glob`. `grep()` calls `POST /api/v1/search/grep` with all filter params (`case_insensitive`, `exclude_uri`, `level_limit`, `node_limit`). All methods use `SearchMapper` for response mapping.
+
 **Config Cascade**:
 Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile. Each source overrides the previous via shallow merge.
 `.pi/settings.json` is read at the `"pi-openviking"` namespace key — only the sub-tree under that key enters the cascade. Pi-level keys (`extensions`, etc.) are ignored.

@@ -110,6 +110,8 @@
 | **ContentMapper** | Pure function `toContent(raw, uri, level?): Content` in `adapters/driven/openviking/mappers/content-mapper.ts`. Converts OV content JSON to domain `Content` (Uri + body + level). Handles null body, extra fields. 8 tests. | content parser, response mapper |
 | **FsStoreAdapter** | Full implementation of `FsStore` port in `adapters/driven/openviking/fs-store.ts`. read+write+list+tree+stat+mkdir+mv+delete implemented. `write()` uses `wait: true`. `delete()` auto-retries with `recursive=true`. 22 tests. | fs adapter, content adapter |
 | **FsMapper** | Pure functions in `adapters/driven/openviking/mappers/fs-mapper.ts`: `toFsEntry(raw)` validates type and returns `FsEntry`; `toFsEntries(raw)` maps arrays, null-safe; `toWriteResult(raw, uri)` infers success from `success` flag or `status` field. 15 tests. | fs response mapper |
+| **SearchMapper** | Pure functions in `adapters/driven/openviking/mappers/search-mapper.ts`: `toSearchResult(raw)` maps OV search response to domain `SearchResult`; `toGlobResult(raw)` maps glob; `toGrepResult(raw)` maps grep matches. All null-safe. 13 tests. | search parser, search response mapper |
+| **KnowledgeBaseAdapter** | Implementation of `KnowledgeBase` port in `adapters/driven/openviking/knowledge-base.ts`. `find()`→`POST /search/find`, `search()`→`POST /search/search` c/ session_id, `glob()`→`POST /search/glob`, `grep()`→`POST /search/grep` c/ all filters. 13 tests. | kb adapter, search adapter |
 
 ## Example dialogue
 
