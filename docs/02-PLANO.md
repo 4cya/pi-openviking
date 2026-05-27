@@ -146,11 +146,12 @@ Profiles registrados. Tudo testado sem OV.
 | F3.2d | `adapters/driven/openviking/mappers/fs-mapper.ts` | F2 (domain types) | ✅ |
 | F3.2e | `adapters/driven/openviking/mappers/search-mapper.ts` | F2 (domain types) | ✅ |
 | F3.2f | `adapters/driven/openviking/mappers/session-mapper.ts` | F2 (domain types) | ✅ |
-| F3.2g | `adapters/driven/openviking/mappers/relation-mapper.ts` | F2 (domain types) | ⏳ |
+| F3.2g | `adapters/driven/openviking/mappers/relation-mapper.ts` | F2 (domain types) | ✅ |
 | F3.3a | `adapters/driven/openviking/fs-store.ts` (write + list + tree + stat + mkdir + mv + delete) | F3.1 + F3.2d | ✅ |
 | F3.3b | `adapters/driven/openviking/knowledge-base.ts` (find + search + glob + grep) | F3.1 + F3.2e | ✅ |
 | F3.3c | `adapters/driven/openviking/session-store.ts` (create+message+commit+tasks+lifecycle) | F3.1 + F3.2f | ✅ |
-| F3.3d | `adapters/driven/openviking/adapter.ts` (factory) | F3.1 + F3.2 | ⏳ |
+| F3.3d | `adapters/driven/openviking/graph-store.ts` (link+unlink+graph) | F3.1 + F3.2g | ✅ |
+| F3.3e | `adapters/driven/openviking/adapter.ts` (factory) | F3.1 + F3.2 | ⏳ |
 | F3.4 | Testes com mock OV (docker ou in-process) | F3.3 | ⏳ |
 
 **Milestone:** Ports implementadas. Testado contra OV real e mock.

@@ -510,17 +510,19 @@ src/
 │   │   ├── status-bar.ts       # ctx.ui.setStatus()
 │   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
 │   └── driven/
-│       ├── openviking/        # 🔶 F3: All ports implemented (✅), factory pending
+│       ├── openviking/        # 🔶 F3: All ports + mappers implemented (✅), factory pending
 │       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort
-│       │   ├── fs-store.ts        # ✅ FsStoreAdapter (full — read/write/nav/manage)
+│       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read/write/list/tree/stat/mkdir/mv/delete)
 │       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find/search/glob/grep)
-│       │   ├── session-store.ts   # ✅ SessionStoreAdapter (create/messages/commit/tasks/lifecycle)
+│       │   ├── session-store.ts   # ✅ SessionStoreAdapter (create/send/commit/tasks/lifecycle)
+│       │   ├── graph-store.ts     # ✅ GraphStoreAdapter (link/unlink/graph)
 │       │   └── mappers/
-│       │       ├── error-mapper.ts   # ✅ toDomainError(): HTTP status → DomainError
-│       │       ├── content-mapper.ts # ✅ toContent(): OV JSON → domain Content
-│       │       ├── fs-mapper.ts      # ✅ toFsEntry/toFsEntries/toWriteResult
-│       │       ├── search-mapper.ts  # ✅ toSearchResult/toGlobResult/toGrepResult
-│       │       └── session-mapper.ts # ✅ toSessionId/toCommitResult/toTaskStatus + PartSerializer
+│       │       ├── error-mapper.ts    # ✅ toDomainError()
+│       │       ├── content-mapper.ts  # ✅ toContent()
+│       │       ├── fs-mapper.ts       # ✅ toFsEntry/toFsEntries/toWriteResult
+│       │       ├── search-mapper.ts   # ✅ toSearchResult/toGlobResult/toGrepResult
+│       │       ├── session-mapper.ts  # ✅ toSessionId/toCommitResult/toTaskStatus + PartSerializer
+│       │       └── relation-mapper.ts # ✅ toLinkResult/toRelations
 │       ├── cache/             # (futuro F3+) InMemoryCache / RedisCache
 │       └── logger/
 │           ├── file-logger.ts # ✅ FileLogger (JSON lines + rotação)
@@ -546,7 +548,7 @@ src/
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
-> F3 — Issues #52–#56: Transport + FsStore + KnowledgeBase + SessionStore + todos mappers exceto relation implementados 2026-05-27. Próximo: relation mapper + adapter factory.
+> F3 — Issues #52–#57: All 6 ports implemented (Transport + FsStore + KnowledgeBase + SessionStore + GraphStore + 6 mappers) 2026-05-27. Próximo: adapter factory + F4 Operations.
 
 ---
 

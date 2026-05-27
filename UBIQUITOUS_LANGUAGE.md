@@ -114,6 +114,8 @@
 | **KnowledgeBaseAdapter** | Implementation of `KnowledgeBase` port in `adapters/driven/openviking/knowledge-base.ts`. `find()`→`POST /search/find`, `search()`→`POST /search/search` c/ session_id, `glob()`→`POST /search/glob`, `grep()`→`POST /search/grep` c/ all filters. 13 tests. | kb adapter, search adapter |
 | **SessionMapper** | Pure functions in `adapters/driven/openviking/mappers/session-mapper.ts`. `toSessionId(raw)` extracts session identifier; `toCommitResult(raw)` maps commit; `toTaskStatus(raw)` maps task status. Includes `serializePart`/`serializeParts` for camelCase→snake_case Part serialization. 15 tests. | session parser |
 | **SessionStoreAdapter** | Full implementation of `SessionStore` port in `adapters/driven/openviking/session-store.ts`. All 8 methods: create, sendMessage, sendMessages, commit, getTaskStatus, listTasks, sessionUsed, deleteSession. 11 tests. | session adapter |
+| **RelationMapper** | Pure functions in `adapters/driven/openviking/mappers/relation-mapper.ts`. `toLinkResult(raw, source, targets, reason?)` builds `LinkResult`; `toRelations(raw)` maps OV graph response (array or `{relations}` shape). 9 tests. | relation parser |
+| **GraphStoreAdapter** | Implementation of `GraphStore` port in `adapters/driven/openviking/graph-store.ts`. `link()`→`POST /relations/link`, `unlink()`→`DELETE /relations/link`, `graph()`→`GET /relations?uri=`. 8 tests. | graph adapter |
 
 ## Example dialogue
 
