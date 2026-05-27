@@ -11,8 +11,8 @@
 | Fase | Status | Artefatos |
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
-| **F2 Domain + Ports** | 🔶 Em progresso | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ · Pendente: `domain/ports/` restantes (todos implementados). |
-| **F3+** | ⏳ Planejado | Ver `02-PLANO.md` |
+| **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
+| **F3 OV Adapter** | 🔶 Em progresso | `adapters/driven/openviking/transport.ts` (Transport) ✅ · `adapters/driven/openviking/mappers/error-mapper.ts` (ErrorMapper) ✅ · Mappers restantes ⏳ · Adapter ⏳ · Ver `02-PLANO.md` |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -150,14 +150,29 @@ Todas as ports ficam em `domain/ports/`. Adaptadores concretos em `adapters/driv
 
 ### KnowledgeBase — busca semântica e lexical
 
-Mapeamento OV: `POST /api/v1/search/find` (rápida), `POST /api/v1/search/search` (profunda),
-`POST /api/v1/search/glob`, `POST /api/v1/search/grep`.
+Dois endpoints de busca OV:
+- `POST /api/v1/search/find` — find(), sem sessão, sem intent analysis, baixa latência
+- `POST /api/v1/search/search` — search(), com sessão + intent analysis server-side, alta latência
+- `POST /api/v1/search/glob` (pattern, uri root scope, node_limit)
+- `POST /api/v1/search/grep` (uri, pattern, case_insensitive, exclude_uri, level_limit, node_limit)
 
 ```typescript
 interface KnowledgeBase {
-  search(query: SearchQuery): Promise<SearchResult>;
+  /** Simple semantic search, no session context. POST /api/v1/search/find */
+  find(query: FindQuery): Promise<SearchResult>;
+  /** Deep search with session + intent analysis. POST /api/v1/search/search */
+  search(request: SearchRequest): Promise<SearchResult>;
   glob(pattern: string, uri?: Uri, limit?: number): Promise<GlobResult>;
   grep(pattern: string, opts?: GrepOptions): Promise<GrepResult>;
+
+GrepOptions:
+- `pattern` — padrão de busca
+- `caseInsensitive?` — case insensitive match
+- `excludeUri?` — URI a excluir
+- `levelLimit?` — profundidade máxima (níveis de diretório)
+- `nodeLimit?` — max resultados
+
+OV: `POST /api/v1/search/grep {uri, pattern, case_insensitive, exclude_uri, level_limit, node_limit}`
 }
 ```
 
@@ -175,16 +190,24 @@ interface GraphStore {
 
 ### SessionStore — ciclo de vida de sessão OV
 
-Mapeamento OV: `POST /api/v1/sessions`, `POST /api/v1/sessions/{id}/messages`,
-`POST /api/v1/sessions/{id}/commit`, `POST /api/v1/sessions/{id}/used`,
-`GET /api/v1/tasks/{id}`, `DELETE /api/v1/sessions/{id}`.
+Mapeamento OV:
+- `POST /api/v1/sessions` — create
+- `POST /api/v1/sessions/{id}/messages` — sendMessage (1 mensagem)
+- `POST /api/v1/sessions/{id}/messages/batch` — sendMessages (max 100)
+- `POST /api/v1/sessions/{id}/commit` — commit (com `keep_recent_count`)
+- `POST /api/v1/sessions/{id}/used` — sessionUsed
+- `GET /api/v1/tasks/{id}` — getTaskStatus
+- `GET /api/v1/tasks` (com filtros) — listTasks
+- `DELETE /api/v1/sessions/{id}` — deleteSession
 
 ```typescript
 interface SessionStore {
   create(): Promise<SessionId>;
   sendMessage(sessionId: SessionId, role: string, content: Part[]): Promise<void>;
-  commit(sessionId: SessionId): Promise<CommitResult>;
+  sendMessages(sessionId: SessionId, messages: { role: string; content: Part[] }[]): Promise<void>;
+  commit(sessionId: SessionId, options?: CommitOptions): Promise<CommitResult>;
   getTaskStatus(taskId: string): Promise<TaskStatus>;
+  listTasks(filter?: TaskFilter): Promise<TaskStatus[]>;
   sessionUsed(sessionId: SessionId, contexts: Uri[]): Promise<void>;
   deleteSession(sessionId: SessionId): Promise<void>;
 }
@@ -195,13 +218,15 @@ interface SessionStore {
 Port única para ler, escrever, navegar e gerenciar o filesystem virtual do OpenViking.
 ContentStore foi fundida nesta port — OV trata content e fs como o mesmo sistema.
 
-Mapeamento OV: `POST /api/v1/content/write`, `GET /api/v1/fs/{read|abstract|overview}`,
-`GET /api/v1/fs/ls`, `GET /api/v1/fs/tree`, `GET /api/v1/fs/stat`,
-`POST /api/v1/fs/mkdir`, `POST /api/v1/fs/mv`, `DELETE /api/v1/fs`.
+Mapeamento OV:
+- Leitura: `GET /api/v1/content/{read|abstract|overview}?uri=&offset=&limit=`
+- Escrita: `POST /api/v1/content/write` (mode: replace|append|create, wait, timeout)
+- Navegação: `GET /api/v1/fs/ls`, `GET /api/v1/fs/tree`, `GET /api/v1/fs/stat`
+- Mutação: `POST /api/v1/fs/mkdir`, `POST /api/v1/fs/mv`, `DELETE /api/v1/fs`
 
 ```typescript
 interface FsStore {
-  read(uri: Uri, level?: ContentLevel): Promise<Content>;
+  read(uri: Uri, level?: ContentLevel, offset?: number, limit?: number): Promise<Content>;
   write(uri: Uri, content: string, mode?: WriteMode): Promise<WriteResult>;
   list(uri: Uri, recursive?: boolean): Promise<FsEntry[]>;
   tree(uri: Uri): Promise<FsEntry[]>;
@@ -212,8 +237,13 @@ interface FsStore {
 }
 ```
 
+> `read()` aceita `offset` (linha inicial, default 0) e `limit` (linhas, default -1).
+> OV: `GET /api/v1/content/read?uri=&offset=&limit=`.
+>
 > `write()` não expõe `wait` no domínio — espera síncrona é detalhe de transporte OV,
-> resolvido no adapter (F3) via timeout padrão. Domínio não sabe de async processing.
+> resolvido no adapter (F3) via `wait: true` com timeout default de 30s.
+> Domínio não sabe de async processing. OV `POST /api/v1/content/write` aceita
+> `wait: bool` e `timeout: float`.
 
 **Tipos de suporte (definidos em `domain/common/`):**
 
@@ -480,7 +510,10 @@ src/
 │   │   ├── status-bar.ts       # ctx.ui.setStatus()
 │   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
 │   └── driven/
-│       ├── openviking/        # (futuro F3) OV Adapter + Transport + Mappers
+│       ├── openviking/        # 🔶 F3: Transport + ErrorMapper (✅), Mappers restantes (⏳), Adapter (⏳)
+│       │   ├── transport.ts    # ✅ HTTP client c/ auth, retry, timeout, abort
+│       │   └── mappers/
+│       │       └── error-mapper.ts # ✅ toDomainError(): HTTP status → DomainError
 │       ├── cache/             # (futuro F3+) InMemoryCache / RedisCache
 │       └── logger/
 │           ├── file-logger.ts # ✅ FileLogger (JSON lines + rotação)
@@ -506,6 +539,7 @@ src/
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
+> F3 — Transport (#52) + ErrorMapper implementados 2026-05-27. Próximo: mappers restantes + adapter.
 
 ---
 

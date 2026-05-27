@@ -1,4 +1,4 @@
-import type { SearchQuery } from "../common/search-query";
+import type { FindQuery, SearchRequest } from "../common/search-query";
 import type { SearchResult } from "../knowledge/model/search-result";
 
 export interface GlobResult {
@@ -8,8 +8,10 @@ export interface GlobResult {
 
 export interface GrepOptions {
   pattern: string;
-  caseSensitive?: boolean;
-  maxResults?: number;
+  caseInsensitive?: boolean;
+  excludeUri?: string;
+  levelLimit?: number;
+  nodeLimit?: number;
 }
 
 export interface GrepResult {
@@ -18,7 +20,10 @@ export interface GrepResult {
 }
 
 export interface KnowledgeBase {
-  search(query: SearchQuery): Promise<SearchResult>;
+  /** Simple semantic search, no session context. POST /api/v1/search/find */
+  find(query: FindQuery): Promise<SearchResult>;
+  /** Deep search with session + intent analysis. POST /api/v1/search/search */
+  search(request: SearchRequest): Promise<SearchResult>;
   glob(pattern: string, uri?: string, limit?: number): Promise<GlobResult>;
   grep(pattern: string, opts?: GrepOptions): Promise<GrepResult>;
 }

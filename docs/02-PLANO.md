@@ -90,7 +90,7 @@ Profiles registrados. Tudo testado sem OV.
 | 3 | F2.1 | `domain/{knowledge,recall}/model/*.ts` | ✅ KnowledgeItem, ResourceItem, SkillItem, SearchResult, Relation, RecallItem, TokenBudget |
 | 4 | F2.2 | `domain/ports/knowledge-base.ts` | ✅ KnowledgeBase + GlobResult, GrepOptions, GrepResult |
 | 5 | F2.3 | `domain/ports/session-store.ts` | ✅ SessionStore + CommitResult, TaskStatus |
-| 6 | F2.4 | `domain/ports/fs-store.ts` | ✅ FsStore (read + write + list + tree + stat + mkdir + mv + delete; **sem reindex**, **sem wait**) + Content, WriteResult, FsEntry |
+| 6 | F2.4 | `domain/ports/fs-store.ts` | ✅ FsStore (read + write + list + tree + stat + mkdir + mv + delete; **sem wait na port**) + Content, WriteResult, FsEntry |
 | 7 | F2.5 | `domain/ports/event-bus.ts` | ✅ EventBus + DomainEvent types (ADR-011) + EventHandler |
 | 8 | F2.6 | `domain/ports/cache-store.ts` | ✅ CacheStore |
 | 9 | F2.7 | `domain/ports/logger.ts` | ✅ Logger (já existia) |
@@ -101,27 +101,35 @@ Profiles registrados. Tudo testado sem OV.
 
 **Decisões de design:**
 - `ContentStore` foi fundida em `FsStore` — OV trata content e fs como o mesmo sistema.
-  FsStore tem `write()`, `delete()`, `read()` + navegação. **Sem `reindex()`** — OV v3 não expõe esse endpoint; write() sempre refresca semântica automaticamente.
+  FsStore tem `write()`, `delete()`, `read()` + navegação. **Sem `reindex()` na port** — write() sempre refresca semântica/vectors automaticamente.
+  OV tem `POST /api/v1/content/reindex` (admin, mode: vectors_only | full) para manutenção, mas não faz parte da FsStore — uso normal não precisa chamar reindex.
 - `Uri` e `SessionId` são **classes** (value objects com validação), não type aliases.
-- `SearchQuery` é interface, não classe — objeto de dados simples.
+- `FindQuery` e `SearchRequest` são interfaces, não classes — objetos de dados simples.
 - `Part` é união discriminada de interfaces `TextPart | ToolPart | ContextPart`.
-- `ContentLevel`, `WriteMode`, `SearchMode` são type aliases (string literal union).
+- `ContentLevel`, `WriteMode` são type aliases (string literal union).
+- **`SearchMode` removido.** OV tem dois endpoints de busca distintos:
+  - `find()` → `POST /api/v1/search/find` (sem sessão, sem intent analysis)
+  - `search()` → `POST /api/v1/search/search` (com sessão + intent analysis)
+  `KnowledgeBase` expõe ambos como métodos separados, não mode flag.
 - ProfileManager (esqueleto) deferido para F7a. Profile é value object (`name` + `description`) em F2.
 
 **Mapeamento OV v3 confirmado (2026-05):**
-- FsStore.read → `GET /api/v1/fs/{read|abstract|overview}?uri=`
+- FsStore.read → `GET /api/v1/content/{read|abstract|overview}?uri=&offset=&limit=` (offset/limit para paginação de arquivos grandes)
 - FsStore.write → `POST /api/v1/content/write` (mode: replace|append|create)
 - FsStore.delete → `DELETE /api/v1/fs?uri=&recursive=`
 - KnowledgeBase.search → `POST /api/v1/search/find` ou `/search/search`
-- KnowledgeBase.glob → `POST /api/v1/search/glob`
-- KnowledgeBase.grep → `POST /api/v1/search/grep`
+- KnowledgeBase.glob → `POST /api/v1/search/glob` (params: pattern, uri (root scope), node_limit)
+- KnowledgeBase.grep → `POST /api/v1/search/grep` (params: uri, pattern, case_insensitive, exclude_uri, level_limit, node_limit)
 - GraphStore.link → `POST /api/v1/relations/link`
 - GraphStore.unlink → `DELETE /api/v1/relations/link`
 - GraphStore.graph → `GET /api/v1/relations?uri=`
 - SessionStore.create → `POST /api/v1/sessions`
 - SessionStore.sendMessage → `POST /api/v1/sessions/{id}/messages`
-- SessionStore.commit → `POST /api/v1/sessions/{id}/commit`
+- SessionStore.commit → `POST /api/v1/sessions/{id}/commit` (aceita `keepRecentCount` → `keep_recent_count`)
 - SessionStore.sessionUsed → `POST /api/v1/sessions/{id}/used`
+- SessionStore.sendMessages (batch) → `POST /api/v1/sessions/{id}/messages/batch` (max 100)
+- SessionStore.getTaskStatus → `GET /api/v1/tasks/{id}`
+- SessionStore.listTasks → `GET /api/v1/tasks` (filtros: task_type, status, resource_id, limit)
 
 **Milestone:** Domínio puro definido. Ports estabelecidas. Nada importa infra real.
 
@@ -129,14 +137,17 @@ Profiles registrados. Tudo testado sem OV.
 
 **Objetivo:** Implementar as Ports contra o OV real. Testável com mock server.
 
-| Tarefa | Artefato | Depende |
-|--------|----------|---------|
-| F3.1 | `adapters/driven/openviking/transport.ts` | F1.1 (config) |
-| F3.2 | `adapters/driven/openviking/mappers/*.ts` | F2 (domain types) |
-| F3.3 | `adapters/driven/openviking/adapter.ts` | F3.1 + F3.2 |
-| F3.4 | Testes com mock OV (docker) | F3.3 |
+| Tarefa | Artefato | Depende | Status |
+|--------|----------|---------|--------|
+| F3.1 | `adapters/driven/openviking/transport.ts` | F1.1 (config) | ✅ |
+| F3.2a | `adapters/driven/openviking/mappers/error-mapper.ts` | F2 (domain types) | ✅ |
+| F3.2b | `adapters/driven/openviking/mappers/{search,content,fs,session,relation}-mapper.ts` | F2 (domain types) | ⏳ |
+| F3.3 | `adapters/driven/openviking/adapter.ts` | F3.1 + F3.2 | ⏳ |
+| F3.4 | Testes com mock OV (docker ou in-process) | F3.3 | ⏳ |
 
 **Milestone:** Ports implementadas. Testado contra OV real e mock.
+
+**Nota:** O teste de F3.1 usa servidor HTTP in-process (Node http), não Docker — cada teste sobe e derruba o mock sem dependência externa.
 
 ### F4 — Operations (14 dias)
 

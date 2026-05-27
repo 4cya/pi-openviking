@@ -21,7 +21,7 @@ export interface FsEntry {
 }
 
 export interface FsStore {
-  read(uri: Uri, level?: ContentLevel): Promise<Content>;
+  read(uri: Uri, level?: ContentLevel, offset?: number, limit?: number): Promise<Content>;
   write(uri: Uri, content: string, mode?: WriteMode): Promise<WriteResult>;
   list(uri: Uri, recursive?: boolean): Promise<FsEntry[]>;
   tree(uri: Uri): Promise<FsEntry[]>;

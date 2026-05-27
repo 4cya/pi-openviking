@@ -1,27 +1,41 @@
 import { describe, it, expect } from "vitest";
-import type { KnowledgeBase, GlobResult, GrepOptions, GrepResult } from "./knowledge-base";
-import type { SearchQuery, SearchMode } from "../common/search-query";
+import type { KnowledgeBase, GlobResult, GrepResult } from "./knowledge-base";
+import type { FindQuery, SearchRequest } from "../common/search-query";
 import type { SearchResult } from "../knowledge/model/search-result";
 
 describe("KnowledgeBase interface", () => {
   it("can be satisfied by a mock", () => {
     const mock: KnowledgeBase = {
+      find: async () => ({ memories: [], resources: [], skills: [], total: 0 }),
       search: async () => ({ memories: [], resources: [], skills: [], total: 0 }),
       glob: async () => ({ entries: [], total: 0 }),
       grep: async () => ({ matches: [], total: 0 }),
     };
+    expect(typeof mock.find).toBe("function");
     expect(typeof mock.search).toBe("function");
     expect(typeof mock.glob).toBe("function");
     expect(typeof mock.grep).toBe("function");
   });
 
-  it("search accepts SearchQuery and returns SearchResult", async () => {
+  it("find accepts FindQuery and returns SearchResult", async () => {
     const mock: KnowledgeBase = {
-      search: async (_q: SearchQuery) => ({ memories: [], resources: [], skills: [], total: 0 }),
+      find: async (_q: FindQuery) => ({ memories: [], resources: [], skills: [], total: 0 }),
+      search: async () => ({ memories: [], resources: [], skills: [], total: 0 }),
       glob: async () => ({ entries: [], total: 0 }),
       grep: async () => ({ matches: [], total: 0 }),
     };
-    const result = await mock.search({ query: "test", mode: "auto" as SearchMode });
+    const result = await mock.find({ query: "test" });
+    expect(result.total).toBe(0);
+  });
+
+  it("search accepts SearchRequest and returns SearchResult", async () => {
+    const mock: KnowledgeBase = {
+      find: async () => ({ memories: [], resources: [], skills: [], total: 0 }),
+      search: async (_r: SearchRequest) => ({ memories: [], resources: [], skills: [], total: 0 }),
+      glob: async () => ({ entries: [], total: 0 }),
+      grep: async () => ({ matches: [], total: 0 }),
+    };
+    const result = await mock.search({ query: "test" });
     expect(result.total).toBe(0);
   });
 });

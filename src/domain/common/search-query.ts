@@ -1,12 +1,23 @@
 import { Uri } from "./uri";
 import { SessionId } from "./session-id";
 
-export type SearchMode = "auto" | "fast" | "deep";
-
-export interface SearchQuery {
+/**
+ * FindQuery: simple semantic search without session context.
+ * Maps to OV POST /api/v1/search/find.
+ */
+export interface FindQuery {
   query: string;
   limit?: number;
-  mode?: SearchMode;
   targetUri?: Uri;
+}
+
+/**
+ * SearchRequest: deep search with optional session context for intent analysis.
+ * Maps to OV POST /api/v1/search/search.
+ */
+export interface SearchRequest {
+  query: string;
+  limit?: number;
   sessionId?: SessionId;
+  targetUri?: Uri;
 }

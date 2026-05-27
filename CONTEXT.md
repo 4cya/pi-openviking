@@ -49,6 +49,18 @@ _Avoid_: framework, wiring layer
 The Zod schema that defines, validates, and provides defaults for all plugin configuration. Single source of truth. Exports `PiOVConfig` type inferred via `z.infer`.
 _Avoid_: schema, config definition
 
+**OVAdapterConfig**:
+A sub-schema of Config Schema (field `ov`) that defines server connection parameters: `endpoint`, `apiKey`, `account`, `user`, `timeout`, `commitTimeout`, `maxRetries`. Validated via Zod with sensible defaults (endpoint = `http://localhost:1933`, timeout = 30s, maxRetries = 3).
+_Avoid_: ov config, transport config
+
+**Transport**:
+An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers (`X-API-Key`, `X-OpenViking-Account`, `X-OpenViking-User`), exponential backoff retry (5xx/network), configurable timeout, and AbortSignal passthrough. Single method `request<T>(methodLabel, path, opts?, signal?)`. Lives in `adapters/driven/openviking/transport.ts`.
+_Avoid_: http client, fetcher
+
+**ErrorMapper**:
+A pure function `toDomainError(httpStatus, body, methodLabel)` that translates OV HTTP errors into typed `DomainError` subtypes: 401/403 → `ConnectionError`, 404 → `NotFoundError`, 409/422 → `ValidationError`, 5xx → `ConnectionError`. Lives in `adapters/driven/openviking/mappers/error-mapper.ts`.
+_Avoid_: error translator, http error handler
+
 **Config Cascade**:
 Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile. Each source overrides the previous via shallow merge.
 `.pi/settings.json` is read at the `"pi-openviking"` namespace key — only the sub-tree under that key enters the cascade. Pi-level keys (`extensions`, etc.) are ignored.
@@ -100,9 +112,14 @@ A stack of cross-cutting concerns (Logging → Cache → Metrics) that wraps app
 A discriminated union (`TextPart | ToolPart | ContextPart`) that represents a piece of content in an OV session message.
 Maps to OV v3 `part` types. Lives in `domain/common/part.ts`.
 
-**SearchQuery**:
-A data object with `query`, optional `limit`, `mode` (`auto` | `fast` | `deep`), `targetUri`, and `sessionId`.
-Lives in `domain/common/search-query.ts`. Mode is resolved by the adapter (F3), not the domain.
+**FindQuery**:
+A data object with `query`, optional `limit`, `targetUri`. Used for simple search without session context.
+Maps to OV `POST /api/v1/search/find`. Lives in `domain/common/search-query.ts`.
+
+**SearchRequest**:
+A data object with `query`, optional `limit`, `sessionId`, `targetUri`. Used for deep search
+with server-side intent analysis. Maps to OV `POST /api/v1/search/search`.
+Lives in `domain/common/search-query.ts`.
 
 **ContentLevel**:
 A string literal union: `"abstract" | "overview" | "read"`. Controls response detail level for `FsStore.read()`.
@@ -112,9 +129,7 @@ Lives in `domain/common/content-level.ts`.
 A string literal union: `"replace" | "append" | "create"`. Controls overwrite behavior for `FsStore.write()`.
 Lives in `domain/common/write-mode.ts`.
 
-**SearchMode**:
-A string literal union: `"auto" | "fast" | "deep"`. Used by `SearchQuery.mode` to hint search strategy.
-Lives in `domain/common/search-query.ts`.
+
 
 **EventBus** (synchronous):
 An in-memory publish/subscribe mechanism for domain events (ADR-011). Dispatch is synchronous — handlers

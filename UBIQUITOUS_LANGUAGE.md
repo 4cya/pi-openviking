@@ -104,6 +104,9 @@
 | **CuratedItem** | Interface: `{ uri, text, score, source: "memory" | "resource", category? }`. Produced by curation pipeline. | curated result |
 | **CurateOpts** | Interface: `{ topN, scoreThreshold, maxTokens }`. Controls curation behavior. | curation options, opts |
 | **CuratedResult** | Interface: `{ items: CuratedItem[], tokens: number, dropped: number }`. Output of curation. | curation output |
+| **OVAdapterConfig** | Zod sub-schema in `ConfigSchema.ov` (field `ov`). Defines server connection: `endpoint`, `apiKey`, `account`, `user`, `timeout`, `commitTimeout`, `maxRetries`. Defaults: endpoint=`http://localhost:1933`, timeout=30s, maxRetries=3. Lives in `infrastructure/config/schema.ts`. | ov config, transport config |
+| **Transport** | HTTP client class in `adapters/driven/openviking/transport.ts`. Wraps native `fetch()` with auth headers, exp-backoff retry (5xx/network), timeout, AbortSignal passthrough. Single method `request<T>(methodLabel, path, opts?, signal?)`. 13 tests. | http client, fetcher |
+| **ErrorMapper** | Pure function `toDomainError(httpStatus, body, methodLabel): DomainError` in `adapters/driven/openviking/mappers/error-mapper.ts`. Maps: 401/403→ConnectionError, 404→NotFoundError, 409/422→ValidationError, 5xx→ConnectionError. 11 tests. | error translator, http error handler |
 
 ## Example dialogue
 

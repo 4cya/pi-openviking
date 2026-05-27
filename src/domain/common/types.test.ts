@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ContentLevel } from "./content-level";
 import type { WriteMode } from "./write-mode";
-import type { SearchQuery, SearchMode } from "./search-query";
+import type { FindQuery, SearchRequest } from "./search-query";
 import { Uri } from "./uri";
 import { SessionId } from "./session-id";
 
@@ -23,37 +23,33 @@ describe("WriteMode", () => {
   });
 });
 
-describe("SearchMode", () => {
-  it("accepts all three literals", () => {
-    const a: SearchMode = "auto";
-    const b: SearchMode = "fast";
-    const c: SearchMode = "deep";
-    expect([a, b, c]).toHaveLength(3);
-  });
-});
-
-describe("SearchQuery", () => {
+describe("FindQuery", () => {
   it("accepts all optional fields", () => {
-    const q: SearchQuery = {
+    const q: FindQuery = {
       query: "test",
       limit: 10,
-      mode: "deep",
       targetUri: new Uri("viking://test"),
-      sessionId: new SessionId("sess_1"),
     };
     expect(q.query).toBe("test");
     expect(q.limit).toBe(10);
-    expect(q.mode).toBe("deep");
     expect(q.targetUri?.toString()).toBe("viking://test");
-    expect(q.sessionId?.toString()).toBe("sess_1");
   });
 
   it("works with only required field", () => {
-    const q: SearchQuery = { query: "just query" };
+    const q: FindQuery = { query: "just query" };
     expect(q.query).toBe("just query");
     expect(q.limit).toBeUndefined();
-    expect(q.mode).toBeUndefined();
     expect(q.targetUri).toBeUndefined();
-    expect(q.sessionId).toBeUndefined();
+  });
+});
+
+describe("SearchRequest", () => {
+  it("accepts sessionId", () => {
+    const r: SearchRequest = {
+      query: "complex task",
+      sessionId: new SessionId("sess_1"),
+    };
+    expect(r.query).toBe("complex task");
+    expect(r.sessionId?.toString()).toBe("sess_1");
   });
 });
