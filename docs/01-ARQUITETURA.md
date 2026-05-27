@@ -11,7 +11,7 @@
 | Fase | Status | Artefatos |
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
-| **F2 Domain + Ports** | 🔶 Em progresso | `domain/ports/logger.ts` ✅ · `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces (KnowledgeBase, FsStore, GraphStore, SessionStore, CacheStore, EventBus) ✅ · Demais: infra/event-bus/ e ports restantes. |
+| **F2 Domain + Ports** | 🔶 Em progresso | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ · Pendente: `domain/ports/` restantes (todos implementados). |
 | **F3+** | ⏳ Planejado | Ver `02-PLANO.md` |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
@@ -495,7 +495,7 @@ src/
 │   │   └── profile-schema.ts  # ✅ ProfileSchema (só name+description em F1)
 │   ├── di/
 │   │   └── container.ts       # ✅ DI Container manual (21 linhas)
-│   ├── event-bus/             # (futuro F2.9) InMemoryEventBus
+│   ├── event-bus/             # ✅ InMemoryEventBus (publish/subscribe, error isolation, event log)
 │   ├── lifecycle.ts           # ✅ init() + shutdown()
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │

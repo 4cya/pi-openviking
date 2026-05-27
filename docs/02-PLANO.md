@@ -95,7 +95,8 @@ Profiles registrados. Tudo testado sem OV.
 | 8 | F2.6 | `domain/ports/cache-store.ts` | ✅ CacheStore |
 | 9 | F2.7 | `domain/ports/logger.ts` | ✅ Logger (já existia) |
 | 10 | F2.8 | `domain/ports/graph-store.ts` | ✅ GraphStore + LinkResult |
-| 11 | F2.9 | `infrastructure/event-bus/in-memory.ts` | Implementação InMemoryEventBus |
+| 11 | F2.9 | `infrastructure/event-bus/in-memory.ts` | ✅ InMemoryEventBus (publish/subscribe/unsubscribe, error isolation, event log) |
+| 12 | F2.10 | `domain/recall/curate.ts` | ✅ Curation function: merge → dedup → score-sort → threshold → topN → budget trim |
 | — | — | Testes | Cobertura ≥90% |
 
 **Decisões de design:**

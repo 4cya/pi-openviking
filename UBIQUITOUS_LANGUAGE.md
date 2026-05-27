@@ -95,6 +95,16 @@
 | **DomainEvent** | Discriminated union of 5 event types: MEMORY_SAVED, RELATION_LINKED, INTENT_DETECTED, RECALL_EXECUTED, BUDGET_EXCEEDED. No PROFILE_CHANGED or ERROR (infra events stay out). Defined in `domain/ports/event-bus.ts` | event, notification |
 | **Logger** | Port for structured logging. Methods: `info`, `warn`, `error`, `debug`, `isEnabled`. Lives in `domain/ports/logger.ts` | log, console |
 
+## Runtime Implementations
+
+| Term | Definition | Aliases to avoid |
+| ---- | ---------- | ---------------- |
+| **InMemoryEventBus** | Synchronous in-memory EventBus implementation. Handlers execute in same tick as `publish()`. Error isolation: one handler throw does not break others. `subscribe()` returns unsubscribe. Event log accumulates published events (`getLog()`, `clearLog()`). Lives in `src/infrastructure/event-bus/in-memory.ts` | event bus, sync bus |
+| **Curate Pipeline** | Pure function `curate(SearchResult, CurateOpts): CuratedResult`. 4 steps: merge (memories + resources → CuratedItem[]), score-sort-dedup, threshold filter + topN, trim-to-budget (~130 overhead + ~60 per-item token accounting). `estimateTokens(text): number` helper. Does NOT mutate TokenBudget — caller manages allocation. Lives in `src/domain/recall/curate.ts` | curation, curator |
+| **CuratedItem** | Interface: `{ uri, text, score, source: "memory" | "resource", category? }`. Produced by curation pipeline. | curated result |
+| **CurateOpts** | Interface: `{ topN, scoreThreshold, maxTokens }`. Controls curation behavior. | curation options, opts |
+| **CuratedResult** | Interface: `{ items: CuratedItem[], tokens: number, dropped: number }`. Output of curation. | curation output |
+
 ## Example dialogue
 
 > **Dev:** "How does **Config Cascade** work at startup?"
