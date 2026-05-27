@@ -107,6 +107,8 @@
 | **OVAdapterConfig** | Zod sub-schema in `ConfigSchema.ov` (field `ov`). Defines server connection: `endpoint`, `apiKey`, `account`, `user`, `timeout`, `commitTimeout`, `maxRetries`. Defaults: endpoint=`http://localhost:1933`, timeout=30s, maxRetries=3. Lives in `infrastructure/config/schema.ts`. | ov config, transport config |
 | **Transport** | HTTP client class in `adapters/driven/openviking/transport.ts`. Wraps native `fetch()` with auth headers, exp-backoff retry (5xx/network), timeout, AbortSignal passthrough. Single method `request<T>(methodLabel, path, opts?, signal?)`. 13 tests. | http client, fetcher |
 | **ErrorMapper** | Pure function `toDomainError(httpStatus, body, methodLabel): DomainError` in `adapters/driven/openviking/mappers/error-mapper.ts`. Maps: 401/403→ConnectionError, 404→NotFoundError, 409/422→ValidationError, 5xx→ConnectionError. 11 tests. | error translator, http error handler |
+| **ContentMapper** | Pure function `toContent(raw, uri, level?): Content` in `adapters/driven/openviking/mappers/content-mapper.ts`. Converts OV content JSON to domain `Content` (Uri + body + level). Handles null body, extra fields. 8 tests. | content parser, response mapper |
+| **FsStoreAdapter** | Implementation of `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` built: maps level → `/api/v1/content/{read|abstract|overview}`, builds query params, uses Transport + ContentMapper. Other methods stub. 7 tests. | fs adapter, content adapter |
 
 ## Example dialogue
 

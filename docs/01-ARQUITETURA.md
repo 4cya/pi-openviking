@@ -510,10 +510,12 @@ src/
 │   │   ├── status-bar.ts       # ctx.ui.setStatus()
 │   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
 │   └── driven/
-│       ├── openviking/        # 🔶 F3: Transport + ErrorMapper (✅), Mappers restantes (⏳), Adapter (⏳)
+│       ├── openviking/        # 🔶 F3: Transport + ErrorMapper + ContentMapper + FsStore.read (✅), restante ⏳
 │       │   ├── transport.ts    # ✅ HTTP client c/ auth, retry, timeout, abort
+│       │   ├── fs-store.ts     # ✅ FsStoreAdapter (read implementado, restante stub)
 │       │   └── mappers/
-│       │       └── error-mapper.ts # ✅ toDomainError(): HTTP status → DomainError
+│       │       ├── error-mapper.ts   # ✅ toDomainError(): HTTP status → DomainError
+│       │       └── content-mapper.ts # ✅ toContent(): OV JSON → domain Content
 │       ├── cache/             # (futuro F3+) InMemoryCache / RedisCache
 │       └── logger/
 │           ├── file-logger.ts # ✅ FileLogger (JSON lines + rotação)
@@ -539,7 +541,7 @@ src/
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
-> F3 — Transport (#52) + ErrorMapper implementados 2026-05-27. Próximo: mappers restantes + adapter.
+> F3 — Transport (#52) + ErrorMapper + ContentMapper + FsStore.read (#53) implementados 2026-05-27. Próximo: mappers restantes + adapter factory.
 
 ---
 

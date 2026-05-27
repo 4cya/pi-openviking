@@ -61,6 +61,13 @@ _Avoid_: http client, fetcher
 A pure function `toDomainError(httpStatus, body, methodLabel)` that translates OV HTTP errors into typed `DomainError` subtypes: 401/403 → `ConnectionError`, 404 → `NotFoundError`, 409/422 → `ValidationError`, 5xx → `ConnectionError`. Lives in `adapters/driven/openviking/mappers/error-mapper.ts`.
 _Avoid_: error translator, http error handler
 
+**ContentMapper**:
+A pure function `toContent(raw, uri, level?)` that converts OV content endpoint JSON into domain `Content` (typed `Uri` object + `body` string + optional `level`). Handles all three levels (read/abstract/overview). Extracts `body` from response, falls back to empty string on null. Lives in `adapters/driven/openviking/mappers/content-mapper.ts`.
+_Avoid_: content parser, response mapper
+
+**FsStoreAdapter**:
+An implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` is implemented: maps level to endpoint segment (`/api/v1/content/{read|abstract|overview}`), builds query params (`uri`, `offset`, `limit`), calls `Transport`, and maps response via `ContentMapper`. Remaining methods (write, list, tree, stat, mkdir, mv, delete) are stubs for future issues.
+
 **Config Cascade**:
 Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile. Each source overrides the previous via shallow merge.
 `.pi/settings.json` is read at the `"pi-openviking"` namespace key — only the sub-tree under that key enters the cascade. Pi-level keys (`extensions`, etc.) are ignored.
