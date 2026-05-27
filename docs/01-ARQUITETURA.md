@@ -12,7 +12,7 @@
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
-| **F3 OV Adapter** | 🔶 Em progresso | `adapters/driven/openviking/transport.ts` (Transport) ✅ · `adapters/driven/openviking/mappers/error-mapper.ts` (ErrorMapper) ✅ · Mappers restantes ⏳ · Adapter ⏳ · Ver `02-PLANO.md` |
+| **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -510,7 +510,7 @@ src/
 │   │   ├── status-bar.ts       # ctx.ui.setStatus()
 │   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
 │   └── driven/
-│       ├── openviking/        # 🔶 F3: All ports + mappers implemented (✅), factory pending
+│       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
 │       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort
 │       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read/write/list/tree/stat/mkdir/mv/delete)
 │       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find/search/glob/grep)
@@ -541,14 +541,14 @@ src/
 │   ├── lifecycle.ts           # ✅ init() + shutdown()
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
-├── _legacy/                   # Código original (referência, manter até F3)
+├── _legacy/                   # Código original (referência; F3 completo, considerar remoção)
 ├── index.ts                   # ✅ Entry point: pi.on("session_start") → init()
 ```
 
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
-> F3 — Issues #52–#57: All 6 ports implemented (Transport + FsStore + KnowledgeBase + SessionStore + GraphStore + 6 mappers) 2026-05-27. Próximo: adapter factory + F4 Operations.
+> F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27. Próximo: F4 Operations.
 
 ---
 

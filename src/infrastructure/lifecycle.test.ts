@@ -58,6 +58,45 @@ describe("init", () => {
     const content = readFileSync(logFile, "utf-8");
     expect(content).toContain("custom path test");
   });
+
+  it("container resolves knowledgeBase adapter", async () => {
+    const { container } = await init(tmpDir);
+    const kb = container.resolve("knowledgeBase");
+    expect(kb).toBeDefined();
+    expect(typeof kb.find).toBe("function");
+    expect(typeof kb.search).toBe("function");
+  });
+
+  it("container resolves fsStore adapter", async () => {
+    const { container } = await init(tmpDir);
+    const fs = container.resolve("fsStore");
+    expect(fs).toBeDefined();
+    expect(typeof fs.read).toBe("function");
+    expect(typeof fs.write).toBe("function");
+  });
+
+  it("container resolves graphStore adapter", async () => {
+    const { container } = await init(tmpDir);
+    const gs = container.resolve("graphStore");
+    expect(gs).toBeDefined();
+    expect(typeof gs.link).toBe("function");
+    expect(typeof gs.graph).toBe("function");
+  });
+
+  it("container resolves sessionStore adapter", async () => {
+    const { container } = await init(tmpDir);
+    const ss = container.resolve("sessionStore");
+    expect(ss).toBeDefined();
+    expect(typeof ss.create).toBe("function");
+    expect(typeof ss.commit).toBe("function");
+  });
+
+  it("adapter instances are singletons (same reference on second resolve)", async () => {
+    const { container } = await init(tmpDir);
+    const kb1 = container.resolve("knowledgeBase");
+    const kb2 = container.resolve("knowledgeBase");
+    expect(kb1).toBe(kb2);
+  });
 });
 
 describe("shutdown", () => {

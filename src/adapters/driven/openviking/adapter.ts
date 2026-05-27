@@ -1,0 +1,28 @@
+import type { KnowledgeBase } from "../../../domain/ports/knowledge-base";
+import type { FsStore } from "../../../domain/ports/fs-store";
+import type { GraphStore } from "../../../domain/ports/graph-store";
+import type { SessionStore } from "../../../domain/ports/session-store";
+import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
+import { Transport } from "./transport";
+import { FsStoreAdapter } from "./fs-store";
+import { KnowledgeBaseAdapter } from "./knowledge-base";
+import { SessionStoreAdapter } from "./session-store";
+import { GraphStoreAdapter } from "./graph-store";
+
+export interface OVAdapter {
+  knowledgeBase: KnowledgeBase;
+  fsStore: FsStore;
+  graphStore: GraphStore;
+  sessionStore: SessionStore;
+}
+
+export function createOVAdapter(config: OVAdapterConfig): OVAdapter {
+  const transport = new Transport(config);
+
+  return {
+    knowledgeBase: new KnowledgeBaseAdapter(transport),
+    fsStore: new FsStoreAdapter(transport),
+    graphStore: new GraphStoreAdapter(transport),
+    sessionStore: new SessionStoreAdapter(transport),
+  };
+}

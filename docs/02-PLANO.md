@@ -151,8 +151,9 @@ Profiles registrados. Tudo testado sem OV.
 | F3.3b | `adapters/driven/openviking/knowledge-base.ts` (find + search + glob + grep) | F3.1 + F3.2e | ✅ |
 | F3.3c | `adapters/driven/openviking/session-store.ts` (create+message+commit+tasks+lifecycle) | F3.1 + F3.2f | ✅ |
 | F3.3d | `adapters/driven/openviking/graph-store.ts` (link+unlink+graph) | F3.1 + F3.2g | ✅ |
-| F3.3e | `adapters/driven/openviking/adapter.ts` (factory) | F3.1 + F3.2 | ⏳ |
-| F3.4 | Testes com mock OV (docker ou in-process) | F3.3 | ⏳ |
+| F3.3e | `adapters/driven/openviking/adapter.ts` (factory) | F3.1 + F3.2 | ✅ |
+| F3.4 | DI wiring (`lifecycle.ts` regista 4 ports) + smoke test (mock OV in-process) | F3.3 | ✅ |
+| **F3** | **Milestone completo** | — | ✅ |
 
 **Milestone:** Ports implementadas. Testado contra OV real e mock.
 
