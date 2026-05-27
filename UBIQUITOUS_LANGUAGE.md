@@ -61,6 +61,27 @@
 | **ToolPart** | Interface `{ type: "tool"; toolId; toolName; toolInput; toolOutput; toolStatus; toolOutputTruncated; toolUri; skillUri; durationMs | null; promptTokens | null; completionTokens | null; toolOutputRef }`. A tool execution record. `toolStatus` is `string` (not enum) to support future OV values. | tool result |
 | **ContextPart** | Interface `{ type: "context"; uri: string; contextType: "memory" \| "resource" \| "skill"; abstract: string }`. A referenced context item. | context reference |
 
+## Domain Errors
+
+| Term | Definition | Aliases to avoid |
+| ---- | ---------- | ---------------- |
+| **DomainError** | Base class extending `Error`. All domain-layer errors inherit from it. Sets `this.name = this.constructor.name` automatically. Lives in `domain/errors/domain-error.ts` | generic Error |
+| **NotFoundError** | Extends `DomainError`. Represents a resource that does not exist. Lives in `domain/errors/not-found-error.ts` | 404, missing |
+| **ConnectionError** | Extends `DomainError`. Represents a failure to connect to a remote service (e.g. OV unreachable). Lives in `domain/errors/connection-error.ts` | network error, timeout |
+| **ValidationError** | Extends `DomainError`. Carries optional `details: Record<string, unknown>` for structured error info. Lives in `domain/errors/validation-error.ts` | invalid input, bad request |
+
+## Domain Models
+
+| Term | Definition | Aliases to avoid |
+| ---- | ---------- | ---------------- |
+| **KnowledgeItem** | Interface describing a unit of persistent knowledge in OV. Fields: `uri`, `text`, optional `abstract`, `overview`, `score`, `category`, `level`, `modTime`. Lives in `domain/knowledge/model/knowledge-item.ts` | memory, document |
+| **ResourceItem** | Interface for an OV resource reference: `uri`, optional `score`, `abstract`. Lives in `domain/knowledge/model/resource-item.ts` | file, resource |
+| **SkillItem** | Interface for an OV skill reference: `uri`, optional `score`, `abstract`. Lives in `domain/knowledge/model/skill-item.ts` | tool, skill |
+| **SearchResult** | Interface grouping search output: `memories: KnowledgeItem[]`, `resources: ResourceItem[]`, `skills: SkillItem[]`, `total: number`, optional `queryPlan`. Lives in `domain/knowledge/model/search-result.ts` | search response |
+| **Relation** | Interface for a graph edge: `uri`, optional `reason`. Lives in `domain/knowledge/model/relation.ts` | link, edge |
+| **RecallItem** | Interface for a curated search result: `item: KnowledgeItem`, `score: number`, `source: "search" | "graph"`. Lives in `domain/recall/model/recall-item.ts` | curated item |
+| **TokenBudget** | Class managing token limits for recall. Methods: `remaining()`, `tryAllocate()`, `reset()`. Does NOT throw on insufficient budget — returns false. Lives in `domain/recall/model/token-budget.ts` | budget, token limit |
+
 ## Example dialogue
 
 > **Dev:** "How does **Config Cascade** work at startup?"

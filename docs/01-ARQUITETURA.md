@@ -11,7 +11,7 @@
 | Fase | Status | Artefatos |
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
-| **F2 Domain + Ports** | 🔶 Em progresso | `domain/ports/logger.ts` ✅ · `domain/common/` (Uri, SessionId, ContentLevel, WriteMode, SearchQuery, Part) ✅ · Demais ports, modelos de domínio e erros pendentes. |
+| **F2 Domain + Ports** | 🔶 Em progresso | `domain/ports/logger.ts` ✅ · `domain/common/` ✅ · `domain/errors/` (DomainError, NotFoundError, ConnectionError, ValidationError) ✅ · `domain/knowledge/model/` (KnowledgeItem, SearchResult, Relation) ✅ · `domain/recall/model/` (TokenBudget, RecallItem) ✅ · Demais ports pendentes. |
 | **F3+** | ⏳ Planejado | Ver `02-PLANO.md` |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
@@ -450,8 +450,8 @@ src/
 ├── domain/                    # Pure TS. Sem imports externos.
 │   ├── common/                # ✅ Shared kernel: Uri, SessionId, ContentLevel, WriteMode, SearchQuery, Part
 │   ├── knowledge/             # (futuro F2) Contexto: armazenamento e busca
-│   │   ├── model/             # KnowledgeItem, Resource, Relation
-│   │   └── service/           # SemanticSearch
+│   │   ├── model/             # ✅ KnowledgeItem, ResourceItem, SkillItem, SearchResult, Relation
+│   │   └── service/           # (futuro) SemanticSearch
 │   ├── recall/                # (futuro F2/F4) Contexto: detecção e curadoria
 │   │   ├── model/             # RecallItem, TokenBudget
 │   │   ├── intent/            # Chain of Responsibility handlers + IntentDetector
@@ -463,7 +463,7 @@ src/
 │   │   └── logger.ts          # ✅ Logger (implementado: FileLogger + NullLogger)
 │   │   # (futuro F2) KnowledgeBase, FsStore, GraphStore,
 │   │   #          SessionStore, EventBus, CacheStore
-│   └── errors/                # (futuro F2) DomainError hierarchy
+│   └── errors/                # ✅ DomainError, NotFoundError, ConnectionError, ValidationError
 │
 ├── application/               # (futuro F4) Casos de uso
 │   ├── services/              # search, write, session, recall, backup, auto-actions
@@ -501,7 +501,7 @@ src/
 
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
-> F2 — domain/common/ (Uri, SessionId, ContentLevel, WriteMode, SearchQuery, Part) implementado em 2026-05-27.
+> F2 — domain/common/ implementado 2026-05-27. domain/errors/, domain/knowledge/model/, domain/recall/model/ implementado 2026-05-27 (issue #48).
 
 ---
 

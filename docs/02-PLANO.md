@@ -86,8 +86,8 @@ Profiles registrados. Tudo testado sem OV.
 | Passo | Tarefa | Artefato | Descrição |
 |-------|--------|----------|-----------|
 | 1 | F2.0a | `domain/common/{uri,session-id,content-level,write-mode,search-query,part,index}.ts` | ✅ Shared kernel: Uri (class), SessionId (class), ContentLevel, WriteMode, SearchQuery (interface), Part (discriminated union) |
-| 2 | F2.0b | `domain/errors/{domain-error,not-found,connection,validation}.ts` | DomainError hierarchy |
-| 3 | F2.1 | `domain/{knowledge,recall,profile}/model/*.ts` | Value Objects + Aggregates por bounded context |
+| 2 | F2.0b | `domain/errors/{domain-error,not-found-error,connection-error,validation-error,index}.ts` | ✅ DomainError, NotFoundError, ConnectionError, ValidationError |
+| 3 | F2.1 | `domain/{knowledge,recall}/model/*.ts` | ✅ KnowledgeItem, ResourceItem, SkillItem, SearchResult, Relation, RecallItem, TokenBudget |
 | 4 | F2.2 | `domain/ports/knowledge-base.ts` | Interface KnowledgeBase |
 | 5 | F2.3 | `domain/ports/session-store.ts` | Interface SessionStore |
 | 6 | F2.4 | `domain/ports/fs-store.ts` | Interface FsStore (fundida com ContentStore — read + write + list + tree + stat + mkdir + mv + delete; **sem reindex** — OV v3 não tem esse endpoint) |
