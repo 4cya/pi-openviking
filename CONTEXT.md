@@ -66,7 +66,10 @@ A pure function `toContent(raw, uri, level?)` that converts OV content endpoint 
 _Avoid_: content parser, response mapper
 
 **FsStoreAdapter**:
-An implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` is implemented: maps level to endpoint segment (`/api/v1/content/{read|abstract|overview}`), builds query params (`uri`, `offset`, `limit`), calls `Transport`, and maps response via `ContentMapper`. Remaining methods (write, list, tree, stat, mkdir, mv, delete) are stubs for future issues.
+A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` maps level to endpoint segment (`/api/v1/content/{read|abstract|overview}`) with `uri`, `offset`, `limit` query params. `write()` calls `POST /api/v1/content/write` with `wait: true`. Navigation methods (`list`, `tree`, `stat`) call `GET /api/v1/fs/{ls|tree|stat}`. Management methods (`mkdir`, `mv`) use POST with URI payload. `delete()` calls `DELETE /api/v1/fs?uri=` and auto-retries with `recursive=true` on recursive-required errors.
+
+**FsMapper**:
+Pure functions in `adapters/driven/openviking/mappers/fs-mapper.ts`: `toFsEntry(raw)` validates type (`file|directory`) and returns domain `FsEntry`; `toFsEntries(raw)` maps arrays; `toWriteResult(raw, expectedUri)` infers success from `success` flag or `status` field.
 
 **Config Cascade**:
 Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile. Each source overrides the previous via shallow merge.

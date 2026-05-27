@@ -122,3 +122,258 @@ describe("FsStoreAdapter.read", () => {
     expect(path).toContain("limit=50");
   });
 });
+
+describe("FsStoreAdapter.write", () => {
+  const uri = new Uri("viking://docs/new.md");
+
+  it("calls POST /api/v1/content/write with correct body", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      uri: "viking://docs/new.md",
+      success: true,
+    });
+
+    const fs = new FsStoreAdapter(transport);
+    const result = await fs.write(uri, "# New content", "replace");
+
+    expect(transport.request).toHaveBeenCalledTimes(1);
+    const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.write");
+    expect(path).toBe("/api/v1/content/write");
+    expect(opts.method).toBe("POST");
+
+    const body = JSON.parse(opts.body);
+    expect(body.uri).toBe("viking://docs/new.md");
+    expect(body.content).toBe("# New content");
+    expect(body.mode).toBe("replace");
+    expect(body.wait).toBe(true);
+
+    expect(result.uri).toEqual(uri);
+    expect(result.success).toBe(true);
+  });
+
+  it("defaults mode to undefined when not provided", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      uri: "viking://docs/new.md",
+      success: true,
+    });
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.write(uri, "content");
+
+    const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(opts.body);
+    expect(body.mode).toBeUndefined();
+  });
+
+  it("defaults method to POST", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      uri: "viking://docs/new.md",
+      success: true,
+    });
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.write(uri, "content");
+
+    const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(opts.method).toBe("POST");
+  });
+});
+
+describe("FsStoreAdapter.list", () => {
+  const uri = new Uri("viking://docs/");
+
+  it("calls GET /api/v1/fs/ls with uri param", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { uri: "viking://docs/a.md", type: "file", size: 100 },
+    ]);
+
+    const fs = new FsStoreAdapter(transport);
+    const result = await fs.list(uri);
+
+    const [label, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.list");
+    expect(path).toContain("/api/v1/fs/ls");
+    expect(path).toContain(encodeURIComponent("viking://docs/"));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.value).toBe("viking://docs/a.md");
+  });
+
+  it("appends recursive=true when recursive flag is set", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.list(uri, true);
+
+    const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(path).toContain("recursive=true");
+  });
+
+  it("omits recursive param when not set", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.list(uri);
+
+    const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(path).not.toContain("recursive");
+  });
+});
+
+describe("FsStoreAdapter.tree", () => {
+  const uri = new Uri("viking://docs/");
+
+  it("calls GET /api/v1/fs/tree with uri param", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { uri: "viking://docs/a.md", type: "file" },
+      { uri: "viking://docs/sub/", type: "directory" },
+    ]);
+
+    const fs = new FsStoreAdapter(transport);
+    const result = await fs.tree(uri);
+
+    const [label, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.tree");
+    expect(path).toContain("/api/v1/fs/tree");
+    expect(result).toHaveLength(2);
+    expect(result[1].type).toBe("directory");
+  });
+});
+
+describe("FsStoreAdapter.stat", () => {
+  const uri = new Uri("viking://docs/architecture.md");
+
+  it("calls GET /api/v1/fs/stat with uri param", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      uri: "viking://docs/architecture.md",
+      type: "file",
+      size: 4096,
+      modTime: "2026-01-01T00:00:00Z",
+    });
+
+    const fs = new FsStoreAdapter(transport);
+    const result = await fs.stat(uri);
+
+    const [label, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.stat");
+    expect(path).toContain("/api/v1/fs/stat");
+    expect(path).toContain(encodeURIComponent("viking://docs/architecture.md"));
+    expect(result.uri).toEqual(uri);
+    expect(result.type).toBe("file");
+    expect(result.size).toBe(4096);
+  });
+});
+
+describe("FsStoreAdapter.mkdir", () => {
+  const uri = new Uri("viking://docs/new-folder/");
+
+  it("calls POST /api/v1/fs/mkdir with uri body", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.mkdir(uri);
+
+    const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.mkdir");
+    expect(path).toBe("/api/v1/fs/mkdir");
+    expect(opts.method).toBe("POST");
+    const body = JSON.parse(opts.body);
+    expect(body.uri).toBe("viking://docs/new-folder/");
+  });
+});
+
+describe("FsStoreAdapter.mv", () => {
+  const from = new Uri("viking://docs/old.md");
+  const to = new Uri("viking://docs/new.md");
+
+  it("calls POST /api/v1/fs/mv with from_uri and to_uri", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.mv(from, to);
+
+    const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.mv");
+    expect(path).toBe("/api/v1/fs/mv");
+    expect(opts.method).toBe("POST");
+    const body = JSON.parse(opts.body);
+    expect(body.from_uri).toBe("viking://docs/old.md");
+    expect(body.to_uri).toBe("viking://docs/new.md");
+  });
+});
+
+describe("FsStoreAdapter.delete", () => {
+  const uri = new Uri("viking://docs/old.md");
+
+  it("calls DELETE /api/v1/fs with uri param", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.delete(uri);
+
+    const [label, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.delete");
+    expect(path).toContain("/api/v1/fs");
+    expect(path).toContain(encodeURIComponent("viking://docs/old.md"));
+  });
+
+  it("appends recursive=true when recursive flag is set", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.delete(uri, true);
+
+    const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(path).toContain("recursive=true");
+  });
+
+  it("retries with recursive=true on recursive-required error", async () => {
+    const transport = mockTransport();
+    const mock = transport.request as ReturnType<typeof vi.fn>;
+    // First call fails, second succeeds
+    mock.mockRejectedValueOnce(new Error("recursive required"));
+    mock.mockResolvedValueOnce({});
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.delete(uri);
+
+    expect(mock).toHaveBeenCalledTimes(2);
+    const [, path1] = mock.mock.calls[0];
+    const [, path2] = mock.mock.calls[1];
+    // First call: no recursive
+    expect(path1).not.toContain("recursive");
+    // Second call: with recursive=true
+    expect(path2).toContain("recursive=true");
+  });
+
+  it("does not retry on non-recursive errors", async () => {
+    const transport = mockTransport();
+    const mock = transport.request as ReturnType<typeof vi.fn>;
+    mock.mockRejectedValue(new Error("unauthorized"));
+
+    const fs = new FsStoreAdapter(transport);
+    await expect(fs.delete(uri)).rejects.toThrow();
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry twice when recursive already set", async () => {
+    const transport = mockTransport();
+    const mock = transport.request as ReturnType<typeof vi.fn>;
+    mock.mockRejectedValue(new Error("some error"));
+
+    const fs = new FsStoreAdapter(transport);
+    await expect(fs.delete(uri, true)).rejects.toThrow();
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
