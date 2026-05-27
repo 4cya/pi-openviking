@@ -1,14 +1,24 @@
 import type { DomainEvent, EventHandler, EventBus } from "../../domain/ports/event-bus";
+import type { Logger } from "../../domain/ports/logger";
 
 export class InMemoryEventBus implements EventBus {
   private handlers = new Map<string, EventHandler[]>();
   private eventLog: DomainEvent[] = [];
 
+  constructor(private readonly logger?: Logger) {}
+
   publish(event: DomainEvent): void {
     this.eventLog.push(event);
     const handlers = this.handlers.get(event.type) ?? [];
     for (const h of handlers) {
-      try { h(event); } catch { /* handler error */ }
+      try { h(event); } catch (err) {
+        if (this.logger) {
+          this.logger.error("EventBus handler error", {
+            eventType: event.type,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
     }
   }
 

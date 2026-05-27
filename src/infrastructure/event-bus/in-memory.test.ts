@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { InMemoryEventBus } from "./in-memory";
 import type { DomainEvent } from "../../domain/ports/event-bus";
+import type { Logger } from "../../domain/ports/logger";
 
 describe("InMemoryEventBus", () => {
   it("implements publish and subscribe", () => {
@@ -90,5 +91,28 @@ describe("InMemoryEventBus", () => {
     bus.publish({ type: "MEMORY_SAVED", uri: "u", source: "s" });
     expect(h1).not.toHaveBeenCalled();
     expect(h2).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs handler error when Logger is provided", () => {
+    const errorFn = vi.fn();
+    const logger: Logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: errorFn,
+      debug: vi.fn(),
+      isEnabled: () => true,
+    };
+    const bus = new InMemoryEventBus(logger);
+    bus.subscribe("MEMORY_SAVED", () => { throw new Error("crash"); });
+    bus.publish({ type: "MEMORY_SAVED", uri: "u", source: "s" });
+    expect(errorFn).toHaveBeenCalled();
+  });
+
+  it("does not crash when no Logger provided and handler throws", () => {
+    const bus = new InMemoryEventBus();
+    bus.subscribe("MEMORY_SAVED", () => { throw new Error("crash"); });
+    expect(() => {
+      bus.publish({ type: "MEMORY_SAVED", uri: "u", source: "s" });
+    }).not.toThrow();
   });
 });

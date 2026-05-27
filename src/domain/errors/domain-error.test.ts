@@ -15,6 +15,16 @@ describe("DomainError", () => {
     const e = new DomainError("test");
     expect(e.name).toBe("DomainError");
   });
+
+  it("accepts optional code", () => {
+    const e = new DomainError("not found", "NOT_FOUND");
+    expect(e.code).toBe("NOT_FOUND");
+  });
+
+  it("code is undefined when not provided", () => {
+    const e = new DomainError("generic");
+    expect(e.code).toBeUndefined();
+  });
 });
 
 describe("NotFoundError", () => {
@@ -25,6 +35,11 @@ describe("NotFoundError", () => {
     expect(e.message).toBe("resource not found");
     expect(e.name).toBe("NotFoundError");
   });
+
+  it("accepts optional code", () => {
+    const e = new NotFoundError("missing", "ERR_MISSING");
+    expect(e.code).toBe("ERR_MISSING");
+  });
 });
 
 describe("ConnectionError", () => {
@@ -33,6 +48,11 @@ describe("ConnectionError", () => {
     expect(e).toBeInstanceOf(DomainError);
     expect(e.message).toBe("OV unreachable");
     expect(e.name).toBe("ConnectionError");
+  });
+
+  it("accepts optional code", () => {
+    const e = new ConnectionError("timeout", "ERR_TIMEOUT");
+    expect(e.code).toBe("ERR_TIMEOUT");
   });
 });
 
@@ -48,5 +68,16 @@ describe("ValidationError", () => {
     const e = new ValidationError("invalid Uri", { uri: "bad://" });
     expect(e.message).toBe("invalid Uri");
     expect(e.details).toEqual({ uri: "bad://" });
+  });
+
+  it("accepts optional code after details", () => {
+    const e = new ValidationError("bad", { field: "x" }, "ERR_VALIDATION");
+    expect(e.code).toBe("ERR_VALIDATION");
+    expect(e.details).toEqual({ field: "x" });
+  });
+
+  it("code is undefined when omitted", () => {
+    const e = new ValidationError("bad", { field: "x" });
+    expect(e.code).toBeUndefined();
   });
 });
