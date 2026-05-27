@@ -12,8 +12,8 @@
 | 01 | `01-ARQUITETURA.md` | Arquitetura hexagonal: camadas, ports, patterns, módulos, fluxos | Implementar o sistema |
 | 02 | `02-PLANO.md` | 8 fases de implementação, tarefas, dependências, milestones | Organizar o trabalho |
 | 03 | `03-PROFILES.md` | Sistema de profiles: schema, resolução, auto-detect, consumo | Implementar profiles |
-| — | `CONTEXT.md` | Glossário do domínio (termos e definições) | **Será criado pelo grill-with-docs** |
-| — | `adr/` | Decisões arquiteturais (ADR-0010 em diante) | **Serão criados pelo grill-with-docs** |
+| [CONTEXT.md](../CONTEXT.md) | Glossário do domínio (termos e definições) | ✅ Purificado (só glossário) |
+| `docs/adr/` | Decisões arquiteturais | ✅ ADR-002, ADR-008, ADR-010 criados |
 
 ## Documentos arquivados (`_archive/`)
 

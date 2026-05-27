@@ -6,6 +6,19 @@
 
 ---
 
+## Estado Atual
+
+| Fase | Status | Artefatos |
+|------|--------|-----------|
+| **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
+| **F2 Domain + Ports** | 🔶 Em progresso | Logger port em `domain/ports/`. Demais ports, modelos de domínio e erros pendentes. |
+| **F3+** | ⏳ Planejado | Ver `02-PLANO.md` |
+
+> Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
+> Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
+
+---
+
 ## 1. Diagrama de Camadas
 
 ```mermaid
@@ -18,103 +31,152 @@ flowchart TB
 
     subgraph Adapters["🔌 Adaptadores (Driving)"]
         direction TB
-        PI_BRIDGE["Pi Event Bridge\nTraduz Pi events → EventBus"]
-        TOOL_REGISTRY["Tool Registry\nMCP tool → Application Service"]
-        CMD_REGISTRY["Command Registry\nCLI /ov-* → Application Service"]
-        TUI_RENDER["TUI Renderers\nStatus bar + Result displays"]
+        TOOL_REGISTRY["Tool Registry\nregisterTool() → App Service"]
+        CMD_REGISTRY["Command Registry\nregisterCommand() → App Service"]
+        UI_HOOKS["UI Hooks\nsetStatus, autocomplete,\nnotify — registra no Pi"]
     end
 
     subgraph Ports["🚪 Portas (Interfaces)"]
         direction TB
-        PORT_KB["KnowledgeBase\nsearch / write / graph / ..."]
+        PORT_KB["KnowledgeBase\nsearch / glob / grep"]
+        PORT_FS["FsStore\nread / write / list / tree / stat\nmkdir / mv / delete"]
+        PORT_GRAPH["GraphStore\nlink / unlink / graph"]
         PORT_SESSION["SessionStore\ncreate / send / commit / ..."]
-        PORT_FS["FsStore\nlist / read / write / mkdir / ..."]
         PORT_CACHE["CacheStore\nget / set / invalidate"]
         PORT_LOGGER["Logger\ndebug / info / warn / error"]
         PORT_EVENTS["EventBus\npublish / subscribe"]
     end
 
-    subgraph Domain["🧠 Domínio"]
+    subgraph Domain["🧠 Domínio (3 Bounded Contexts)"]
         direction TB
-        DOMAIN_ENT["Value Objects\nKnowledgeItem, SessionId,\nUri, RecallItem, Relation"]
-        DOMAIN_INTENT["Intent Detection\nChain of Responsibility"]
-        DOMAIN_CURATOR["Recall Curator\nScoring + Dedup + Budget"]
+        DOMAIN_KNOW["Knowledge Context\nKnowledgeItem, Resource,\nUri, SessionId"]
+        DOMAIN_RECALL["Recall Context\nRecallItem, TokenBudget,\nIntentDetector, RecallCurator,\nGraphExpander"]
+        DOMAIN_PROFILE["Profile Context\nProfileConfig (value object),\nProfileManager, AutoDetect"]
     end
 
     subgraph App["⚙️ Aplicação"]
         direction TB
-        APP_SVC["Application Services\nsearch.service, write.service,\nsession.service, recall.service"]
-        APP_MW["Middleware Pipeline\nLogging → Cache → Metrics"]
-        APP_EVENTS["Event Handlers\nauto-save, auto-commit,\nstatus-bar, metrics"]
+        APP_SVC["Application Services\nsearch, write, session,\nrecall, backup, auto-actions"]
+        APP_MW["Middleware Pipeline\nLogging (cache adiado → F3+)"]
     end
 
     subgraph Impl["🔌 Adaptadores (Driven)"]
         direction TB
-        OV_ADAPTER["OpenVikingAdapter\nImplementa KnowledgeBase\n+ SessionStore + FsStore"]
+        OV_ADAPTER["OpenVikingAdapter\nImplementa KnowledgeBase\n+ FsStore + GraphStore\n+ SessionStore"]
         OV_TRANSPORT["Transport\nHTTP + Auth + Retry + RateLimit"]
         CACHE_IMPL["CacheImpl\nInMemoryCache\n(Redis opcional)"]
-        LOG_IMPL["LoggerImpl\nStructuredLogger (JSON)"]
-        DI["DI Container\nAwilix / Manual"]
+        LOG_IMPL["FileLogger\nJSON lines + rotação"]
+        EVENT_IMPL["InMemoryEventBus\nImplementa EventBus port"]
     end
 
-    PI --> PI_BRIDGE
-    PI --> TOOL_REGISTRY
-    USER --> CMD_REGISTRY
-    USER --> TUI_RENDER
+    subgraph Infra["🏗️ Infraestrutura"]
+        direction TB
+        DI["DI Container\nManual (21 linhas)"]
+        CONFIG["Config Cascade\ndefaults → env → file → profile"]
+        LIFECYCLE["Lifecycle\ninit() / shutdown()"]
+    end
 
-    PI_BRIDGE --> PORT_EVENTS
+    PI --> TOOL_REGISTRY
+    PI -->|pi.on()| APP_SVC
+    USER --> CMD_REGISTRY
+    USER --> UI_HOOKS
+
     TOOL_REGISTRY --> APP_SVC
     CMD_REGISTRY --> APP_SVC
+    UI_HOOKS --> APP_SVC
 
-    APP_SVC --> DOMAIN_INTENT
-    APP_SVC --> DOMAIN_CURATOR
-    APP_SVC --> DOMAIN_ENT
+    APP_SVC --> DOMAIN_KNOW
+    APP_SVC --> DOMAIN_RECALL
+    APP_SVC --> DOMAIN_PROFILE
     APP_SVC -.-> APP_MW
-    APP_SVC -.-> APP_EVENTS
 
     APP_SVC --> PORT_KB
-    APP_SVC --> PORT_SESSION
     APP_SVC --> PORT_FS
+    APP_SVC --> PORT_GRAPH
+    APP_SVC --> PORT_SESSION
     APP_SVC --> PORT_CACHE
     APP_SVC --> PORT_LOGGER
     APP_SVC --> PORT_EVENTS
 
     OV_ADAPTER --> PORT_KB
-    OV_ADAPTER --> PORT_SESSION
     OV_ADAPTER --> PORT_FS
+    OV_ADAPTER --> PORT_GRAPH
+    OV_ADAPTER --> PORT_SESSION
     OV_ADAPTER --> OV_TRANSPORT
     OV_TRANSPORT -->|HTTP| OV
 
     CACHE_IMPL --> PORT_CACHE
     LOG_IMPL --> PORT_LOGGER
+    EVENT_IMPL --> PORT_EVENTS
+
     DI --> OV_ADAPTER
     DI --> CACHE_IMPL
     DI --> LOG_IMPL
+    DI --> EVENT_IMPL
     DI --> APP_SVC
+    CONFIG --> DI
+    LIFECYCLE --> DI
 ```
+
+> **Nota sobre PiEventBridge:** não existe `pi-event-bridge.ts` como adaptador separado.
+> Pi emite eventos de infra (session_start, message_end) via `pi.on()` diretamente para
+> Application Services. O EventBus de domínio só transporta eventos de domínio
+> (MEMORY_SAVED, INTENT_DETECTED, etc.) — ver ADR-011.
+> Ver [seção 4.4](#44-event-bus--domínio-puro) para detalhes.
 
 ---
 
-## 2. Ports (Interfaces do Domínio)
+## 2. F2 — Ordem de Implementação
 
-### KnowledgeBase
+A ordem de criação dos artefatos de domínio segue dependências entre eles:
+
+| Passo | Artefato | Depende |
+|-------|----------|---------|
+| 1 | `domain/common/` — Uri (class), SessionId (class), ContentLevel, ResourceKind | — |
+| 2 | `domain/errors/` — DomainError class + subtipos (NotFoundError, ConnectionError, etc.) | — |
+| 3 | `domain/{knowledge,recall,profile}/model/` — value objects + aggregates | common, errors |
+| 4 | `domain/ports/` — KnowledgeBase, FsStore, GraphStore, SessionStore, CacheStore, EventBus | models (tipos de retorno) |
+| 5 | `infrastructure/event-bus/in-memory.ts` — InMemoryEventBus | ports/event-bus.ts |
+
+ProfileManager (esqueleto) deferido para F7a. Em F2, Profile é apenas um value object
+(`name` + `description`), já definido em `infrastructure/config/profile-schema.ts`.
+
+---
+
+## 3. Ports (Interfaces do Domínio)
+
+Todas as ports ficam em `domain/ports/`. Adaptadores concretos em `adapters/driven/`.
+
+### KnowledgeBase — busca semântica e lexical
+
+Mapeamento OV: `POST /api/v1/search/find` (rápida), `POST /api/v1/search/search` (profunda),
+`POST /api/v1/search/glob`, `POST /api/v1/search/grep`.
 
 ```typescript
 interface KnowledgeBase {
   search(query: SearchQuery): Promise<SearchResult>;
-  glob(pattern: string, limit?: number): Promise<GlobResult>;
+  glob(pattern: string, uri?: Uri, limit?: number): Promise<GlobResult>;
   grep(pattern: string, opts?: GrepOptions): Promise<GrepResult>;
-  write(uri: Uri, content: Content): Promise<WriteResult>;
-  download(uri: Uri): Promise<Buffer>;
-  reindex(uri: Uri, recursive?: boolean): Promise<TaskRef>;
-  // Grafo
-  link(source: Uri, target: Uri, predicate?: string): Promise<LinkResult>;
-  unlink(source: Uri, target: Uri): Promise<void>;
-  graph(uri: Uri, depth?: number): Promise<GraphResult>;
 }
 ```
 
-### SessionStore
+### GraphStore — navegação de relações
+
+Mapeamento OV: `POST /api/v1/relations/link`, `DELETE /api/v1/relations/link`, `GET /api/v1/relations?uri=`.
+
+```typescript
+interface GraphStore {
+  link(source: Uri, targets: Uri | Uri[], reason?: string): Promise<LinkResult>;
+  unlink(source: Uri, target: Uri): Promise<void>;
+  graph(uri: Uri): Promise<Relation[]>;
+}
+```
+
+### SessionStore — ciclo de vida de sessão OV
+
+Mapeamento OV: `POST /api/v1/sessions`, `POST /api/v1/sessions/{id}/messages`,
+`POST /api/v1/sessions/{id}/commit`, `POST /api/v1/sessions/{id}/used`,
+`GET /api/v1/tasks/{id}`, `DELETE /api/v1/sessions/{id}`.
 
 ```typescript
 interface SessionStore {
@@ -123,45 +185,110 @@ interface SessionStore {
   commit(sessionId: SessionId): Promise<CommitResult>;
   getTaskStatus(taskId: string): Promise<TaskStatus>;
   sessionUsed(sessionId: SessionId, contexts: Uri[]): Promise<void>;
+  deleteSession(sessionId: SessionId): Promise<void>;
 }
 ```
 
-### FsStore
+### FsStore — operações no filesystem OV (ContentStore fundida)
+
+Port única para ler, escrever, navegar e gerenciar o filesystem virtual do OpenViking.
+ContentStore foi fundida nesta port — OV trata content e fs como o mesmo sistema.
+
+Mapeamento OV: `POST /api/v1/content/write`, `GET /api/v1/fs/{read|abstract|overview}`,
+`GET /api/v1/fs/ls`, `GET /api/v1/fs/tree`, `GET /api/v1/fs/stat`,
+`POST /api/v1/fs/mkdir`, `POST /api/v1/fs/mv`, `DELETE /api/v1/fs`.
 
 ```typescript
 interface FsStore {
   read(uri: Uri, level?: ContentLevel): Promise<Content>;
+  write(uri: Uri, content: string, mode?: WriteMode, wait?: boolean): Promise<WriteResult>;
   list(uri: Uri, recursive?: boolean): Promise<FsEntry[]>;
   tree(uri: Uri): Promise<FsEntry[]>;
   stat(uri: Uri): Promise<FsEntry>;
   mkdir(uri: Uri): Promise<void>;
   mv(from: Uri, to: Uri): Promise<void>;
+  delete(uri: Uri, recursive?: boolean): Promise<void>;
 }
 ```
 
-### EventBus
+**Tipos de suporte (definidos em `domain/common/`):**
+
+```typescript
+type ContentLevel = "abstract" | "overview" | "read";
+type WriteMode = "replace" | "append" | "create";
+
+interface SearchQuery {
+  query: string;
+  limit?: number;
+  mode?: "auto" | "fast" | "deep";
+  targetUri?: Uri;
+  sessionId?: SessionId;
+}
+
+type Part = TextPart | ToolPart | ContextPart;
+```
+
+> **Nota:** OV v3 não possui endpoint `reindex`. `write()` sempre atualiza semântica/vectors
+automaticamente. `ResourceKind` foi removido — escrita de conteúdo textual é via
+`write()`, adição de resources via `POST /api/v1/resources` (adaptador OV, não port).
+
+> `SearchQuery` e `Part` vivem em `domain/common/` por serem consumidos por múltiplas ports
+e adaptadores. Não são private de port nenhuma. `write()` sempre atualiza semântica/vectors
+automaticamente. `ResourceKind` foi removido — escrita de conteúdo textual é via
+`write()`, adição de resources via `POST /api/v1/resources` (adaptador OV, não port).
+
+### CacheStore — cache de operações repetidas
+
+```typescript
+interface CacheStore {
+  get(key: string): Promise<unknown | undefined>;
+  set(key: string, value: unknown, ttl?: number): Promise<void>;
+  invalidate(pattern: string): Promise<void>;
+}
+```
+
+### Logger — logging estruturado
+
+```typescript
+type LogLevel = "debug" | "info" | "warn" | "error";
+
+interface Logger {
+  info(msg: string, ctx?: Record<string, unknown>): void;
+  warn(msg: string, ctx?: Record<string, unknown>): void;
+  error(msg: string, ctx?: Record<string, unknown>): void;
+  debug(msg: string, ctx?: Record<string, unknown>): void;
+  isEnabled(level: LogLevel): boolean;
+}
+```
+
+### EventBus — eventos de domínio entre bounded contexts (ADR-011)
 
 ```typescript
 type DomainEvent =
-  | { type: 'SESSION_STARTED'; sessionId: string; cwd: string }
-  | { type: 'SESSION_ENDED'; sessionId: string }
-  | { type: 'MESSAGE_PROCESSED'; sessionId: string; role: string }
-  | { type: 'MEMORY_SAVED'; uri: string }
+  | { type: 'MEMORY_SAVED'; uri: string; source: string }
+  | { type: 'RELATION_LINKED'; source: string; target: string; predicate: string }
   | { type: 'INTENT_DETECTED'; category: string; confidence: number }
   | { type: 'RECALL_EXECUTED'; itemsCount: number; durationMs: number }
-  | { type: 'ERROR'; source: string; error: string };
+  | { type: 'BUDGET_EXCEEDED'; budget: number; attempted: number };
 
 interface EventBus {
   publish(event: DomainEvent): void;
-  subscribe(type: string, handler: Function): () => void;
+  subscribe(type: string, handler: (event: DomainEvent) => void): () => void;
 }
+```
+
+> **Eventos excluídos (não são de domínio):**
+> - `PROFILE_CHANGED` — Profile é value object (substituído, não mutado). Mudanças de config são notificação de infra, não evento de domínio.
+> - `ERROR` — não é conceito de domínio. Erros são diagnóstico.
+> - `SESSION_STARTED`, `MESSAGE_PROCESSED` — infra. Tratados por `pi.on()` diretamente.
+>   (Per ADR-011 e ADR-008 async init.)
 ```
 
 ---
 
-## 3. Design Patterns
+## 4. Design Patterns
 
-### 3.1 Command Pattern — Toda ação é um comando
+### 4.1 Command Pattern — Toda ação é um comando
 
 ```typescript
 interface Command<TInput, TOutput> {
@@ -188,7 +315,7 @@ class SearchKnowledgeCommand implements Command<SearchInput, SearchOutput> {
 }
 ```
 
-### 3.2 Chain of Responsibility — Intent Detection
+### 4.2 Chain of Responsibility — Intent Detection
 
 ```
 ContinuationHandler → ComplexQueryHandler → SimpleQueryHandler → LearnedRejectionHandler
@@ -200,27 +327,36 @@ Cada handler:
   4. Se nenhum match, default conservador (recall off)
 ```
 
-### 3.3 Middleware Pipeline — Cross-cutting concerns
+### 4.3 Middleware Pipeline — Cross-cutting concerns
 
 ```
-Request → LoggingMiddleware → CacheMiddleware → MetricsMiddleware → Handler → Response
-                                    │
-                           CacheStore (get/set)
+Request → LoggingMiddleware → Handler → Response
+
+# Cache middleware: adiado. Implementar após OV adapter (F3+).
 ```
 
-### 3.4 Event Bus — Desacopla reações
+### 4.4 Event Bus — Domínio puro
+
+Domain events carregam mudanças de estado com significado de negócio entre bounded contexts.
+Eventos de infra (SESSION_STARTED, MESSAGE_PROCESSED) ficam fora — entram via `pi.on()` direto.
 
 ```
-PiEventBridge → publish(SESSION_STARTED) → AutoCommitHandler
-                                          → StatusBarHandler
-                                          → ProfileDetectHandler
+# Eventos de domínio cruzam contexts via EventBus
+RecallService.publish(RECALL_EXECUTED) → ProfileAutoDetect (ajusta auto-detect)
+                                        → Logger (métrica)
+
+# Eventos de infra: pi.on() → Application Service direto (sem EventBus)
+pi.on("session_start",   (e, ctx) => sessionService.sync(ctx))
+pi.on("message_end",     (e, ctx) => autoRecall.maybeRecall(ctx))
+
+# Não existe PiEventBridge separado — o index.ts registra os handlers.
 ```
 
 ---
 
-## 4. Fluxos Principais
+## 5. Fluxos Principais
 
-### 4.1 Auto-Recall
+### 5.1 Auto-Recall
 
 ```mermaid
 flowchart TD
@@ -237,35 +373,41 @@ flowchart TD
     I -->|"nao"| K
 ```
 
-### 4.2 Session Sync
+### 5.2 Session Sync
+
+Evento `message_end` chega via `pi.on()` e chama SessionService direto.
+EventBus de domínio não transporta eventos de infra.
 
 ```mermaid
 sequenceDiagram
     participant Pi as Pi Agent
-    participant Bridge as PiEventBridge
-    participant Bus as EventBus
+    participant Index as index.ts
     participant Svc as SessionService
+    participant Bus as EventBus
     participant OV as OpenViking
 
-    Pi->>Bridge: message_end
-    Bridge->>Bus: publish(MESSAGE_PROCESSED)
-    Bus->>Svc: handle(event)
+    Pi->>Index: pi.on("message_end")
+    Index->>Svc: sessionService.sendMessage(sessionId, parts)
     Svc->>OV: sendMessage(sessionId, parts)
     OV-->>Svc: 200
-    Svc->>Bus: publish(MESSAGE_SENT)
+    Svc->>Bus: publish(MEMORY_SAVED)
 ```
 
-### 4.3 Auto-Action (Propositivo)
+### 5.3 Auto-Action (Propositivo) — (futuro, F8)
+
+O gatilho vem de `pi.on("message_end")`, não do EventBus de domínio.
 
 ```mermaid
 sequenceDiagram
-    participant Bus as EventBus
+    participant Pi as Pi Agent
+    participant Index as index.ts
     participant Detector as Detector
     participant Proposer as Proposer
     participant Executor as Executor
     participant OV as OpenViking
 
-    Bus->>Detector: MESSAGE_PROCESSED
+    Pi->>Index: pi.on("message_end")
+    Index->>Detector: autoActions.detect(ctx)
     Detector->>Detector: analisa padrões
     Detector->>Proposer: Signal{decision, 0.85}
     Proposer->>OV: search(query)
@@ -278,44 +420,67 @@ sequenceDiagram
 
 ---
 
-## 5. Estrutura de Diretórios
+## 6. Estrutura de Diretórios
 
 ```
 src/
 ├── domain/                    # Pure TS. Sem imports externos.
-│   ├── entities/              # KnowledgeItem, SessionId, Uri, RecallItem
-│   ├── ports/                 # KnowledgeBase, SessionStore, FsStore, EventBus
-│   ├── intent/                # Chain of Responsibility handlers
-│   ├── curator/               # Scoring, dedup, budget trim
-│   └── errors/                # DomainError hierarchy
+│   ├── common/                # (futuro) Shared kernel: Uri, SessionId, DomainError
+│   ├── knowledge/             # (futuro F2) Contexto: armazenamento e busca
+│   │   ├── model/             # KnowledgeItem, Resource, Relation
+│   │   └── service/           # SemanticSearch
+│   ├── recall/                # (futuro F2/F4) Contexto: detecção e curadoria
+│   │   ├── model/             # RecallItem, TokenBudget
+│   │   ├── intent/            # Chain of Responsibility handlers + IntentDetector
+│   │   └── curator/           # Scorers + RecallCurator + GraphExpander
+│   ├── profile/               # (futuro F7) Contexto: perfis de comportamento
+│   │   ├── model/             # ProfileConfig, AutoDetectRule
+│   │   └── service/           # ProfileManager, ProfileResolver, AutoDetect
+│   ├── ports/                 # Interfaces planas
+│   │   └── logger.ts          # ✅ Logger (implementado: FileLogger + NullLogger)
+│   │   # (futuro F2) KnowledgeBase, FsStore, GraphStore,
+│   │   #          SessionStore, EventBus, CacheStore
+│   └── errors/                # (futuro F2) DomainError hierarchy
 │
-├── application/               # Casos de uso
-│   ├── services/              # search, write, session, recall, backup
-│   ├── commands/              # Command handlers
-│   ├── middleware/            # Pipeline + middlewares
-│   └── event-handlers/        # Reações a DomainEvents
+├── application/               # (futuro F4) Casos de uso
+│   ├── services/              # search, write, session, recall, backup, auto-actions
+│   └── middleware/            # Pipeline + middlewares
 │
 ├── adapters/
-│   ├── driving/               # Entram no sistema
-│   │   ├── pi/                # PiEventBridge, ToolRegistry, CommandRegistry
-│   │   └── tui/               # Renderers
-│   └── driven/                # Saem do sistema
-│       ├── openviking/        # Adapter + Transport + Mappers
-│       ├── cache/             # InMemoryCache / RedisCache
-│       ├── config/            # Zod schema + loader
-│       └── logger/            # StructuredLogger
+│   ├── driving/pi/            # (futuro F5) Callbacks registrados no Pi
+│   │   ├── tool-registry.ts   # registerTool()
+│   │   ├── command-registry.ts # registerCommand()
+│   │   ├── status-bar.ts       # ctx.ui.setStatus()
+│   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
+│   └── driven/
+│       ├── openviking/        # (futuro F3) OV Adapter + Transport + Mappers
+│       ├── cache/             # (futuro F3+) InMemoryCache / RedisCache
+│       └── logger/
+│           ├── file-logger.ts # ✅ FileLogger (JSON lines + rotação)
+│           └── null-logger.ts # ✅ NullLogger (testes/silent mode)
 │
-├── infrastructure/            # DI container, lifecycle
-│   └── di/                    # Container + modules
+├── infrastructure/
+│   ├── config/
+│   │   ├── schema.ts          # ✅ ConfigSchema raiz (Zod)
+│   │   ├── logger-schema.ts   # ✅ LoggerConfigSchema
+│   │   ├── cascade.ts         # ✅ Config Cascade: defaults → env → file → profile
+│   │   ├── loader.ts          # ✅ Leitor .pi/settings.json
+│   │   └── profile-schema.ts  # ✅ ProfileSchema (só name+description em F1)
+│   ├── di/
+│   │   └── container.ts       # ✅ DI Container manual (21 linhas)
+│   ├── event-bus/             # (futuro F2.9) InMemoryEventBus
+│   ├── lifecycle.ts           # ✅ init() + shutdown()
+│   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
-├── _legacy/                   # Código original (referência)
-├── index.ts                   # Entry point
-└── bootstrap.ts               # Startup wiring
+├── _legacy/                   # Código original (referência, manter até F3)
+├── index.ts                   # ✅ Entry point: pi.on("session_start") → init()
 ```
+
+**Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 ---
 
-## 6. Princípios Arquiteturais
+## 7. Princípios Arquiteturais
 
 1. **Domain pure** — Núcleo não importa Pi, OV, HTTP, nada externo
 2. **Ports > Implementations** — Interfaces primeiro, implements depois

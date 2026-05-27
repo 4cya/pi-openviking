@@ -23,8 +23,8 @@ export function loadConfig(cwd: string): PiOVConfig {
     }
   }
 
-  // 3. Overlay file settings
-  const fileSettings = readSettings(cwd);
+  // 3. Overlay file settings (pi-openviking namespace only)
+  const fileSettings = readSettings(cwd, "pi-openviking");
   mergeShallow(config, fileSettings);
 
   // 4. Overlay profile settings (future — no profile-specific fields yet)

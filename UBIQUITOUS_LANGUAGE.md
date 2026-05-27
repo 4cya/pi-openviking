@@ -1,4 +1,7 @@
-# Ubiquitous Language
+# Ubiquitous Language (expanded reference)
+
+> Canonical glossary: [`CONTEXT.md`](./CONTEXT.md)
+> This file is an expanded reference with additional detail and examples. Terms defined in CONTEXT.md are authoritative; this file supplements with deeper explanations.
 
 > Glossário da arquitetura Reborn (Fase 1+). Termos legado em `src/_legacy/` foram omitidos — este documento reflete apenas o novo design hexagonal.
 

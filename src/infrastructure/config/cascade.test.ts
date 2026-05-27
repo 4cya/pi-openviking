@@ -55,12 +55,12 @@ describe("loadConfig", () => {
     expect(result.logger.maxSize).toBe(999999);
   });
 
-  it("settings.json overrides env var", () => {
+  it("settings.json overrides env var (pi-openviking namespace)", () => {
     withTempDir((dir) => {
       process.env.OV_LOG_LEVEL = "debug";
       const piDir = join(dir, ".pi");
       mkdirSync(piDir, { recursive: true });
-      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ logger: { level: "warn" } }));
+      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ "pi-openviking": { logger: { level: "warn" } } }));
 
       const result = loadConfig(dir);
       expect(result.logger.level).toBe("warn");
@@ -71,7 +71,7 @@ describe("loadConfig", () => {
     withTempDir((dir) => {
       const piDir = join(dir, ".pi");
       mkdirSync(piDir, { recursive: true });
-      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ profile: { activeProfile: "docs" } }));
+      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ "pi-openviking": { profile: { activeProfile: "docs" } } }));
 
       const result = loadConfig(dir);
       expect(result.profile.activeProfile).toBe("docs");
@@ -82,7 +82,7 @@ describe("loadConfig", () => {
     withTempDir((dir) => {
       const piDir = join(dir, ".pi");
       mkdirSync(piDir, { recursive: true });
-      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ profile: { activeProfile: "nonexistent" } }));
+      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ "pi-openviking": { profile: { activeProfile: "nonexistent" } } }));
 
       expect(() => loadConfig(dir)).toThrow(/nonexistent/);
     });

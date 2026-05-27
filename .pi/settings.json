@@ -2,6 +2,8 @@
   "extensions": [
     "../src/index.ts"
   ],
-  "openVikingTimeout": 120000,
-  "openVikingCommitTimeout": 120000
+  "pi-openviking": {
+    "openVikingTimeout": 120000,
+    "openVikingCommitTimeout": 120000
+  }
 }

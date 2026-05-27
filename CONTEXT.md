@@ -1,100 +1,145 @@
-# pi-openviking — Context (Reborn)
+# pi-openviking — Context
 
-> Arquitetura hexagonal. Rewrite do zero. Código legado em `src/_legacy/` mantido como referência.
+> Pi extension that integrates OpenViking as a long-term memory and resource backend for coding agents.
+> Not a generic OV client — a focused memory plugin.
 
-## Purpose
+Architecture decisions: see `docs/adr/`.
 
-Pi extension that integrates OpenViking as a **long-term memory and resource backend** for coding agents. Not a generic OV client — a focused memory plugin.
+## Language
 
-Pi owns session history, prompt orchestration, and tool execution. OpenViking owns long-term memory retrieval, resource storage, and memory extraction.
+### Systems & Actors
 
-## Implementação atual
+**Pi**:
+Coding agent harness that owns session history, prompt orchestration, and tool execution.
+_Avoid_: pi-coding-agent, harness
 
-Fase 1 (Foundation) em andamento. Módulos entregues:
+**OpenViking (OV)**:
+Long-term memory server providing semantic search, resource storage, and memory extraction.
+_Avoid_: the server, OV server
 
-| Módulo | Status | Localização |
-|--------|--------|-------------|
-| Config Schema (Zod) — facade | ✅ Entregue | `src/infrastructure/config/schema.ts` |
-| Logger Config Schema | ✅ Entregue | `src/infrastructure/config/logger-schema.ts` |
-| Profile Config Schema | ✅ Entregue | `src/infrastructure/config/profile-schema.ts` |
-| Config Schema tests | ✅ Entregue | `src/infrastructure/config/schema.test.ts` |
-| Config Cascade + Loader | ✅ Entregue | `src/infrastructure/config/cascade.ts`, `loader.ts` |
-| Logger Interface + LogLevel type | ✅ Entregue | `src/domain/ports/logger.ts` |
-| Logger Interface tests | ✅ Entregue | `src/domain/ports/logger.test.ts` |
-| File Logger | ✅ Entregue | `src/adapters/driven/logger/file-logger.ts` |
-| File Logger tests | ✅ Entregue | `src/adapters/driven/logger/file-logger.test.ts` |
-| DI Container | ✅ Entregue | `src/infrastructure/di/container.ts` |
-| Lifecycle + Entry point | ✅ Entregue | `src/infrastructure/lifecycle.ts`, `src/index.ts` |
+**Extension**:
+A Pi plugin that registers tools and hooks into session lifecycle events.
+_Avoid_: plugin, add-on
 
-Próximas fases: Domain Ports (2), OV Adapter (3), Operations (4), Tools+Commands (5), Auto-Recall (6), Profiles (7), Features (8).
+**Agent**:
+The LLM instance orchestrated by Pi that uses tools and produces responses.
+_Avoid_: model, LLM
 
-## Architecture
+### Architecture Layers
 
-```
-src/
-├── domain/                    # Enterprise logic + port interfaces
-│   └── ports/                 # Interfaces (Logger, KnowledgeBase, etc.)
-│       ├── logger.ts              # ✅ Logger interface
-│       └── logger.test.ts         # ✅ 5 tests
-├── adapters/
-│   └── driven/                # Implementações de portas
-│       └── logger/
-│           ├── file-logger.ts          # ✅ FileLogger com rotação + gzip
-│           └── file-logger.test.ts     # ✅ 8 testes
-├── infrastructure/            # Config, DI, lifecycle
-│   ├── config/
-│   │   ├── schema.ts              # ✅ Facade — compõe logger + profile
-│   │   ├── logger-schema.ts       # ✅ Zod schema + LoggerConfig type
-│   │   ├── profile-schema.ts      # ✅ Zod schema + ProfileConfig + built-ins
-│   │   ├── cascade.ts             # ✅ default → env → settings.json → profile
-│   │   ├── loader.ts              # ✅ safe parse, {} on error
-│   │   ├── schema.test.ts         # ✅ 13 testes
-│   │   ├── cascade.test.ts        # ✅ 7 testes
-│   │   └── loader.test.ts         # ✅ 3 testes
-│   ├── path-resolver.ts           # ✅ resolveHome() — shared utility
-│   ├── path-resolver.test.ts      # ✅ 3 testes
-│   ├── di/
-│   │   ├── container.ts       # ✅ DI container manual (21 linhas)
-│   │   └── container.test.ts  # ✅ 4 testes
-│   └── lifecycle.ts           # ✅ init() + shutdown() + lifecycle.test.ts
-├── index.ts                   # ✅ entry point (chama lifecycle.init())
-└── _legacy/                   # Código original intacto
-tests/
-├── global-setup.ts            # Infra compartilhada (docker compose OV test)
-└── _legacy/                   # Testes do código legado
-```
+**Domain**:
+Innermost layer containing enterprise logic and port interfaces. Zero external dependencies. Lives under `src/domain/`.
+_Avoid_: core, business layer
 
-## Core Glossary
+**Port**:
+An interface declared in the domain layer that an adapter must implement.
+_Avoid_: contract
 
-| Term | Meaning |
-|------|---------|
-| **Pi** | Coding agent harness (session manager, tools, prompt builder) |
-| **OV** | OpenViking server — context database with filesystem paradigm |
-| **Config Schema** | Zod schema que define, valida e fornece defaults para toda config do plugin. Fonte única de verdade. Exporta tipo `PiOVConfig` inferido via `z.infer` |
-| **Config Cascade** | Ordem de resolução: defaults compilados → env vars (`OV_*`) → `.pi/settings.json` → perfil ativo. Merge raso encadeado |
-| **Profile** | Preset nomeado de config. 4 built-in: `default`, `web-dev`, `docs`, `learning`. Apenas `name` + `description` na Fase 1 |
-| **Logger** | Interface em `domain/ports/` com métodos `info`, `warn`, `error`, `debug`, `isEnabled` + `ctx` opcional. `LogLevel` type (`"debug"|"info"|"warn"|"error"`) definido no domínio |
-| **File Logger** | Implementação em `adapters/driven/logger/`. JSON lines via `appendFileSync`. Rotação por tamanho (10MB) e idade (7 dias), até 5 arquivos |
-| **DI Container** | Container manual (21 linhas, 4 testes). Registro por string token. Suporte a singleton e factory. Erro claro se token não registrado |
-| **Lifecycle** | `init()` async (cria logger, container, registra tudo) e `shutdown()` sync (reseta estado, zero I/O) |
+**Adapter**:
+An implementation of a Port, living in `src/adapters/`. **Driven** adapters implement domain ports (e.g. FileLogger); **Driver** adapters call domain ports (e.g. Pi Event Bridge).
+_Avoid_: implementation, plugin
 
-## Design Decisions (Foundation)
+**Infrastructure**:
+Cross-cutting concerns: config loading, DI container, lifecycle wiring. Lives under `src/infrastructure/`.
+_Avoid_: framework, wiring layer
 
-- **Config Schema** é a única fonte de verdade para tipos de config. `ConfigSchema.parse({})` preenche todos os defaults. Tipos TS são inferidos via `z.infer` — zero duplicação manual.
-- **Config Cascade** usa merge raso encadeado (Object.assign). Cada fonte sobrescreve chaves da anterior. Zod valida o resultado final.
-- **Perfis** são extensíveis por design — campos OV-specific (endpoint, target_uri, etc.) entram na Fase 4 sem quebrar o schema.
-- **Logger interface** em domain/ports garante que o core nunca dependa de implementação concreta. A interface é pura — zero dependências externas.
-- **File Logger** mantém a estratégia de `appendFileSync` do ADR-002, mas agora por trás da interface Logger. Rotação por tamanho + idade. Gzip de arquivos antigos.
-- **DI Container** é manual (21 linhas, 4 testes) e sem dependências externas. Substituível por Awilix se a complexidade crescer (decidir depois da Fase 5).
-- **Bootstrap** (`init()`) é async (prepara para health check na Fase 2/3). `shutdown()` é sync (ADR-001 — zero I/O no shutdown).
-- **Zod v4** usado (versão do peer dependency `@earendil-works/pi-ai`). Atenção: `z.record()` exige 2 argumentos (key + value schema). `.default({})` em schemas aninhados não resolve defaults recursivos — usar factory `default(() => ChildSchema.parse({}))`.
-- **ADR-002** (file-based logging) respeitado e reformulado: agora com interface + implementação + rotação.
-- **ADR-008** (init async) preparado: `init()` é async para health check futuro.
-- **Distribuição**: git-only via `pi install git:github.com/dslara/pi-openviking`. Pre-alpha (`0.1.0`).
+### Foundation (Config & DI)
 
-## Architecture Decision Records
+**Config Schema**:
+The Zod schema that defines, validates, and provides defaults for all plugin configuration. Single source of truth. Exports `PiOVConfig` type inferred via `z.infer`.
+_Avoid_: schema, config definition
 
-- **ADR-002**: File-based logging com interface `Logger` + `FileLogger` com rotação
-- **ADR-008**: Init assíncrono com timeout (prepara health check futuro)
+**Config Cascade**:
+Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile. Each source overrides the previous via shallow merge.
+`.pi/settings.json` is read at the `"pi-openviking"` namespace key — only the sub-tree under that key enters the cascade. Pi-level keys (`extensions`, etc.) are ignored.
+_Avoid_: merge, resolution chain
 
-ADRs legados (0001, 0003-0007, 0009) movidos para `docs/adr/_legacy/` — descrevem o sistema anterior em `src/_legacy/`.
+**Profile**:
+A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Currently carries only `name` + `description`; future phases add behavioral fields (targetUri, searchMode, etc.).
+_Avoid_: config profile, named preset
+
+**Logger Interface**:
+The `Logger` contract in `domain/ports/logger.ts` with methods `info`, `warn`, `error`, `debug`, `isEnabled`. Pure interface — zero external dependencies.
+_Avoid_: log, console
+
+**File Logger**:
+JSON lines output via `appendFileSync`. Rotates by size (10MB) and age (7 days), keeps up to 5 gzipped historical files.
+_Avoid_: file logging, persistent logger
+
+**DI Container**:
+Manual dependency injection container (21 lines). Registers dependencies by string token; supports singleton and factory lifetime. Throws clear error on unregistered token.
+_Avoid_: container, ioc
+
+**Lifecycle**:
+The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
+_Avoid_: bootstrap lifecycle, module lifecycle
+
+### Core Domain (future phases)
+
+**KnowledgeItem**:
+A unit of persistent knowledge stored in OpenViking. Can be a memory (extracted text with metadata) or a resource (document, file, reference). Has a Uri, content, and optional relations.
+
+**Intent Detector**:
+A Chain of Responsibility pipeline that classifies a user prompt to decide whether auto-recall should fire. Handlers: Continuation → ComplexQuery → SimpleQuery → LearnedRejection.
+
+**Recall Curator**:
+A pipeline that scores, ranks, deduplicates, and trims search results to fit a token budget. Operates post-search, locally.
+
+**Graph Expander**:
+Optionally traverses OV relations from seed KnowledgeItems to inject related resources into context.
+
+**EventBus**:
+An in-memory publish/subscribe mechanism that decouples reactions to domain events (SESSION_STARTED, MEMORY_SAVED, INTENT_DETECTED, etc.). Domain events are what cross bounded contexts; infra events stay local.
+
+**Middleware Pipeline**:
+A stack of cross-cutting concerns (Logging → Cache → Metrics) that wraps application service calls. Each middleware can inspect or short-circuit a request before reaching the handler.
+
+### Shared Types (shared kernel)
+
+**Uri** (class — value object):
+A `viking://` URI identifying a resource or location in the OpenViking filesystem. Used across all bounded contexts. Implemented as class with validation in constructor — not a type alias.
+_Avoid_: path, string identifier
+
+**SessionId** (class — value object):
+An opaque identifier for an OpenViking session. Created by `SessionStore.create()`, consumed by recall and profile. Implemented as class — type safety vs Uri.
+_Avoid_: session token, session key
+
+**DomainError** (class):
+Base class for all domain-layer errors. Subtyped as `NotFoundError`, `ConnectionError`, `ValidationError`, etc. Every domain operation that can fail produces a typed DomainError.
+_Avoid_: generic Error, exception
+
+### Services (future phases)
+
+**Recall Service**:
+Orchestrates IntentDetect → KnowledgeBase.search → Curator → GraphExpander → prompt injection. Receives profile config as injected `ResolvedConfig` — does not import ProfileManager.
+
+**Session Service**:
+Manages OV session lifecycle: create, send messages, commit.
+
+**Write Service**:
+Handles content persistence: save resources, create directories, link relations.
+
+## Flagged ambiguities
+
+- **"Profile"** is overloaded three ways: (1) **Profile** — a named config preset in the Foundation layer; (2) **OV cProfile** — the server's own profiling mode; (3) **Memory Profile** — extracted user preferences from session memory. Use **Config Profile** for the Foundation concept, **OV cProfile** for the server concept, and **Memory Profile** for extracted preferences.
+- **Uri** and **SessionId** live in a shared kernel (`domain/common/`), not inside any single bounded context. Every context imports from `common/`; no context imports from another context.
+- **"Logger"** can refer either to the **Logger Interface** in `domain/ports/` or the **File Logger** implementation in `adapters/driven/`. Prefer the qualified name.
+- **"Config"** without qualification refers to the plugin's configuration managed by the **Config Schema**. Not to be confused with Pi's own settings (`.pi/settings.json`) or OV's server configuration.
+
+## Example dialogue
+
+> **Dev:** "How does Config Cascade work at startup?"
+>
+> **Domain expert:** "Bootstrap resolves config in order: compiled defaults → env vars like `OV_LOG_LEVEL` → `.pi/settings.json` → active Profile. Zod validates the final merged object. An invalid field like `level: "verbose"` throws at bootstrap time, not silently at runtime."
+>
+> **Dev:** "So if I add a new config field, I only touch the Config Schema?"
+>
+> **Domain expert:** "The Config Schema is the single source of truth. Update the Zod definition, and the `PiOVConfig` type updates automatically via `z.infer`. The DI Container resolves the validated config as a singleton — every module receives config through the container, not by importing it directly."
+>
+> **Dev:** "Can I swap the File Logger for a different implementation?"
+>
+> **Domain expert:** "Yes — that's the point of the Port interface. The domain code depends only on Logger Interface. As long as the new implementation satisfies that contract, register it in the DI Container and the rest of the system doesn't change."
+>
+> **Dev:** "Will Recall Service need to import anything from OV?"
+>
+> **Domain expert:** "No. Recall Service depends on Port interfaces — KnowledgeBase, Curator, GraphStore. The OV Adapter implements those ports behind the scenes. The domain layer has zero awareness of HTTP, authentication, or the OV API."
