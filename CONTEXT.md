@@ -78,6 +78,13 @@ _Avoid_: search parser, search response mapper
 **KnowledgeBaseAdapter**:
 An implementation of the `KnowledgeBase` port in `adapters/driven/openviking/knowledge-base.ts`. `find()` calls `POST /api/v1/search/find` (no session). `search()` calls `POST /api/v1/search/search` with optional `session_id`. `glob()` calls `POST /api/v1/search/glob`. `grep()` calls `POST /api/v1/search/grep` with all filter params (`case_insensitive`, `exclude_uri`, `level_limit`, `node_limit`). All methods use `SearchMapper` for response mapping.
 
+**SessionMapper**:
+Pure functions in `adapters/driven/openviking/mappers/session-mapper.ts`: `toSessionId(raw)` extracts the session identifier from OV create response; `toCommitResult(raw)` maps commit response to `{ sessionId, taskId? }`; `toTaskStatus(raw)` maps task status (pending/running/completed/failed). Also exports `serializePart(part)` and `serializeParts(parts)` which convert domain `Part` types to OV JSON format with camelCase→snake_case key mapping.
+_Avoid_: session parser
+
+**SessionStoreAdapter**:
+An implementation of the `SessionStore` port in `adapters/driven/openviking/session-store.ts`. All 8 methods implemented: `create()` → `POST /api/v1/sessions`; `sendMessage()` → `POST /api/v1/sessions/{id}/messages` with serialized `Part[]`; `sendMessages()` → batch endpoint; `commit()` → `POST /api/v1/sessions/{id}/commit` with `keep_recent_count`; `getTaskStatus()` → `GET /api/v1/tasks/{id}`; `listTasks()` → `GET /api/v1/tasks` with optional filters; `sessionUsed()` → `POST /api/v1/sessions/{id}/used`; `deleteSession()` → `DELETE /api/v1/sessions/{id}`.
+
 **Config Cascade**:
 Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile. Each source overrides the previous via shallow merge.
 `.pi/settings.json` is read at the `"pi-openviking"` namespace key — only the sub-tree under that key enters the cascade. Pi-level keys (`extensions`, etc.) are ignored.

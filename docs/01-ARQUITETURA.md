@@ -510,15 +510,17 @@ src/
 │   │   ├── status-bar.ts       # ctx.ui.setStatus()
 │   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
 │   └── driven/
-│       ├── openviking/        # 🔶 F3: Transport + FsStore + KnowledgeBase + all mappers (✅)
+│       ├── openviking/        # 🔶 F3: All ports implemented (✅), factory pending
 │       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort
-│       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read+write+list+tree+stat+mkdir+mv+delete)
-│       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find+search+glob+grep)
+│       │   ├── fs-store.ts        # ✅ FsStoreAdapter (full — read/write/nav/manage)
+│       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find/search/glob/grep)
+│       │   ├── session-store.ts   # ✅ SessionStoreAdapter (create/messages/commit/tasks/lifecycle)
 │       │   └── mappers/
 │       │       ├── error-mapper.ts   # ✅ toDomainError(): HTTP status → DomainError
 │       │       ├── content-mapper.ts # ✅ toContent(): OV JSON → domain Content
 │       │       ├── fs-mapper.ts      # ✅ toFsEntry/toFsEntries/toWriteResult
-│       │       └── search-mapper.ts  # ✅ toSearchResult/toGlobResult/toGrepResult
+│       │       ├── search-mapper.ts  # ✅ toSearchResult/toGlobResult/toGrepResult
+│       │       └── session-mapper.ts # ✅ toSessionId/toCommitResult/toTaskStatus + PartSerializer
 │       ├── cache/             # (futuro F3+) InMemoryCache / RedisCache
 │       └── logger/
 │           ├── file-logger.ts # ✅ FileLogger (JSON lines + rotação)
@@ -544,7 +546,7 @@ src/
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
-> F3 — Transport (#52) + ContentMapper + FsStore.read (#53) + FsStore completo (#54) + SearchMapper + KnowledgeBase (#55) implementados 2026-05-27. Próximo: session+relation mappers + adapter factory.
+> F3 — Issues #52–#56: Transport + FsStore + KnowledgeBase + SessionStore + todos mappers exceto relation implementados 2026-05-27. Próximo: relation mapper + adapter factory.
 
 ---
 
