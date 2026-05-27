@@ -82,6 +82,19 @@
 | **RecallItem** | Interface for a curated search result: `item: KnowledgeItem`, `score: number`, `source: "search" | "graph"`. Lives in `domain/recall/model/recall-item.ts` | curated item |
 | **TokenBudget** | Class managing token limits for recall. Methods: `remaining()`, `tryAllocate()`, `reset()`. Does NOT throw on insufficient budget — returns false. Lives in `domain/recall/model/token-budget.ts` | budget, token limit |
 
+## Port Interfaces (domain/ports/)
+
+| Term | Definition | Aliases to avoid |
+| ---- | ---------- | ---------------- |
+| **KnowledgeBase** | Port for semantic and lexical search. Methods: `search(SearchQuery)`, `glob(pattern, uri?, limit?)`, `grep(pattern, opts?)`. Lives in `domain/ports/knowledge-base.ts` | search engine, KB |
+| **FsStore** | Port for filesystem operations on OV virtual filesystem (merged with ContentStore). Methods: `read`, `write`, `list`, `tree`, `stat`, `mkdir`, `mv`, `delete`. No `reindex` (OV v3 has no such endpoint). No `wait` (synchronous wait is OV transport detail, resolved by adapter). Lives in `domain/ports/fs-store.ts` | content store, file system |
+| **GraphStore** | Port for navigating relations. Methods: `link`, `unlink`, `graph`. Lives in `domain/ports/graph-store.ts` | relation store, graph db |
+| **SessionStore** | Port for OV session lifecycle. Methods: `create`, `sendMessage`, `commit`, `getTaskStatus`, `sessionUsed`, `deleteSession`. Lives in `domain/ports/session-store.ts` | session manager |
+| **CacheStore** | Port for caching repeated operations. Methods: `get`, `set`, `invalidate`. Lives in `domain/ports/cache-store.ts` | cache, data store |
+| **EventBus** | Port for synchronous domain event dispatch (ADR-011). Methods: `publish`, `subscribe` (returns unsubscribe). Handlers run in the same tick; errors logged but never propagated. Lives in `domain/ports/event-bus.ts` | message bus, event emitter |
+| **DomainEvent** | Discriminated union of 5 event types: MEMORY_SAVED, RELATION_LINKED, INTENT_DETECTED, RECALL_EXECUTED, BUDGET_EXCEEDED. No PROFILE_CHANGED or ERROR (infra events stay out). Defined in `domain/ports/event-bus.ts` | event, notification |
+| **Logger** | Port for structured logging. Methods: `info`, `warn`, `error`, `debug`, `isEnabled`. Lives in `domain/ports/logger.ts` | log, console |
+
 ## Example dialogue
 
 > **Dev:** "How does **Config Cascade** work at startup?"

@@ -88,13 +88,13 @@ Profiles registrados. Tudo testado sem OV.
 | 1 | F2.0a | `domain/common/{uri,session-id,content-level,write-mode,search-query,part,index}.ts` | ✅ Shared kernel: Uri (class), SessionId (class), ContentLevel, WriteMode, SearchQuery (interface), Part (discriminated union) |
 | 2 | F2.0b | `domain/errors/{domain-error,not-found-error,connection-error,validation-error,index}.ts` | ✅ DomainError, NotFoundError, ConnectionError, ValidationError |
 | 3 | F2.1 | `domain/{knowledge,recall}/model/*.ts` | ✅ KnowledgeItem, ResourceItem, SkillItem, SearchResult, Relation, RecallItem, TokenBudget |
-| 4 | F2.2 | `domain/ports/knowledge-base.ts` | Interface KnowledgeBase |
-| 5 | F2.3 | `domain/ports/session-store.ts` | Interface SessionStore |
-| 6 | F2.4 | `domain/ports/fs-store.ts` | Interface FsStore (fundida com ContentStore — read + write + list + tree + stat + mkdir + mv + delete; **sem reindex** — OV v3 não tem esse endpoint) |
-| 7 | F2.5 | `domain/ports/event-bus.ts` | Interface EventBus + DomainEvent types (ADR-011) |
-| 8 | F2.6 | `domain/ports/cache-store.ts` | Interface CacheStore |
-| 9 | F2.7 | `domain/ports/logger.ts` | Interface Logger (já existe, validar contrato) |
-| 10 | F2.8 | `domain/errors/*.ts` | Hierarquia: DomainError → NotFoundError, ConnectionError, etc |
+| 4 | F2.2 | `domain/ports/knowledge-base.ts` | ✅ KnowledgeBase + GlobResult, GrepOptions, GrepResult |
+| 5 | F2.3 | `domain/ports/session-store.ts` | ✅ SessionStore + CommitResult, TaskStatus |
+| 6 | F2.4 | `domain/ports/fs-store.ts` | ✅ FsStore (read + write + list + tree + stat + mkdir + mv + delete; **sem reindex**, **sem wait**) + Content, WriteResult, FsEntry |
+| 7 | F2.5 | `domain/ports/event-bus.ts` | ✅ EventBus + DomainEvent types (ADR-011) + EventHandler |
+| 8 | F2.6 | `domain/ports/cache-store.ts` | ✅ CacheStore |
+| 9 | F2.7 | `domain/ports/logger.ts` | ✅ Logger (já existia) |
+| 10 | F2.8 | `domain/ports/graph-store.ts` | ✅ GraphStore + LinkResult |
 | 11 | F2.9 | `infrastructure/event-bus/in-memory.ts` | Implementação InMemoryEventBus |
 | — | — | Testes | Cobertura ≥90% |
 

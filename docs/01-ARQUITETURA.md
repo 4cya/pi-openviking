@@ -11,7 +11,7 @@
 | Fase | Status | Artefatos |
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
-| **F2 Domain + Ports** | 🔶 Em progresso | `domain/ports/logger.ts` ✅ · `domain/common/` ✅ · `domain/errors/` (DomainError, NotFoundError, ConnectionError, ValidationError) ✅ · `domain/knowledge/model/` (KnowledgeItem, SearchResult, Relation) ✅ · `domain/recall/model/` (TokenBudget, RecallItem) ✅ · Demais ports pendentes. |
+| **F2 Domain + Ports** | 🔶 Em progresso | `domain/ports/logger.ts` ✅ · `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces (KnowledgeBase, FsStore, GraphStore, SessionStore, CacheStore, EventBus) ✅ · Demais: infra/event-bus/ e ports restantes. |
 | **F3+** | ⏳ Planejado | Ver `02-PLANO.md` |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
@@ -459,10 +459,14 @@ src/
 │   ├── profile/               # (futuro F7) Contexto: perfis de comportamento
 │   │   ├── model/             # ProfileConfig, AutoDetectRule
 │   │   └── service/           # ProfileManager, ProfileResolver, AutoDetect
-│   ├── ports/                 # Interfaces planas
-│   │   └── logger.ts          # ✅ Logger (implementado: FileLogger + NullLogger)
-│   │   # (futuro F2) KnowledgeBase, FsStore, GraphStore,
-│   │   #          SessionStore, EventBus, CacheStore
+│   ├── ports/                 # ✅ Interfaces planas (todas implementadas)
+│   │   ├── logger.ts          # ✅ Logger
+│   │   ├── knowledge-base.ts  # ✅ KnowledgeBase + GlobResult, GrepOptions, GrepResult
+│   │   ├── fs-store.ts        # ✅ FsStore + Content, WriteResult, FsEntry
+│   │   ├── graph-store.ts     # ✅ GraphStore + LinkResult
+│   │   ├── session-store.ts   # ✅ SessionStore + CommitResult, TaskStatus
+│   │   ├── cache-store.ts     # ✅ CacheStore
+│   │   └── event-bus.ts       # ✅ EventBus + DomainEvent, EventHandler
 │   └── errors/                # ✅ DomainError, NotFoundError, ConnectionError, ValidationError
 │
 ├── application/               # (futuro F4) Casos de uso
@@ -501,7 +505,7 @@ src/
 
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
-> F2 — domain/common/ implementado 2026-05-27. domain/errors/, domain/knowledge/model/, domain/recall/model/ implementado 2026-05-27 (issue #48).
+> F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
 
 ---
 
