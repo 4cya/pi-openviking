@@ -174,7 +174,7 @@ Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 | 4 | F4.3 | `domain/recall/curator/RecallCurator.ts` | Wrapper sobre `curate()`. Carrega opts do config, chama `curate()` com scorers, emite log. GraphExpander = optional (?). |
 | 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | ✅ `RecallConfigSchema` adicionado: `targetUri` (string?), `topN` (5), `scoreThreshold` (0.5), `expandGraph` (false), `searchMode` ('find'|'search'). Env vars: OV_TOP_N, OV_SCORE_THRESHOLD, OV_TARGET_URI, OV_EXPAND_GRAPH, OV_SEARCH_MODE. 36 tests config/. |
 | 6 | F4.5 | `application/services/recall.service.ts` | Orquestra: recall toggle check → `search()` → `curate()` → retorna. Input: `prompt: string`. Output: `{ items, tokens, formatted }`. Graceful degradation: ConnectionError → vazio. |
-| 7 | F4.6 | `application/services/session.service.ts` | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
+| 7 | F4.6 | `domain/services/session-service.ts` ✅ | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
 | — | Testes | Unit com port mocks (vitest). Cobertura ≥90%. |
 
 **Decisões de design (grill 2026-05-28, ver CONTEXT.md):**

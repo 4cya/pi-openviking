@@ -200,7 +200,7 @@ _Avoid_: session token, session key
 Base class for all domain-layer errors. Subtyped as `NotFoundError`, `ConnectionError`, `ValidationError`, etc. Every domain operation that can fail produces a typed DomainError.
 _Avoid_: generic Error, exception
 
-### Services (future phases)
+### Services
 
 **Recall Service**:
 Orchestrates IntentDetect → KnowledgeBase.search → Curator → GraphExpander. Returns `{ items, tokens, formatted }`. Prompt injection is the caller's responsibility (F6 handler). Receives configuration via DI — raw `RecallConfig` fields before F7a, `ResolvedConfig` after F7a. Does not import ProfileManager.
@@ -215,13 +215,14 @@ Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported typ
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
 Profile behavioral fields (autoRecall, autoSaveMode, autoLinkMode) added in F7a via ProfileSchema expansion — these 5 RecallConfig fields are birth in F4, Profile overrides them in F7a.
 
-**Session Service**:
-Manages OV session lifecycle: create, send messages, commit.
-Owns the active OV session — callers get current session via `sessionService.getActive()`.
-`createAndSet()` creates a new OV session and sets it as active.
-Bindings: `pi.on('session_start')` → `createAndSet()`. SessionId is module-level state inside the service, not in index.ts.
+**SessionService** *(implemented — `domain/services/session-service.ts`)*:
+Stateful service that manages the OV session lifecycle. Owns the active session — callers get the current session via `getActive()` rather than tracking it externally. Depends on `SessionStore` port + `SessionServiceConfig { commitTimeout, pollInterval? }`.
 
-**Commit model split into two methods:** `commit(sessionId)` returns `CommitResult { sessionId, taskId }` immediately (no polling). `waitForCommit(taskId, timeout?)` optionally polls `getTaskStatus()` until complete or timeout. Caller chooses: F6 auto-recall uses both; F5 tools may expose `taskId` to user and skip the wait.
+Methods: `createAndSet(): Promise<SessionId>`, `getActive(): SessionId | null`, `sendMessage(sessionId, role, parts)`, `commit(sessionId, options?): Promise<CommitResult>`, `waitForCommit(taskId, timeout?): Promise<TaskStatus>`, `deleteSession(sessionId)`.
+
+Active session is instance-level private state. `createAndSet()` creates via port and stores as active; subsequent calls replace the previous active. `commit()` returns `{ taskId }` immediately — no polling. `waitForCommit()` polls `getTaskStatus()` at `pollInterval` (default 1s) until `completed`/`failed` or timeout (defaults to `commitTimeout` from config, overridable per-call). Throws on timeout.
+Bindings: `pi.on('session_start')` → `createAndSet()`.
+_Avoid_: session manager, session handler
 
 **Write Service**:
 Handles content persistence: save, mkdir, mv. Wraps FsStore port. No write-back — OV `write()` modes (replace|append|create) cover all cases.
