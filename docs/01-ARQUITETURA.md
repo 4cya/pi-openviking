@@ -473,7 +473,7 @@ src/
 │   │   └── service/           # (futuro) SemanticSearch
 │   ├── recall/                # (futuro F2/F4) Contexto: curadoria
 │   │   ├── model/             # RecallItem, TokenBudget
-│   │   └── curator/           # Scorers + RecallCurator + GraphExpander
+│   │   └── recall-curator.ts  # ✅ RecallCurator wrapper over curate()
 │   ├── profile/               # (futuro F7) Contexto: perfis de comportamento
 │   │   ├── model/             # ProfileConfig, AutoDetectRule
 │   │   └── service/           # ProfileManager, ProfileResolver, AutoDetect

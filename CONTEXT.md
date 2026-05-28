@@ -127,10 +127,8 @@ A user-controlled toggle command that enables or disables auto-recall. `/ov reca
 No intent detection — user decides when recall fires. searchMode comes from RecallConfig, overridable via profile.
 _Avoid_: intent detector, auto-detect recall
 
-**Recall Curator**:
-A pipeline that scores, ranks, deduplicates, and trims search results to fit a token budget. Operates post-search, locally.
-The **RecallCurator** class in `domain/recall/curator/` is a thin wrapper over the pure `curate()` function.
-It loads `CurateOpts` from profile config, calls `curate()`, handles expand-graph orchestration, and emits logs/metrics.
+**Recall Curator** *(implemented — `domain/recall/recall-curator.ts`)*:
+Thin wrapper class over the pure `curate()` function. Constructor takes `RecallConfig`, `Scorer[]`, `Logger`. Single method `curate(results: SearchResult): CuratedResult` reads `topN`, `scoreThreshold`, `maxTokens` from config, builds `CurateOpts`, calls the pure `curate()`, emits log with item/token counts. `GraphExpander` optional — absent in F4, injected in F8. 6 tests.
 **Scorers** (`domain/recall/curate.ts`) extend the internal scoring with relevance and temporal signals — they refine, not replace, the base sort. `relevanceScorer`: keyword overlap between query tokens and item text+uri, case-insensitive, max +0.5. `temporalScorer`: exponential decay on `CuratedItem.modTime`, half-life 7 days, max +0.5. Additional scorers (lexical, preference) in future slices.
 
 **Graph Expander**:
@@ -210,10 +208,10 @@ SessionId resolved internally via `SessionService.getActive()`. targetUri/topN/s
 
 **Graceful degradation**: RecallService catcha ConnectionError de KnowledgeBase e retorna resultado vazio (log warn). Os demais services (search, write, session) propagam ConnectionError — são operações explícitas do usuário que precisam reportar falha.
 
-**RecallConfig** (5 fields added to ConfigSchema in F4): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`).
+**RecallConfig** (6 fields added to ConfigSchema in F4): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`).
 Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported type `RecallConfig` inferred via `z.infer`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
-Profile behavioral fields (autoRecall, autoSaveMode, autoLinkMode) added in F7a via ProfileSchema expansion — these 5 RecallConfig fields are birth in F4, Profile overrides them in F7a.
+Profile behavioral fields (autoRecall, autoSaveMode, autoLinkMode) added in F7a via ProfileSchema expansion — these 6 RecallConfig fields are birth in F4, Profile overrides them in F7a.
 
 **SessionService** *(implemented — `domain/services/session-service.ts`)*:
 Stateful service that manages the OV session lifecycle. Owns the active session — callers get the current session via `getActive()` rather than tracking it externally. Depends on `SessionStore` port + `SessionServiceConfig { commitTimeout, pollInterval? }`.
