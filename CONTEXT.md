@@ -210,7 +210,9 @@ SessionId resolved internally via `SessionService.getActive()`. targetUri/topN/s
 
 **Graceful degradation**: RecallService catcha ConnectionError de KnowledgeBase e retorna resultado vazio (log warn). Os demais services (search, write, session) propagam ConnectionError — são operações explícitas do usuário que precisam reportar falha.
 
-**RecallConfig** (5 fields added to ConfigSchema in F4): `targetUri` (optional URI string, null=global), `topN` (number, default 5), `scoreThreshold` (number, default 0.5), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`).
+**RecallConfig** (5 fields added to ConfigSchema in F4): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`).
+Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported type `RecallConfig` inferred via `z.infer`.
+Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
 Profile behavioral fields (autoRecall, autoSaveMode, autoLinkMode) added in F7a via ProfileSchema expansion — these 5 RecallConfig fields are birth in F4, Profile overrides them in F7a.
 
 **Session Service**:

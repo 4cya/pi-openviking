@@ -47,6 +47,15 @@ describe("DEFAULT_CONFIG", () => {
   it("contains all required sections", () => {
     expect(DEFAULT_CONFIG.logger).toBeDefined();
     expect(DEFAULT_CONFIG.profile).toBeDefined();
+    expect(DEFAULT_CONFIG.recall).toBeDefined();
+  });
+
+  it("recall defaults match expected values", () => {
+    expect(DEFAULT_CONFIG.recall.targetUri).toBeUndefined();
+    expect(DEFAULT_CONFIG.recall.topN).toBe(5);
+    expect(DEFAULT_CONFIG.recall.scoreThreshold).toBe(0.5);
+    expect(DEFAULT_CONFIG.recall.expandGraph).toBe(false);
+    expect(DEFAULT_CONFIG.recall.searchMode).toBe("find");
   });
 
   it("logger defaults match expected values", () => {
@@ -56,6 +65,38 @@ describe("DEFAULT_CONFIG", () => {
 
   it("profile defaults to 'default'", () => {
     expect(DEFAULT_CONFIG.profile.activeProfile).toBe("default");
+  });
+});
+
+describe("RecallConfigSchema", () => {
+  it("invalid topN (zero) throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { topN: 0 } })).toThrow(ZodError);
+  });
+
+  it("invalid scoreThreshold (above 1) throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { scoreThreshold: 1.5 } })).toThrow(ZodError);
+  });
+
+  it("invalid scoreThreshold (negative) throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { scoreThreshold: -0.1 } })).toThrow(ZodError);
+  });
+
+  it("invalid searchMode throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { searchMode: "invalid" } })).toThrow(ZodError);
+  });
+
+  it("valid targetUri string accepted", () => {
+    const config = ConfigSchema.parse({ recall: { targetUri: "viking://docs" } });
+    expect(config.recall.targetUri).toBe("viking://docs");
+  });
+
+  it("partial recall override keeps other defaults", () => {
+    const config = ConfigSchema.parse({ recall: { topN: 10 } });
+    expect(config.recall.topN).toBe(10);
+    expect(config.recall.scoreThreshold).toBe(0.5);
+    expect(config.recall.expandGraph).toBe(false);
+    expect(config.recall.searchMode).toBe("find");
+    expect(config.recall.targetUri).toBeUndefined();
   });
 });
 

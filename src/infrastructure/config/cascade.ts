@@ -14,6 +14,11 @@ export function loadConfig(cwd: string): PiOVConfig {
     OV_LOG_MAX_FILES:  { path: "logger.maxFiles", parse: Number },
     OV_LOG_MAX_AGE:    { path: "logger.maxAge", parse: Number },
     OV_ACTIVE_PROFILE: { path: "profile.activeProfile" },
+    OV_TOP_N:          { path: "recall.topN", parse: Number },
+    OV_SCORE_THRESHOLD:{ path: "recall.scoreThreshold", parse: Number },
+    OV_TARGET_URI:     { path: "recall.targetUri" },
+    OV_EXPAND_GRAPH:   { path: "recall.expandGraph", parse: (v) => v === "true" },
+    OV_SEARCH_MODE:    { path: "recall.searchMode" },
   };
 
   for (const [envKey, { path, parse }] of Object.entries(ENV_TO_PATH)) {

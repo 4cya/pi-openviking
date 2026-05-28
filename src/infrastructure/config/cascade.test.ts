@@ -87,4 +87,47 @@ describe("loadConfig", () => {
       expect(() => loadConfig(dir)).toThrow(/nonexistent/);
     });
   });
+
+  it("env OV_TOP_N overrides recall.topN", () => {
+    process.env.OV_TOP_N = "10";
+    const result = loadConfig("/tmp/nonexistent-cascade-test");
+    expect(result.recall.topN).toBe(10);
+    expect(result.recall.scoreThreshold).toBe(DEFAULT_CONFIG.recall.scoreThreshold);
+  });
+
+  it("env OV_SCORE_THRESHOLD overrides recall.scoreThreshold", () => {
+    process.env.OV_SCORE_THRESHOLD = "0.8";
+    const result = loadConfig("/tmp/nonexistent-cascade-test");
+    expect(result.recall.scoreThreshold).toBe(0.8);
+  });
+
+  it("env OV_SEARCH_MODE overrides recall.searchMode", () => {
+    process.env.OV_SEARCH_MODE = "search";
+    const result = loadConfig("/tmp/nonexistent-cascade-test");
+    expect(result.recall.searchMode).toBe("search");
+  });
+
+  it("env OV_TARGET_URI overrides recall.targetUri", () => {
+    process.env.OV_TARGET_URI = "viking://docs";
+    const result = loadConfig("/tmp/nonexistent-cascade-test");
+    expect(result.recall.targetUri).toBe("viking://docs");
+  });
+
+  it("env OV_EXPAND_GRAPH overrides recall.expandGraph", () => {
+    process.env.OV_EXPAND_GRAPH = "true";
+    const result = loadConfig("/tmp/nonexistent-cascade-test");
+    expect(result.recall.expandGraph).toBe(true);
+  });
+
+  it("settings.json can override recall fields", () => {
+    withTempDir((dir) => {
+      const piDir = join(dir, ".pi");
+      mkdirSync(piDir, { recursive: true });
+      writeFileSync(join(piDir, "settings.json"), JSON.stringify({ "pi-openviking": { recall: { topN: 3, searchMode: "search" } } }));
+      const result = loadConfig(dir);
+      expect(result.recall.topN).toBe(3);
+      expect(result.recall.searchMode).toBe("search");
+      expect(result.recall.scoreThreshold).toBe(DEFAULT_CONFIG.recall.scoreThreshold);
+    });
+  });
 });

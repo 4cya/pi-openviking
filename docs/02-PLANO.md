@@ -172,7 +172,7 @@ Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 | 2 | F4.1b | `src/domain/recall/curate.ts` (expandir) | ✅ `CurateOpts` ganhou `scorers?: Scorer[]` + `query?: string`. `CuratedItem` ganhou `modTime?`. `curate()` aplica scorers após base sort, soma scores, re-ordena. Backward-compatible. |
 | 3 | F4.2 | `domain/recall/intent/{handlers/*,IntentDetector}.ts` | Chain of Responsibility: Continuation → SimpleQuery → ComplexQuery → Default. Retorna `IntentResult { shouldRecall, searchMode, query }`. |
 | 4 | F4.3 | `domain/recall/curator/RecallCurator.ts` | Wrapper sobre `curate()`. Carrega opts do config, chama `curate()` com scorers, emite log. GraphExpander = optional (?). |
-| 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | Adicionar `RecallConfig` (5 fields): `targetUri`, `topN` (default 5), `scoreThreshold` (0.5), `expandGraph` (false), `searchMode` ('find'). |
+| 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | ✅ `RecallConfigSchema` adicionado: `targetUri` (string?), `topN` (5), `scoreThreshold` (0.5), `expandGraph` (false), `searchMode` ('find'|'search'). Env vars: OV_TOP_N, OV_SCORE_THRESHOLD, OV_TARGET_URI, OV_EXPAND_GRAPH, OV_SEARCH_MODE. 36 tests config/. |
 | 6 | F4.5 | `application/services/recall.service.ts` | Orquestra: `detect(prompt)` → se recall=true → `search()` → `curate()` → retorna. Input: `prompt: string`. Output: `{ items, tokens, formatted }`. Graceful degradation: ConnectionError → vazio. |
 | 7 | F4.6 | `application/services/session.service.ts` | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
 | — | Testes | Unit com port mocks (vitest). Cobertura ≥90%. |

@@ -22,10 +22,23 @@ export const OVAdapterConfigSchema = z.object({
 
 export type OVAdapterConfig = z.infer<typeof OVAdapterConfigSchema>;
 
+// ── Recall config ────────────────────────────────────────────────────────────
+
+export const RecallConfigSchema = z.object({
+  targetUri: z.string().optional(),
+  topN: z.number().int().positive().default(5),
+  scoreThreshold: z.number().min(0).max(1).default(0.5),
+  expandGraph: z.boolean().default(false),
+  searchMode: z.enum(["find", "search"]).default("find"),
+});
+
+export type RecallConfig = z.infer<typeof RecallConfigSchema>;
+
 export const ConfigSchema = z.object({
   logger: LoggerConfigSchema.default(() => LoggerConfigSchema.parse({})),
   profile: ProfileSectionSchema.default(() => ProfileSectionSchema.parse({})),
   ov: OVAdapterConfigSchema.default(() => OVAdapterConfigSchema.parse({})),
+  recall: RecallConfigSchema.default(() => RecallConfigSchema.parse({})),
 });
 
 export type PiOVConfig = z.infer<typeof ConfigSchema>;
