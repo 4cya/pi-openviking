@@ -1,6 +1,6 @@
 # Plano de Implementação — 8 Fases
 
-> Rewrite do zero. Código legado em `src/_legacy/` mantido como referência.
+> Rewrite do zero. Código legado (`src/_legacy/`) removido em F3 (2026-05-27).
 > Cada fase funcional + testada antes de avançar.
 
 ---

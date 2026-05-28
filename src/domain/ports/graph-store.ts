@@ -8,7 +8,7 @@ export interface LinkResult {
 }
 
 export interface GraphStore {
-  link(source: Uri, targets: Uri | Uri[], reason?: string): Promise<LinkResult>;
-  unlink(source: Uri, target: Uri): Promise<void>;
-  graph(uri: Uri): Promise<Relation[]>;
+  link(source: Uri, targets: Uri | Uri[], reason?: string, signal?: AbortSignal): Promise<LinkResult>;
+  unlink(source: Uri, target: Uri, signal?: AbortSignal): Promise<void>;
+  graph(uri: Uri, signal?: AbortSignal): Promise<Relation[]>;
 }

@@ -38,11 +38,7 @@ postergados para fases futuras intencionalmente.
 
 ---
 
-## Legado: `tests/_legacy/`
+## ~~Legado: `src/_legacy/` + `tests/_legacy/`~~ **RESOLVIDO**
 
-| Campo | Valor |
-|-------|-------|
-| **Deferido de** | F1 |
-| **Deferido para** | Indeterminado |
-| **Motivo** | Testes legacy dependem de Docker (OV server). Cobertura migrada para testes co-localizados em `src/`. |
-| **Status** | Mantido como referência. Remover quando F3 (OV Adapter) estiver completo e testado. |
+Removido em F3 Review (2026-05-27). Cobertura integral migrada para `src/`.
+`src/_legacy/` e `tests/_legacy/` deletados.

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { FsStoreAdapter } from "./fs-store";
 import { Uri } from "../../../domain/common/uri";
+import { ValidationError } from "../../../domain/errors/validation-error";
 import type { Transport } from "./transport";
 
 function mockTransport(): Transport {
@@ -342,7 +343,7 @@ describe("FsStoreAdapter.delete", () => {
     const transport = mockTransport();
     const mock = transport.request as ReturnType<typeof vi.fn>;
     // First call fails, second succeeds
-    mock.mockRejectedValueOnce(new Error("recursive required"));
+    mock.mockRejectedValueOnce(new ValidationError("recursive required"));
     mock.mockResolvedValueOnce({});
 
     const fs = new FsStoreAdapter(transport);

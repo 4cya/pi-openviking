@@ -21,9 +21,9 @@ export interface GrepResult {
 
 export interface KnowledgeBase {
   /** Simple semantic search, no session context. POST /api/v1/search/find */
-  find(query: FindQuery): Promise<SearchResult>;
+  find(query: FindQuery, signal?: AbortSignal): Promise<SearchResult>;
   /** Deep search with session + intent analysis. POST /api/v1/search/search */
-  search(request: SearchRequest): Promise<SearchResult>;
-  glob(pattern: string, uri?: string, limit?: number): Promise<GlobResult>;
-  grep(pattern: string, opts?: GrepOptions): Promise<GrepResult>;
+  search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResult>;
+  glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult>;
+  grep(pattern: string, opts?: GrepOptions, signal?: AbortSignal): Promise<GrepResult>;
 }

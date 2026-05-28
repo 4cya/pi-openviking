@@ -219,4 +219,75 @@ describe("Transport", () => {
     await t.request("test", "/api/v1/success");
     expect(lastRequest.method).toBe("GET");
   });
+
+  it("uses per-request timeout override when provided", async () => {
+    const t = makeTransport({ timeout: 5000 }); // default 5s
+    // Override with a much shorter timeout via RequestOptions
+    await expect(t.request("test", "/api/v1/delayed?ms=200", { timeout: 10 })).rejects.toThrow();
+  });
+
+  it("uses default timeout when per-request timeout not set", async () => {
+    const t = makeTransport({ timeout: 50 });
+    await expect(t.request("test", "/api/v1/delayed?ms=200")).rejects.toThrow();
+  });
+
+  it("allows longer per-request timeout to succeed where default would fail", async () => {
+    const t = makeTransport({ timeout: 10 }); // very short default
+    // Override with longer timeout — should succeed
+    const result = await t.request<{ status: string }>("test", "/api/v1/success", { timeout: 5000 });
+    expect(result.status).toBe("ok");
+  });
+
+  it("rate limit 0 = no throttling (passthrough)", async () => {
+    const t = makeTransport(); // default rateLimitPerSecond = 0
+    const start = Date.now();
+    await t.request("test", "/api/v1/success");
+    await t.request("test", "/api/v1/success");
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(100); // no forced delay
+  });
+
+  it("rate limit > 0 throttles after exhausting initial tokens", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 10, // 100ms between tokens; starts with 10 tokens
+    });
+    // First 10 requests consume initial tokens (no delay)
+    for (let i = 0; i < 10; i++) {
+      await t.request("test", "/api/v1/success");
+    }
+    // 11th request should wait for a token
+    const start = Date.now();
+    await t.request("test", "/api/v1/success");
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(50);
+  });
+
+  it("rate limit respects AbortSignal while waiting for token", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 5, // 200ms between tokens; starts with 5 tokens
+    });
+    // Use up the first 5 tokens
+    for (let i = 0; i < 5; i++) {
+      await t.request("test", "/api/v1/success");
+    }
+    // 6th request will wait for next token
+    const controller = new AbortController();
+    const promise = t.request("test", "/api/v1/success", undefined, controller.signal);
+    controller.abort();
+    await expect(promise).rejects.toThrow();
+  });
 });

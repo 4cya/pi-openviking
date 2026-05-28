@@ -18,7 +18,7 @@ export async function init(cwd: string): Promise<{
   container.register("logger", () => logger, true);
 
   // Create OV adapter and register all port implementations
-  const adapter = createOVAdapter(config.ov);
+  const adapter = createOVAdapter(config.ov, logger);
   container.register("knowledgeBase", () => adapter.knowledgeBase, true);
   container.register("fsStore", () => adapter.fsStore, true);
   container.register("graphStore", () => adapter.graphStore, true);

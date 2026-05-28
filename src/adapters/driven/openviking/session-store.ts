@@ -6,18 +6,26 @@ import type { Uri } from "../../../domain/common/uri";
 import type { Part } from "../../../domain/common/part";
 
 export class SessionStoreAdapter implements SessionStore {
-  constructor(private readonly transport: Transport) {}
+  private readonly commitTimeout: number;
 
-  async create(): Promise<SessionId> {
+  constructor(
+    private readonly transport: Transport,
+    commitTimeout: number = 120_000,
+  ) {
+    this.commitTimeout = commitTimeout;
+  }
+
+  async create(signal?: AbortSignal): Promise<SessionId> {
     const raw = await this.transport.request<Record<string, unknown>>(
       "SessionStore.create",
       "/api/v1/sessions",
       { method: "POST" },
+      signal,
     );
     return toSessionId(raw);
   }
 
-  async sendMessage(sessionId: SessionId, role: string, content: Part[]): Promise<void> {
+  async sendMessage(sessionId: SessionId, role: string, content: Part[], signal?: AbortSignal): Promise<void> {
     const body = JSON.stringify({
       role,
       content: serializeParts(content),
@@ -26,12 +34,14 @@ export class SessionStoreAdapter implements SessionStore {
       "SessionStore.sendMessage",
       `/api/v1/sessions/${sessionId.value}/messages`,
       { method: "POST", body },
+      signal,
     );
   }
 
   async sendMessages(
     sessionId: SessionId,
     messages: { role: string; content: Part[] }[],
+    signal?: AbortSignal,
   ): Promise<void> {
     const body = JSON.stringify(
       messages.map((m) => ({
@@ -43,10 +53,11 @@ export class SessionStoreAdapter implements SessionStore {
       "SessionStore.sendMessages",
       `/api/v1/sessions/${sessionId.value}/messages/batch`,
       { method: "POST", body },
+      signal,
     );
   }
 
-  async commit(sessionId: SessionId, options?: CommitOptions): Promise<CommitResult> {
+  async commit(sessionId: SessionId, options?: CommitOptions, signal?: AbortSignal): Promise<CommitResult> {
     const bodyObj: Record<string, unknown> = {};
     if (options?.keepRecentCount !== undefined) {
       bodyObj.keep_recent_count = options.keepRecentCount;
@@ -56,20 +67,25 @@ export class SessionStoreAdapter implements SessionStore {
     const raw = await this.transport.request<Record<string, unknown>>(
       "SessionStore.commit",
       `/api/v1/sessions/${sessionId.value}/commit`,
-      body ? { method: "POST", body } : { method: "POST" },
+      body
+        ? { method: "POST", body, timeout: this.commitTimeout }
+        : { method: "POST", timeout: this.commitTimeout },
+      signal,
     );
     return toCommitResult(raw);
   }
 
-  async getTaskStatus(taskId: string): Promise<TaskStatus> {
+  async getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus> {
     const raw = await this.transport.request<Record<string, unknown>>(
       "SessionStore.getTaskStatus",
       `/api/v1/tasks/${taskId}`,
+      undefined,
+      signal,
     );
     return toTaskStatus(raw);
   }
 
-  async listTasks(filter?: TaskFilter): Promise<TaskStatus[]> {
+  async listTasks(filter?: TaskFilter, signal?: AbortSignal): Promise<TaskStatus[]> {
     const params = new URLSearchParams();
     if (filter?.taskType) params.set("task_type", filter.taskType);
     if (filter?.status) params.set("status", filter.status);
@@ -82,11 +98,13 @@ export class SessionStoreAdapter implements SessionStore {
     const raw = await this.transport.request<unknown[]>(
       "SessionStore.listTasks",
       path,
+      undefined,
+      signal,
     );
     return (Array.isArray(raw) ? raw : []).map((item) => toTaskStatus(item));
   }
 
-  async sessionUsed(sessionId: SessionId, contexts: Uri[]): Promise<void> {
+  async sessionUsed(sessionId: SessionId, contexts: Uri[], signal?: AbortSignal): Promise<void> {
     const body = JSON.stringify({
       contexts: contexts.map((u) => u.value),
     });
@@ -94,14 +112,16 @@ export class SessionStoreAdapter implements SessionStore {
       "SessionStore.sessionUsed",
       `/api/v1/sessions/${sessionId.value}/used`,
       { method: "POST", body },
+      signal,
     );
   }
 
-  async deleteSession(sessionId: SessionId): Promise<void> {
+  async deleteSession(sessionId: SessionId, signal?: AbortSignal): Promise<void> {
     await this.transport.request<unknown>(
       "SessionStore.deleteSession",
       `/api/v1/sessions/${sessionId.value}`,
       { method: "DELETE" },
+      signal,
     );
   }
 }

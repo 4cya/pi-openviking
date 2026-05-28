@@ -21,12 +21,12 @@ export interface FsEntry {
 }
 
 export interface FsStore {
-  read(uri: Uri, level?: ContentLevel, offset?: number, limit?: number): Promise<Content>;
-  write(uri: Uri, content: string, mode?: WriteMode): Promise<WriteResult>;
-  list(uri: Uri, recursive?: boolean): Promise<FsEntry[]>;
-  tree(uri: Uri): Promise<FsEntry[]>;
-  stat(uri: Uri): Promise<FsEntry>;
-  mkdir(uri: Uri): Promise<void>;
-  mv(from: Uri, to: Uri): Promise<void>;
-  delete(uri: Uri, recursive?: boolean): Promise<void>;
+  read(uri: Uri, level?: ContentLevel, offset?: number, limit?: number, signal?: AbortSignal): Promise<Content>;
+  write(uri: Uri, content: string, mode?: WriteMode, signal?: AbortSignal): Promise<WriteResult>;
+  list(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<FsEntry[]>;
+  tree(uri: Uri, signal?: AbortSignal): Promise<FsEntry[]>;
+  stat(uri: Uri, signal?: AbortSignal): Promise<FsEntry>;
+  mkdir(uri: Uri, signal?: AbortSignal): Promise<void>;
+  mv(from: Uri, to: Uri, signal?: AbortSignal): Promise<void>;
+  delete(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<void>;
 }

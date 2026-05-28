@@ -3,6 +3,7 @@ import type { FsStore } from "../../../domain/ports/fs-store";
 import type { GraphStore } from "../../../domain/ports/graph-store";
 import type { SessionStore } from "../../../domain/ports/session-store";
 import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
+import type { Logger } from "../../../domain/ports/logger";
 import { Transport } from "./transport";
 import { FsStoreAdapter } from "./fs-store";
 import { KnowledgeBaseAdapter } from "./knowledge-base";
@@ -16,13 +17,13 @@ export interface OVAdapter {
   sessionStore: SessionStore;
 }
 
-export function createOVAdapter(config: OVAdapterConfig): OVAdapter {
-  const transport = new Transport(config);
+export function createOVAdapter(config: OVAdapterConfig, logger?: Logger): OVAdapter {
+  const transport = new Transport(config, logger);
 
   return {
     knowledgeBase: new KnowledgeBaseAdapter(transport),
     fsStore: new FsStoreAdapter(transport),
     graphStore: new GraphStoreAdapter(transport),
-    sessionStore: new SessionStoreAdapter(transport),
+    sessionStore: new SessionStoreAdapter(transport, config.commitTimeout),
   };
 }

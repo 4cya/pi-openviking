@@ -2,11 +2,74 @@ import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
 import { toDomainError } from "./mappers/error-mapper";
 import { ConnectionError } from "../../../domain/errors/connection-error";
 import { DomainError } from "../../../domain/errors/domain-error";
+import type { Logger } from "../../../domain/ports/logger";
 
 export interface RequestOptions {
   method?: string;
   body?: string;
   headers?: Record<string, string>;
+  timeout?: number;
+}
+
+/**
+ * Token-bucket rate limiter.
+ * When maxTokens = 0 (disabled), acquire() resolves immediately.
+ */
+class TokenBucket {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly maxTokens: number;
+  private readonly intervalMs: number;
+
+  constructor(maxPerSecond: number) {
+    this.maxTokens = maxPerSecond > 0 ? maxPerSecond : 0;
+    this.tokens = this.maxTokens;
+    this.lastRefill = Date.now();
+    this.intervalMs = maxPerSecond > 0 ? Math.ceil(1000 / maxPerSecond) : 0;
+  }
+
+  async acquire(signal?: AbortSignal): Promise<void> {
+    if (this.maxTokens === 0) return;
+
+    while (true) {
+      this.refill();
+      if (this.tokens >= 1) {
+        this.tokens -= 1;
+        return;
+      }
+      // Wait for next token
+      try {
+        await sleepWithSignal(this.intervalMs, signal);
+      } catch {
+        // Abort propagated
+        throw new DOMException("Aborted", "AbortError");
+      }
+    }
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.maxTokens);
+    this.lastRefill = now;
+  }
+}
+
+function sleepWithSignal(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    if (signal) {
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
 }
 
 export class Transport {
@@ -18,8 +81,10 @@ export class Transport {
     timeout: number;
     maxRetries: number;
   };
+  private readonly logger?: Logger;
+  private readonly rateLimiter: TokenBucket;
 
-  constructor(config: OVAdapterConfig) {
+  constructor(config: OVAdapterConfig, logger?: Logger) {
     this.baseUrl = config.endpoint.replace(/\/+$/, "");
     this.defaults = {
       apiKey: config.apiKey,
@@ -28,6 +93,8 @@ export class Transport {
       timeout: config.timeout,
       maxRetries: config.maxRetries,
     };
+    this.logger = logger;
+    this.rateLimiter = new TokenBucket(config.rateLimitPerSecond ?? 0);
   }
 
   async request<T>(
@@ -36,6 +103,7 @@ export class Transport {
     opts?: RequestOptions,
     signal?: AbortSignal,
   ): Promise<T> {
+    const startTime = Date.now();
     const url = `${this.baseUrl}${path}`;
     const method = opts?.method ?? "GET";
     const body = opts?.body;
@@ -49,104 +117,120 @@ export class Transport {
     };
 
     const maxRetries = this.defaults.maxRetries;
+    const requestTimeout = opts?.timeout ?? this.defaults.timeout;
     let lastError: Error | null = null;
+    let status: number | null = null;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const abortController = new AbortController();
-        const timeoutId = setTimeout(
-          () => abortController.abort(new DOMException("Timeout", "TimeoutError")),
-          this.defaults.timeout,
-        );
+    // Acquire rate-limit token before sending
+    await this.rateLimiter.acquire(signal);
 
-        let combinedSignal: AbortSignal;
-        if (signal) {
-          const onAbort = () => {
-            abortController.abort(signal.reason);
-            signal.removeEventListener("abort", onAbort);
-          };
-          signal.addEventListener("abort", onAbort, { once: true });
-          combinedSignal = abortController.signal;
-        } else {
-          combinedSignal = abortController.signal;
-        }
+    try {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const abortController = new AbortController();
+          const timeoutId = setTimeout(
+            () => abortController.abort(new DOMException("Timeout", "TimeoutError")),
+            requestTimeout,
+          );
 
-        const response = await fetch(url, {
-          method,
-          headers,
-          body,
-          signal: combinedSignal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          let responseBody: unknown;
-          try {
-            responseBody = await response.json();
-          } catch {
-            responseBody = { message: await response.text().catch(() => "") };
+          let combinedSignal: AbortSignal;
+          if (signal) {
+            if (signal.aborted) {
+              abortController.abort(signal.reason);
+            } else {
+              const onAbort = () => {
+                abortController.abort(signal.reason);
+                signal.removeEventListener("abort", onAbort);
+              };
+              signal.addEventListener("abort", onAbort, { once: true });
+            }
+            combinedSignal = abortController.signal;
+          } else {
+            combinedSignal = abortController.signal;
           }
 
-          if (response.status >= 400 && response.status < 500) {
-            throw toDomainError(response.status, responseBody, methodLabel);
-          }
+          const response = await fetch(url, {
+            method,
+            headers,
+            body,
+            signal: combinedSignal,
+          });
 
-          if (attempt < maxRetries) {
-            lastError = toDomainError(response.status, responseBody, methodLabel);
-            await sleep(Math.pow(2, attempt) * 1000);
-            continue;
-          }
+          clearTimeout(timeoutId);
+          status = response.status;
 
-          throw toDomainError(response.status, responseBody, methodLabel);
-        }
+          if (!response.ok) {
+            let responseBody: unknown;
+            try {
+              responseBody = await response.json();
+            } catch {
+              responseBody = { message: await response.text().catch(() => "") };
+            }
 
-        const text = await response.text();
-        if (!text) return undefined as T;
-        return JSON.parse(text) as T;
-      } catch (err: unknown) {
-        if (err instanceof DOMException || (err instanceof Error && err.name === "AbortError")) {
-          if (err.name === "TimeoutError" || (err as Error).message === "Timeout") {
+            if (response.status >= 400 && response.status < 500) {
+              throw toDomainError(response.status, responseBody, methodLabel);
+            }
+
             if (attempt < maxRetries) {
-              lastError = err as Error;
+              lastError = toDomainError(response.status, responseBody, methodLabel);
               await sleep(Math.pow(2, attempt) * 1000);
               continue;
             }
-            throw toDomainError(503, { message: `Timeout after ${this.defaults.timeout}ms` }, methodLabel);
-          }
-          throw err;
-        }
 
-        if (
-          err instanceof TypeError ||
-          (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ECONNREFUSED")
-        ) {
+            throw toDomainError(response.status, responseBody, methodLabel);
+          }
+
+          const text = await response.text();
+          if (!text) return undefined as T;
+          return JSON.parse(text) as T;
+        } catch (err: unknown) {
+          if (err instanceof DOMException || (err instanceof Error && err.name === "AbortError")) {
+            if (err.name === "TimeoutError" || (err as Error).message === "Timeout") {
+              if (attempt < maxRetries) {
+                lastError = err as Error;
+                await sleep(Math.pow(2, attempt) * 1000);
+                continue;
+              }
+              throw toDomainError(503, { message: `Timeout after ${requestTimeout}ms` }, methodLabel);
+            }
+            throw err;
+          }
+
+          if (
+            err instanceof TypeError ||
+            (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ECONNREFUSED")
+          ) {
+            if (attempt < maxRetries) {
+              lastError = new ConnectionError(`Network error — ${(err as Error).message}`);
+              await sleep(Math.pow(2, attempt) * 1000);
+              continue;
+            }
+            throw new ConnectionError(
+              `[${methodLabel}] Cannot reach OV at ${this.baseUrl} — ${(err as Error).message}`,
+            );
+          }
+
+          // Already a typed DomainError — propagate immediately
+          if (err instanceof DomainError) {
+            throw err;
+          }
+
+          // Unknown error — retryable
           if (attempt < maxRetries) {
-            lastError = new ConnectionError(`Network error — ${(err as Error).message}`);
+            lastError = err as Error;
             await sleep(Math.pow(2, attempt) * 1000);
             continue;
           }
-          throw new ConnectionError(
-            `[${methodLabel}] Cannot reach OV at ${this.baseUrl} — ${(err as Error).message}`,
-          );
+          throw new ConnectionError(`[${methodLabel}] Unexpected error — ${(err as Error).message}`);
         }
-
-        // Already a typed DomainError — propagate immediately
-        if (err instanceof DomainError) {
-          throw err;
-        }
-
-        // Unknown error — retryable
-        if (attempt < maxRetries) {
-          lastError = err as Error;
-          await sleep(Math.pow(2, attempt) * 1000);
-          continue;
-        }
-        throw new ConnectionError(`[${methodLabel}] Unexpected error — ${(err as Error).message}`);
       }
-    }
 
-    throw lastError ?? new ConnectionError(`[${methodLabel}] Request failed`);
+      throw lastError ?? new ConnectionError(`[${methodLabel}] Request failed`);
+    } finally {
+      this.logger?.debug(
+        `[${methodLabel}] ${method} ${path} -> ${status ?? "ERROR"} ${Date.now() - startTime}ms`,
+      );
+    }
   }
 }
 

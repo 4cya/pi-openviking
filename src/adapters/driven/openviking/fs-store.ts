@@ -5,6 +5,7 @@ import type { Uri } from "../../../domain/common/uri";
 import type { ContentLevel } from "../../../domain/common/content-level";
 import type { WriteMode } from "../../../domain/common/write-mode";
 import type { Content, FsStore, FsEntry, WriteResult } from "../../../domain/ports/fs-store";
+import { ValidationError } from "../../../domain/errors/validation-error";
 
 function levelPath(level?: ContentLevel): string {
   return level ?? "read";
@@ -34,6 +35,7 @@ export class FsStoreAdapter implements FsStore {
     level?: ContentLevel,
     offset?: number,
     limit?: number,
+    signal?: AbortSignal,
   ): Promise<Content> {
     const segment = levelPath(level);
     const query = buildQuery(uri, offset, limit);
@@ -42,12 +44,14 @@ export class FsStoreAdapter implements FsStore {
     const raw = await this.transport.request<Record<string, unknown>>(
       "FsStore.read",
       path,
+      undefined,
+      signal,
     );
 
     return toContent(raw, uri, level);
   }
 
-  async write(uri: Uri, content: string, mode?: WriteMode): Promise<WriteResult> {
+  async write(uri: Uri, content: string, mode?: WriteMode, signal?: AbortSignal): Promise<WriteResult> {
     const body = JSON.stringify({
       uri: uri.value,
       content,
@@ -59,55 +63,64 @@ export class FsStoreAdapter implements FsStore {
       "FsStore.write",
       "/api/v1/content/write",
       { method: "POST", body },
+      signal,
     );
 
     return toWriteResult(raw, uri.value);
   }
 
-  async list(uri: Uri, recursive?: boolean): Promise<FsEntry[]> {
+  async list(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<FsEntry[]> {
     const query = recursive ? `uri=${encodeURIComponent(uri.value)}&recursive=true` : uriQuery(uri);
     const raw = await this.transport.request<unknown>(
       "FsStore.list",
       `/api/v1/fs/ls?${query}`,
+      undefined,
+      signal,
     );
     return toFsEntries(raw);
   }
 
-  async tree(uri: Uri): Promise<FsEntry[]> {
+  async tree(uri: Uri, signal?: AbortSignal): Promise<FsEntry[]> {
     const raw = await this.transport.request<unknown>(
       "FsStore.tree",
       `/api/v1/fs/tree?${uriQuery(uri)}`,
+      undefined,
+      signal,
     );
     return toFsEntries(raw);
   }
 
-  async stat(uri: Uri): Promise<FsEntry> {
+  async stat(uri: Uri, signal?: AbortSignal): Promise<FsEntry> {
     const raw = await this.transport.request<Record<string, unknown>>(
       "FsStore.stat",
       `/api/v1/fs/stat?${uriQuery(uri)}`,
+      undefined,
+      signal,
     );
     return toFsEntry(raw);
   }
 
-  async mkdir(uri: Uri): Promise<void> {
+  async mkdir(uri: Uri, signal?: AbortSignal): Promise<void> {
     const body = JSON.stringify({ uri: uri.value });
     await this.transport.request<unknown>(
       "FsStore.mkdir",
       "/api/v1/fs/mkdir",
       { method: "POST", body },
+      signal,
     );
   }
 
-  async mv(from: Uri, to: Uri): Promise<void> {
+  async mv(from: Uri, to: Uri, signal?: AbortSignal): Promise<void> {
     const body = JSON.stringify({ from_uri: from.value, to_uri: to.value });
     await this.transport.request<unknown>(
       "FsStore.mv",
       "/api/v1/fs/mv",
       { method: "POST", body },
+      signal,
     );
   }
 
-  async delete(uri: Uri, recursive?: boolean): Promise<void> {
+  async delete(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<void> {
     const query = recursive
       ? `uri=${encodeURIComponent(uri.value)}&recursive=true`
       : uriQuery(uri);
@@ -117,18 +130,20 @@ export class FsStoreAdapter implements FsStore {
         "FsStore.delete",
         `/api/v1/fs?${query}`,
         { method: "DELETE" },
+        signal,
       );
     } catch (err: unknown) {
       // If recursive required and we haven't tried with recursive, retry
       if (
         !recursive &&
-        err instanceof Error &&
+        err instanceof ValidationError &&
         err.message.toLowerCase().includes("recursive")
       ) {
         await this.transport.request<unknown>(
           "FsStore.delete",
           `/api/v1/fs?${uriQuery(uri)}&recursive=true`,
           { method: "DELETE" },
+          signal,
         );
         return;
       }

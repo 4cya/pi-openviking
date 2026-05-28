@@ -7,7 +7,7 @@ import type { Uri } from "../../../domain/common/uri";
 export class GraphStoreAdapter implements GraphStore {
   constructor(private readonly transport: Transport) {}
 
-  async link(source: Uri, targets: Uri | Uri[], reason?: string): Promise<LinkResult> {
+  async link(source: Uri, targets: Uri | Uri[], reason?: string, signal?: AbortSignal): Promise<LinkResult> {
     const targetArray = Array.isArray(targets) ? targets : [targets];
     const body = JSON.stringify({
       from_uri: source.value,
@@ -19,12 +19,13 @@ export class GraphStoreAdapter implements GraphStore {
       "GraphStore.link",
       "/api/v1/relations/link",
       { method: "POST", body },
+      signal,
     );
 
     return toLinkResult(raw, source, targetArray, reason);
   }
 
-  async unlink(source: Uri, target: Uri): Promise<void> {
+  async unlink(source: Uri, target: Uri, signal?: AbortSignal): Promise<void> {
     const body = JSON.stringify({
       from_uri: source.value,
       to_uri: target.value,
@@ -33,13 +34,16 @@ export class GraphStoreAdapter implements GraphStore {
       "GraphStore.unlink",
       "/api/v1/relations/link",
       { method: "DELETE", body },
+      signal,
     );
   }
 
-  async graph(uri: Uri): Promise<Relation[]> {
+  async graph(uri: Uri, signal?: AbortSignal): Promise<Relation[]> {
     const raw = await this.transport.request<Record<string, unknown>>(
       "GraphStore.graph",
       `/api/v1/relations?uri=${encodeURIComponent(uri.value)}`,
+      undefined,
+      signal,
     );
     return toRelations(raw);
   }

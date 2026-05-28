@@ -9,7 +9,7 @@ import type { GlobResult, GrepResult } from "../../../domain/ports/knowledge-bas
 export class KnowledgeBaseAdapter implements KnowledgeBase {
   constructor(private readonly transport: Transport) {}
 
-  async find(query: FindQuery): Promise<SearchResult> {
+  async find(query: FindQuery, signal?: AbortSignal): Promise<SearchResult> {
     const body: Record<string, unknown> = { query: query.query };
     if (query.limit !== undefined) body.limit = query.limit;
     if (query.targetUri) body.target_uri = query.targetUri.value;
@@ -18,12 +18,13 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
       "KnowledgeBase.find",
       "/api/v1/search/find",
       { method: "POST", body: JSON.stringify(body) },
+      signal,
     );
 
     return toSearchResult(raw);
   }
 
-  async search(request: SearchRequest): Promise<SearchResult> {
+  async search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResult> {
     const body: Record<string, unknown> = { query: request.query };
     if (request.limit !== undefined) body.limit = request.limit;
     if (request.sessionId) body.session_id = request.sessionId.value;
@@ -33,12 +34,13 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
       "KnowledgeBase.search",
       "/api/v1/search/search",
       { method: "POST", body: JSON.stringify(body) },
+      signal,
     );
 
     return toSearchResult(raw);
   }
 
-  async glob(pattern: string, uri?: string, limit?: number): Promise<GlobResult> {
+  async glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult> {
     const body: Record<string, unknown> = { pattern };
     if (uri !== undefined) body.uri = uri;
     if (limit !== undefined) body.node_limit = limit;
@@ -47,12 +49,13 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
       "KnowledgeBase.glob",
       "/api/v1/search/glob",
       { method: "POST", body: JSON.stringify(body) },
+      signal,
     );
 
     return toGlobResult(raw);
   }
 
-  async grep(pattern: string, opts?: GrepOptions): Promise<GrepResult> {
+  async grep(pattern: string, opts?: GrepOptions, signal?: AbortSignal): Promise<GrepResult> {
     const body: Record<string, unknown> = {
       pattern: opts?.pattern ?? pattern,
     };
@@ -65,6 +68,7 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
       "KnowledgeBase.grep",
       "/api/v1/search/grep",
       { method: "POST", body: JSON.stringify(body) },
+      signal,
     );
 
     return toGrepResult(raw);

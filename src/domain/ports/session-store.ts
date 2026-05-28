@@ -28,14 +28,14 @@ export interface TaskFilter {
 }
 
 export interface SessionStore {
-  create(): Promise<SessionId>;
-  sendMessage(sessionId: SessionId, role: string, content: Part[]): Promise<void>;
+  create(signal?: AbortSignal): Promise<SessionId>;
+  sendMessage(sessionId: SessionId, role: string, content: Part[], signal?: AbortSignal): Promise<void>;
   /** Batch-add multiple messages in one request. OV POST /api/v1/sessions/{id}/messages/batch */
-  sendMessages(sessionId: SessionId, messages: { role: string; content: Part[] }[]): Promise<void>;
-  commit(sessionId: SessionId, options?: CommitOptions): Promise<CommitResult>;
-  getTaskStatus(taskId: string): Promise<TaskStatus>;
+  sendMessages(sessionId: SessionId, messages: { role: string; content: Part[] }[], signal?: AbortSignal): Promise<void>;
+  commit(sessionId: SessionId, options?: CommitOptions, signal?: AbortSignal): Promise<CommitResult>;
+  getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus>;
   /** List tasks with optional filters. OV GET /api/v1/tasks */
-  listTasks(filter?: TaskFilter): Promise<TaskStatus[]>;
-  sessionUsed(sessionId: SessionId, contexts: Uri[]): Promise<void>;
-  deleteSession(sessionId: SessionId): Promise<void>;
+  listTasks(filter?: TaskFilter, signal?: AbortSignal): Promise<TaskStatus[]>;
+  sessionUsed(sessionId: SessionId, contexts: Uri[], signal?: AbortSignal): Promise<void>;
+  deleteSession(sessionId: SessionId, signal?: AbortSignal): Promise<void>;
 }

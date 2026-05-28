@@ -541,7 +541,7 @@ src/
 │   ├── lifecycle.ts           # ✅ init() + shutdown()
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
-├── _legacy/                   # Código original (referência; F3 completo, considerar remoção)
+├── _legacy/                   # (removido em F3 — 2026-05-27)
 ├── index.ts                   # ✅ Entry point: pi.on("session_start") → init()
 ```
 

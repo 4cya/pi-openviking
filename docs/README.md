@@ -2,7 +2,7 @@
 
 > Projeto: Extensão Pi para OpenViking (motor de memória persistente)
 > Arquitetura: Hexagonal (Ports & Adapters)
-> Estratégia: Rewrite do zero. Código legado em `src/_legacy/`.
+> Estratégia: Rewrite do zero. Código legado (`src/_legacy/`) removido em F3 (2026-05-27).
 
 ## Documentos ativos
 

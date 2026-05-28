@@ -17,6 +17,7 @@ export const OVAdapterConfigSchema = z.object({
   timeout: z.number().positive().default(30_000),
   commitTimeout: z.number().positive().default(120_000),
   maxRetries: z.number().int().min(0).default(3),
+  rateLimitPerSecond: z.number().min(0).default(0),
 });
 
 export type OVAdapterConfig = z.infer<typeof OVAdapterConfigSchema>;
