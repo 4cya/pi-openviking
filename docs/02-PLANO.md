@@ -47,7 +47,7 @@
 | **F1** Foundation | 02/jun | 16/jun | 11 | Config, DI, Logger, Profiles |
 | **F2** Domain + Ports | 16/jun | 26/jun | 9 | Ports definidas, EventBus |
 | **F3** OV Adapter | 26/jun | 10/jul | 12 | Transport, Adapter, Mappers |
-| **F4** Operations | 10/jul | 28/jul | 14 | Services, Curator, Intent Detection |
+| F4 | Operations | 10/jul | 28/jul | 14 | Services, Curator, Recall Toggle |
 | **F5** Tools + Commands | 28/jul | 18/ago | 15 | Primeiro momento funcional |
 | **F6** Auto-Recall + Session | 18/ago | 05/set | 15 | Memória persistente operacional |
 | **F7a** Profiles Essential | 05/set | 12/set | 5 | Schema estendido, ProfileManager, integração recall |
@@ -161,7 +161,7 @@ Profiles registrados. Tudo testado sem OV.
 
 ### F4 — Operations (14 dias)
 
-**Objetivo:** Domain logic pura (IntentDetector, RecallCurator, scorers) + serviços com estado ou orquestração real (RecallService, SessionService).
+**Objetivo:** Domain logic pura (RecallCurator, scorers) + serviços com estado ou orquestração real (RecallService, SessionService).
 Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 
 **Ordem de implementação (domain logic → services):**
@@ -170,10 +170,10 @@ Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 |-------|--------|----------|-----------|
 | 1 | F4.1a | `domain/recall/curate.ts` (scorers) | ✅ `Scorer` type + `relevanceScorer` (keyword overlap, max +0.5) + `temporalScorer` (exponential decay, half-life 7d, max +0.5). Scorers live in curate.ts alongside pipeline. 23 tests. |
 | 2 | F4.1b | `src/domain/recall/curate.ts` (expandir) | ✅ `CurateOpts` ganhou `scorers?: Scorer[]` + `query?: string`. `CuratedItem` ganhou `modTime?`. `curate()` aplica scorers após base sort, soma scores, re-ordena. Backward-compatible. |
-| 3 | F4.2 | `domain/recall/intent/{handlers/*,IntentDetector}.ts` | Chain of Responsibility: Continuation → SimpleQuery → ComplexQuery → Default. Retorna `IntentResult { shouldRecall, searchMode, query }`. |
+| 3 | F4.2 | ~~`domain/recall/intent/`~~ **Eliminado** | Intent Detection removido. Recall é toggle command. searchMode vem do RecallConfig. |
 | 4 | F4.3 | `domain/recall/curator/RecallCurator.ts` | Wrapper sobre `curate()`. Carrega opts do config, chama `curate()` com scorers, emite log. GraphExpander = optional (?). |
 | 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | ✅ `RecallConfigSchema` adicionado: `targetUri` (string?), `topN` (5), `scoreThreshold` (0.5), `expandGraph` (false), `searchMode` ('find'|'search'). Env vars: OV_TOP_N, OV_SCORE_THRESHOLD, OV_TARGET_URI, OV_EXPAND_GRAPH, OV_SEARCH_MODE. 36 tests config/. |
-| 6 | F4.5 | `application/services/recall.service.ts` | Orquestra: `detect(prompt)` → se recall=true → `search()` → `curate()` → retorna. Input: `prompt: string`. Output: `{ items, tokens, formatted }`. Graceful degradation: ConnectionError → vazio. |
+| 6 | F4.5 | `application/services/recall.service.ts` | Orquestra: recall toggle check → `search()` → `curate()` → retorna. Input: `prompt: string`. Output: `{ items, tokens, formatted }`. Graceful degradation: ConnectionError → vazio. |
 | 7 | F4.6 | `application/services/session.service.ts` | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
 | — | Testes | Unit com port mocks (vitest). Cobertura ≥90%. |
 
@@ -183,13 +183,13 @@ Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 RecallCurator é wrapper, não rewrite. Classe injeta config + scorers, chama `curate()` pura, orquestra expandGraph opcional. Scorers (`Scorer[]`) estendem scoring interno — não substituem.
 
 **F4 reordenado:**
-Domain logic primeiro (scorers → curate() → IntentDetector → RecallCurator), depois services (RecallService, SessionService). Services dependem de domain logic.
+Domain logic primeiro (scorers → curate() → RecallCurator), depois services (RecallService, SessionService). Services dependem de domain logic.
 
 **RecallService retorna dados puros:**
 `{ items, tokens, formatted }`. Caller (F6) faz inject no prompt. RecallService não sabe de Pi.
 
-**IntentDetector output:**
-`IntentResult { shouldRecall, searchMode, query }` — não binário. searchMode='find' (rápido, sem sessão) ou 'search' (profundo, com intenção). Caller escolhe método KnowledgeBase.
+**Recall toggle:**
+Recall é controlado por toggle command (`/ov recall on|off`). searchMode vem do `RecallConfig` (default `'find'`), overridable via profile. Sem intent detection.
 
 **Graceful degradation:**
 RecallService catcha ConnectionError → log warn + retorno vazio. Demais services propagam ConnectionError.
@@ -209,7 +209,7 @@ F4 services não sabem de middleware. F5 tool handler chama `pipeline.execute(()
 **Testes:**
 Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integration se necessário.
 
-**Milestone:** Domain logic (scorers, IntentDetector, RecallCurator) + RecallService + SessionService + RecallConfig implementados e testados (≥90%).
+**Milestone:** Domain logic (scorers, RecallCurator) + RecallService + SessionService + RecallConfig implementados e testados (≥90%).
 
 ### F5 — Tools + Commands (15 dias)
 
@@ -254,14 +254,14 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 | Tarefa | Artefato | Descrição |
 |--------|----------|-----------|
-| F7a.1 | `infrastructure/config/profile-schema.ts` (expandir) | Adicionar autoRecall, scope, automation, intent ao schema |
+| F7a.1 | `infrastructure/config/profile-schema.ts` (expandir) | Adicionar autoRecall, scope, automation ao schema |
 | F7a.2 | `domain/profile/service/ProfileManager.ts` + `ProfileResolver.ts` | ProfileManager + ResolvedConfig merge |
 | F7a.3 | `infrastructure/config/cascade.ts` (expandir) | Merge profile no cascade |
 | F7a.4 | Integration: recall → profile.resolve() | targetUri, topN, scoreThreshold, searchMode, expandGraph |
-| F7a.5 | Integration: intent → profile.forceRecall | thresholdOverride, forceRecall |
+| F7a.5 | ~~Integration: intent~~ **Eliminado** | Recall toggle substitui intent detection |
 | — | Testes | ProfileManager.test, resolver.test, cascade update |
 
-**Milestone:** Profiles existem como dados comportamentais. Recall e intent consomem.
+**Milestone:** Profiles existem como dados comportamentais. Recall consome.
 
 ### F7b — Profiles Expansion (7 dias)
 
@@ -271,7 +271,7 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 |--------|----------|
 | F7b.1 | `domain/profile/service/AutoDetect.ts` — minimatch rules + regras built-in |
 | F7b.2 | `domain/profile/service/AutoDetect.test.ts` |
-| F7b.3 | `domain/recall/intent/ContextProfiler.ts` — session history analysis |
+| F7b.3 | ~~`domain/recall/intent/ContextProfiler.ts`~~ **Eliminado** | Intent detection removido |
 | F7b.4 | `adapters/driving/pi/commands/profile.ts` — /ov-profile {apply,list,show,detect} |
 | F7b.5 | Integration: auto-actions → profile.autoSaveMode |
 | F7b.6 | Integration: auto-actions → profile.autoLinkMode |

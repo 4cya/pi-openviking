@@ -1,7 +1,6 @@
 export type DomainEvent =
   | { type: "MEMORY_SAVED"; uri: string; source: string }
   | { type: "RELATION_LINKED"; source: string; target: string; predicate: string }
-  | { type: "INTENT_DETECTED"; category: string; confidence: number }
   | { type: "RECALL_EXECUTED"; itemsCount: number; durationMs: number }
   | { type: "BUDGET_EXCEEDED"; budget: number; attempted: number };
 

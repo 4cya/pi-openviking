@@ -8,7 +8,6 @@ Domain events carry business-meaningful state changes between bounded contexts. 
 |-------|-------------|-------------|---------|
 | `MEMORY_SAVED` | WriteService (knowledge) | GraphExpander cache, ProfileAutoDetect | `{ uri, source }` |
 | `RELATION_LINKED` | GraphStore (knowledge) | GraphExpander cache (invalidation) | `{ source, target, predicate }` |
-| `INTENT_DETECTED` | IntentDetector (recall) | Logger, ProfileAutoDetect | `{ category, confidence }` |
 | `RECALL_EXECUTED` | RecallService (recall) | Logger, ProfileAutoDetect | `{ itemsCount, durationMs }` |
 | `BUDGET_EXCEEDED` | RecallSession (recall) | Logger | `{ budget, attempted }` |
 

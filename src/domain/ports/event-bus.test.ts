@@ -12,11 +12,6 @@ describe("DomainEvent", () => {
     expect(e.type).toBe("RELATION_LINKED");
   });
 
-  it("INTENT_DETECTED has correct shape", () => {
-    const e: DomainEvent = { type: "INTENT_DETECTED", category: "question", confidence: 0.9 };
-    expect(e.confidence).toBe(0.9);
-  });
-
   it("RECALL_EXECUTED has correct shape", () => {
     const e: DomainEvent = { type: "RECALL_EXECUTED", itemsCount: 5, durationMs: 42 };
     expect(e.itemsCount).toBe(5);

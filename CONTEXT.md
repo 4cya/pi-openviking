@@ -122,10 +122,10 @@ _Avoid_: bootstrap lifecycle, module lifecycle
 **KnowledgeItem**:
 A unit of persistent knowledge stored in OpenViking. Can be a memory (extracted text with metadata) or a resource (document, file, reference). Has a Uri, content, and optional relations.
 
-**Intent Detector**:
-A Chain of Responsibility pipeline that classifies a user prompt to decide whether auto-recall should fire. Handlers: Continuation → ComplexQuery → SimpleQuery → LearnedRejection.
-Returns `IntentResult { shouldRecall: boolean; searchMode: 'find' | 'search'; query: string }`.
-Caller (RecallService / F6) uses searchMode to choose KnowledgeBase method and handles session availability.
+**Recall Toggle**:
+A user-controlled toggle command that enables or disables auto-recall. `/ov recall on` / `/ov recall off`.
+No intent detection — user decides when recall fires. searchMode comes from RecallConfig, overridable via profile.
+_Avoid_: intent detector, auto-detect recall
 
 **Recall Curator**:
 A pipeline that scores, ranks, deduplicates, and trims search results to fit a token budget. Operates post-search, locally.

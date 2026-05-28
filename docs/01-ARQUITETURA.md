@@ -51,7 +51,7 @@ flowchart TB
     subgraph Domain["🧠 Domínio (3 Bounded Contexts)"]
         direction TB
         DOMAIN_KNOW["Knowledge Context\nKnowledgeItem, Resource,\nUri, SessionId"]
-        DOMAIN_RECALL["Recall Context\nRecallItem, TokenBudget,\nIntentDetector, RecallCurator,\nGraphExpander"]
+        DOMAIN_RECALL["Recall Context\nRecallItem, TokenBudget,\nRecallCurator, GraphExpander"]
         DOMAIN_PROFILE["Profile Context\nProfileConfig (value object),\nProfileManager, AutoDetect"]
     end
 
@@ -122,7 +122,7 @@ flowchart TB
 > **Nota sobre PiEventBridge:** não existe `pi-event-bridge.ts` como adaptador separado.
 > Pi emite eventos de infra (session_start, message_end) via `pi.on()` diretamente para
 > Application Services. O EventBus de domínio só transporta eventos de domínio
-> (MEMORY_SAVED, INTENT_DETECTED, etc.) — ver ADR-011.
+> (MEMORY_SAVED, RELATION_LINKED, RECALL_EXECUTED, etc.) — ver ADR-011.
 > Ver [seção 4.4](#44-event-bus--domínio-puro) para detalhes.
 
 ---
@@ -320,7 +320,6 @@ interface Logger {
 type DomainEvent =
   | { type: 'MEMORY_SAVED'; uri: string; source: string }
   | { type: 'RELATION_LINKED'; source: string; target: string; predicate: string }
-  | { type: 'INTENT_DETECTED'; category: string; confidence: number }
   | { type: 'RECALL_EXECUTED'; itemsCount: number; durationMs: number }
   | { type: 'BUDGET_EXCEEDED'; budget: number; attempted: number };
 
@@ -344,41 +343,31 @@ interface EventBus {
 ### 4.1 Command Pattern — Toda ação é um comando
 
 ```typescript
-interface Command<TInput, TOutput> {
-  execute(input: TInput): Promise<TOutput>;
-}
-
-class SearchKnowledgeCommand implements Command<SearchInput, SearchOutput> {
+class RecallService {
   constructor(
     private knowledge: KnowledgeBase,
-    private intentDetector: IntentDetector,
     private curator: RecallCurator,
+    private config: RecallConfig,
   ) {}
 
-  async execute(input: SearchInput): Promise<SearchOutput> {
-    if (!this.intentDetector.shouldRecall(input.query)) {
-      return { items: [], total: 0 };
-    }
-    const results = await this.knowledge.search(input.toQuery());
+  async recall(prompt: string): Promise<RecallResult> {
+    const mode = this.config.searchMode; // 'find' | 'search', from RecallConfig
+    const results = mode === 'search'
+      ? await this.knowledge.search({ query: prompt, ... })
+      : await this.knowledge.find({ query: prompt, ... });
     return {
-      items: this.curator.curate(results, input.query),
+      items: this.curator.curate(results, prompt),
       total: results.total,
     };
   }
 }
 ```
 
-### 4.2 Chain of Responsibility — Intent Detection
+### 4.2 Recall Toggle — User control
 
-```
-ContinuationHandler → ComplexQueryHandler → SimpleQueryHandler → LearnedRejectionHandler
-
-Cada handler:
-  1. Tenta classificar o prompt
-  2. Se confidence >= threshold, retorna
-  3. Se não, passa para o próximo
-  4. Se nenhum match, default conservador (recall off)
-```
+Recall is controlled by a toggle command (`/ov recall on` / `/ov recall off`).
+No intent detection — user decides when recall fires.
+`searchMode` comes from `RecallConfig` (default `'find'`), overridable via profile.
 
 ### 4.3 Middleware Pipeline — Cross-cutting concerns
 
@@ -415,8 +404,8 @@ pi.on("message_end",     (e, ctx) => autoRecall.maybeRecall(ctx))
 flowchart TD
     A["before_agent_start"] --> B{"OV healthy?"}
     B -->|"nao"| C["skip"]
-    B -->|"sim"| D["intentDetector.shouldRecall()"]
-    D -->|"nao"| E["skip (economia de tokens)"]
+    B -->|"sim"| D{"recall toggle on?"}
+    D -->|"nao"| E["skip"]
     D -->|"sim"| F["profileManager.resolve()"]
     F --> G["knowledge.search(query, targetUri, mode, limit)"]
     G --> H["curator.curate(score, dedup, budget)"]
@@ -482,9 +471,8 @@ src/
 │   ├── knowledge/             # (futuro F2) Contexto: armazenamento e busca
 │   │   ├── model/             # ✅ KnowledgeItem, ResourceItem, SkillItem, SearchResult, Relation
 │   │   └── service/           # (futuro) SemanticSearch
-│   ├── recall/                # (futuro F2/F4) Contexto: detecção e curadoria
+│   ├── recall/                # (futuro F2/F4) Contexto: curadoria
 │   │   ├── model/             # RecallItem, TokenBudget
-│   │   ├── intent/            # Chain of Responsibility handlers + IntentDetector
 │   │   └── curator/           # Scorers + RecallCurator + GraphExpander
 │   ├── profile/               # (futuro F7) Contexto: perfis de comportamento
 │   │   ├── model/             # ProfileConfig, AutoDetectRule
