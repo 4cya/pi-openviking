@@ -161,20 +161,55 @@ Profiles registrados. Tudo testado sem OV.
 
 ### F4 — Operations (14 dias)
 
-**Objetivo:** Casos de uso da aplicação orquestrando as Ports.
+**Objetivo:** Domain logic pura (IntentDetector, RecallCurator, scorers) + serviços com estado ou orquestração real (RecallService, SessionService).
+Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 
-| Tarefa | Artefato | Descrição |
-|--------|----------|-----------|
-| F4.1 | `application/services/search.service.ts` | search + glob + grep |
-| F4.2 | `application/services/write.service.ts` | save + mkdir + mv + write-back |
-| F4.3 | `application/services/session.service.ts` | create + send + commit |
-| F4.4 | `application/services/recall.service.ts` | orchestre search → curate → expand → inject |
-| F4.5 | `domain/recall/curator/scorers/*.ts` | relevance, temporal, lexical, preference |
-| F4.6 | `domain/recall/curator/RecallCurator.ts` | Pipeline: score → rank → dedup → budget |
-| F4.7 | `domain/recall/intent/handlers/*.ts` | Continuation, ComplexQuery, SimpleQuery, LearnedRejection |
-| F4.8 | `domain/recall/intent/IntentDetector.ts` | Chain of Responsibility |
+**Ordem de implementação (domain logic → services):**
 
-**Milestone:** Toda lógica de negócio implementada. Testada.
+| Passo | Tarefa | Artefato | Descrição |
+|-------|--------|----------|-----------|
+| 1 | F4.1a | `domain/recall/curate.ts` (scorers) | ✅ `Scorer` type + `relevanceScorer` (keyword overlap, max +0.5) + `temporalScorer` (exponential decay, half-life 7d, max +0.5). Scorers live in curate.ts alongside pipeline. 23 tests. |
+| 2 | F4.1b | `src/domain/recall/curate.ts` (expandir) | ✅ `CurateOpts` ganhou `scorers?: Scorer[]` + `query?: string`. `CuratedItem` ganhou `modTime?`. `curate()` aplica scorers após base sort, soma scores, re-ordena. Backward-compatible. |
+| 3 | F4.2 | `domain/recall/intent/{handlers/*,IntentDetector}.ts` | Chain of Responsibility: Continuation → SimpleQuery → ComplexQuery → Default. Retorna `IntentResult { shouldRecall, searchMode, query }`. |
+| 4 | F4.3 | `domain/recall/curator/RecallCurator.ts` | Wrapper sobre `curate()`. Carrega opts do config, chama `curate()` com scorers, emite log. GraphExpander = optional (?). |
+| 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | Adicionar `RecallConfig` (5 fields): `targetUri`, `topN` (default 5), `scoreThreshold` (0.5), `expandGraph` (false), `searchMode` ('find'). |
+| 6 | F4.5 | `application/services/recall.service.ts` | Orquestra: `detect(prompt)` → se recall=true → `search()` → `curate()` → retorna. Input: `prompt: string`. Output: `{ items, tokens, formatted }`. Graceful degradation: ConnectionError → vazio. |
+| 7 | F4.6 | `application/services/session.service.ts` | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
+| — | Testes | Unit com port mocks (vitest). Cobertura ≥90%. |
+
+**Decisões de design (grill 2026-05-28, ver CONTEXT.md):**
+
+**RecallCurator vs curate() existente:**
+RecallCurator é wrapper, não rewrite. Classe injeta config + scorers, chama `curate()` pura, orquestra expandGraph opcional. Scorers (`Scorer[]`) estendem scoring interno — não substituem.
+
+**F4 reordenado:**
+Domain logic primeiro (scorers → curate() → IntentDetector → RecallCurator), depois services (RecallService, SessionService). Services dependem de domain logic.
+
+**RecallService retorna dados puros:**
+`{ items, tokens, formatted }`. Caller (F6) faz inject no prompt. RecallService não sabe de Pi.
+
+**IntentDetector output:**
+`IntentResult { shouldRecall, searchMode, query }` — não binário. searchMode='find' (rápido, sem sessão) ou 'search' (profundo, com intenção). Caller escolhe método KnowledgeBase.
+
+**Graceful degradation:**
+RecallService catcha ConnectionError → log warn + retorno vazio. Demais services propagam ConnectionError.
+
+**SessionService dono da sessão ativa:**
+`getActive(): SessionId | null`, `createAndSet(): SessionId`. Estado não vaza pra index.ts.
+
+**Commit async:**
+`commit(sessionId)` retorna imediato com `taskId`. `waitForCommit(taskId, timeout?)` opcional — F6 chama ambos, F5 tools podem expor taskId ao usuário.
+
+**Middleware pipeline (F5):**
+F4 services não sabem de middleware. F5 tool handler chama `pipeline.execute(() => service.method())`.
+
+**lifecycle.ts:**
+`init()` único — F4 services resolvidos e registrados no mesmo lugar que F1-F3. Sem lifecycle separado.
+
+**Testes:**
+Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integration se necessário.
+
+**Milestone:** Domain logic (scorers, IntentDetector, RecallCurator) + RecallService + SessionService + RecallConfig implementados e testados (≥90%).
 
 ### F5 — Tools + Commands (15 dias)
 
@@ -182,16 +217,20 @@ Profiles registrados. Tudo testado sem OV.
 
 | Tarefa | Artefato | Descrição |
 |--------|----------|-----------|
-| F5.1 | `adapters/driving/pi/tool-registry.ts` | Registra 6 tools no Pi |
-| F5.2 | `adapters/driving/pi/command-registry.ts` | Registra 6 commands no Pi |
+| F5.1 | `adapters/driving/pi/tool-registry.ts` | Registra 6 tools no Pi. Tools chamam services via `pipeline.execute()` (ver F5.6). |
+| F5.2 | `adapters/driving/pi/command-registry.ts` | Registra 6 commands no Pi. |
 | F5.3 | `adapters/driving/pi/pi-event-bridge.ts` | Traduz Pi events → EventBus |
 | F5.4 | `adapters/driving/pi/status-bar.ts` | Status bar integration |
 | F5.5 | `adapters/driving/tui/renderers/*.ts` | TUI renderers |
-| F5.6 | `application/middleware/pipeline.ts` | Middleware Pipeline (orchestrator genérico) |
+| F5.6 | `application/middleware/pipeline.ts` | Middleware Pipeline (orchestrator genérico). Aplica-se em tool-handler level — services não sabem de middleware. |
 | F5.7 | `application/middleware/logging.ts` | Logging middleware |
 | — | Cache middleware | **Adiado**: implementar após OV adapter (F3+) quando cache existir |
-| F5.9 | `index.ts` | Entry point: init DI → connect → register. **Capturar retorno de `init()`** em variáveis module-level (`container`, `config`, `logger`). Ver `docs/DEFERRED.md`. |
-| F5.10 | Testes integração | Testes contra Pi real |
+| **F5.8** | `application/services/search.service.ts` | **Deferido de F4.** Wrapper thin sobre KnowledgeBase (search + glob + grep). |
+| **F5.9** | `application/services/write.service.ts` | **Deferido de F4.** Wrapper thin sobre FsStore (save + mkdir + mv). Sem write-back. |
+| F5.10 | `index.ts` | Entry point: init DI → connect → register. **Capturar retorno de `init()`** em variáveis module-level (`container`, `config`, `logger`). Ver `docs/DEFERRED.md`. |
+| F5.11 | Testes integração | Testes contra Pi real |
+
+**Nota:** F5.8 e F5.9 não têm lógica de orquestração (OV já trata criação de parent directory, validação de extensão, etc.). São wrappers de 1:1 que nascem em F5 porque as tools precisam deles.
 
 **Milestone:** Plugin funcional. Tools e commands operacionais.
 

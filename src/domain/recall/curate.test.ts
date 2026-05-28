@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { curate, estimateTokens } from "./curate";
+import { curate, estimateTokens, relevanceScorer, temporalScorer } from "./curate";
+import type { CuratedItem } from "./curate";
 import type { SearchResult } from "../knowledge/model/search-result";
 
 describe("estimateTokens", () => {
@@ -117,5 +118,139 @@ describe("curate", () => {
     };
     const result = curate(noAbstractResult, { topN: 5, scoreThreshold: 0, maxTokens: 10000 });
     expect(result.items[0].text).toBe("fallback text");
+  });
+});
+
+describe("relevanceScorer", () => {
+  const makeItem = (text: string): CuratedItem => ({
+    uri: "viking://test",
+    text,
+    score: 0.5,
+    source: "memory",
+  });
+
+  it("returns higher score when more query terms match", () => {
+    const item = makeItem("JWT authentication uses HS256 signing");
+    const low = relevanceScorer(item, "jwt oauth"); // 1/2 match
+    const high = relevanceScorer(item, "jwt authentication"); // 2/2 match
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it("returns zero when no terms match", () => {
+    const item = makeItem("database migration schema");
+    expect(relevanceScorer(item, "jwt authentication")).toBe(0);
+  });
+
+  it("returns zero for empty query", () => {
+    const item = makeItem("anything here");
+    expect(relevanceScorer(item, "")).toBe(0);
+  });
+
+  it("matches case-insensitively", () => {
+    const item = makeItem("JWT Authentication");
+    expect(relevanceScorer(item, "jwt authentication")).toBe(
+      relevanceScorer(item, "JWT AUTHENTICATION"),
+    );
+  });
+});
+
+describe("curate with scorers", () => {
+  const sampleResult: SearchResult = {
+    memories: [
+      { uri: "viking://a", text: "JWT authentication token signing", score: 0.5, modTime: new Date().toISOString() },
+      { uri: "viking://b", text: "database migration schema", score: 0.8 },
+    ],
+    resources: [],
+    skills: [],
+    total: 2,
+  };
+
+  it("curate() without scorers behaves identically to before", () => {
+    const result = curate(sampleResult, { topN: 5, scoreThreshold: 0, maxTokens: 10000 });
+    // Sorted by base score: b(0.8), a(0.5)
+    expect(result.items[0].uri).toBe("viking://b");
+    expect(result.items[1].uri).toBe("viking://a");
+  });
+
+  it("curate() with scorers sums scores and re-sorts", () => {
+    // relevanceScorer gives a bonus for "jwt" matching item a
+    // item a: 0.5 + relevance("jwt") > 0.8, so a should sort first
+    const result = curate(sampleResult, {
+      topN: 5,
+      scoreThreshold: 0,
+      maxTokens: 10000,
+      scorers: [relevanceScorer],
+      query: "jwt",
+    });
+    expect(result.items[0].uri).toBe("viking://a");
+  });
+
+  it("multiple scorers stack additively", () => {
+    const result = curate(sampleResult, {
+      topN: 5,
+      scoreThreshold: 0,
+      maxTokens: 10000,
+      scorers: [relevanceScorer, temporalScorer],
+      query: "jwt",
+    });
+    // a gets: 0.5 + relevance("jwt") + temporal(modTime=now)
+    // b gets: 0.8 + 0 + 0 (no modTime)
+    expect(result.items[0].uri).toBe("viking://a");
+    const itemA = result.items.find(i => i.uri === "viking://a")!;
+    const itemB = result.items.find(i => i.uri === "viking://b")!;
+    expect(itemA.score).toBeGreaterThan(itemB.score);
+  });
+
+  it("curate() with scorers and threshold still filters", () => {
+    const result = curate(sampleResult, {
+      topN: 5,
+      scoreThreshold: 10, // impossibly high
+      maxTokens: 10000,
+      scorers: [relevanceScorer],
+      query: "jwt",
+    });
+    expect(result.items).toHaveLength(0);
+  });
+
+  it("edge: empty scorers array = no change", () => {
+    const withEmpty = curate(sampleResult, {
+      topN: 5,
+      scoreThreshold: 0,
+      maxTokens: 10000,
+      scorers: [],
+      query: "jwt",
+    });
+    const without = curate(sampleResult, { topN: 5, scoreThreshold: 0, maxTokens: 10000 });
+    expect(withEmpty.items.map(i => i.uri)).toEqual(without.items.map(i => i.uri));
+  });
+});
+
+describe("temporalScorer", () => {
+  const makeItem = (modTime?: string): CuratedItem => ({
+    uri: "viking://test",
+    text: "test",
+    score: 0.5,
+    source: "memory",
+    modTime,
+  });
+
+  it("returns zero when item has no modTime", () => {
+    const item = makeItem();
+    expect(temporalScorer(item, "query")).toBe(0);
+  });
+
+  it("returns higher score for recent items", () => {
+    const now = new Date().toISOString();
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const fresh = temporalScorer(makeItem(now), "query");
+    const stale = temporalScorer(makeItem(weekAgo), "query");
+    expect(fresh).toBeGreaterThan(stale);
+  });
+
+  it("decays toward zero for old items", () => {
+    const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString();
+    const result = temporalScorer(makeItem(yearAgo), "query");
+    expect(result).toBeGreaterThan(0);
+    expect(result).toBeLessThan(0.05);
   });
 });

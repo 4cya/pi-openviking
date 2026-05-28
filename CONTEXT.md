@@ -114,6 +114,7 @@ _Avoid_: container, ioc
 
 **Lifecycle**:
 The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
+Single `init()` in `infrastructure/lifecycle.ts` — F4 services (SearchService, WriteService, SessionService, RecallService) and domain logic (IntentDetector, RecallCurator, scorers) are resolved and registered inside the same `init()`. No separate application lifecycle.
 _Avoid_: bootstrap lifecycle, module lifecycle
 
 ### Core Domain (future phases)
@@ -123,18 +124,25 @@ A unit of persistent knowledge stored in OpenViking. Can be a memory (extracted 
 
 **Intent Detector**:
 A Chain of Responsibility pipeline that classifies a user prompt to decide whether auto-recall should fire. Handlers: Continuation → ComplexQuery → SimpleQuery → LearnedRejection.
+Returns `IntentResult { shouldRecall: boolean; searchMode: 'find' | 'search'; query: string }`.
+Caller (RecallService / F6) uses searchMode to choose KnowledgeBase method and handles session availability.
 
 **Recall Curator**:
 A pipeline that scores, ranks, deduplicates, and trims search results to fit a token budget. Operates post-search, locally.
+The **RecallCurator** class in `domain/recall/curator/` is a thin wrapper over the pure `curate()` function.
+It loads `CurateOpts` from profile config, calls `curate()`, handles expand-graph orchestration, and emits logs/metrics.
+**Scorers** (`domain/recall/curate.ts`) extend the internal scoring with relevance and temporal signals — they refine, not replace, the base sort. `relevanceScorer`: keyword overlap between query tokens and item text+uri, case-insensitive, max +0.5. `temporalScorer`: exponential decay on `CuratedItem.modTime`, half-life 7 days, max +0.5. Additional scorers (lexical, preference) in future slices.
 
 **Graph Expander**:
 Optionally traverses OV relations from seed KnowledgeItems to inject related resources into context.
+Injected into RecallService as optional (`GraphExpander?`). Absent until F8 — no-op when undefined.
 
 **EventBus**:
 An in-memory publish/subscribe mechanism that decouples reactions to domain events (SESSION_STARTED, MEMORY_SAVED, INTENT_DETECTED, etc.). Domain events are what cross bounded contexts; infra events stay local.
 
 **Middleware Pipeline**:
 A stack of cross-cutting concerns (Logging → Cache → Metrics) that wraps application service calls. Each middleware can inspect or short-circuit a request before reaching the handler.
+Applied at tool-handler level (F5), not inside services (F4). Services are plain classes; tool handlers call `pipeline.execute(() => service.method())` to wrap.
 
 ### Shared Types (shared kernel)
 
@@ -169,6 +177,10 @@ Event log accumulated for debugging. Lives in `domain/ports/event-bus.ts` and `i
 **Curate Pipeline**:
 A pure function: `(SearchResult, CurateOpts) => CuratedResult`. No side effects, no TokenBudget mutation.
 Token count returned but not deducted — caller (`RecallService`, F4) manages budget.
+Accepts optional `Scorer[]` and `query` in `CurateOpts`. Each scorer is `(item: CuratedItem, query: string) => number`;
+scores summed per item after base sort, then re-sorted. No scorers passed = backward-compatible behavior.
+Built-in scorers: `relevanceScorer` (keyword overlap, max +0.5), `temporalScorer` (exponential decay, half-life 7d, max +0.5).
+Scorers live in `domain/recall/curate.ts` alongside the pipeline.
 
 **FsStore.write mode**:
 Does NOT expose `wait` in the domain interface. Synchronous wait is an OV transport detail resolved
@@ -191,13 +203,31 @@ _Avoid_: generic Error, exception
 ### Services (future phases)
 
 **Recall Service**:
-Orchestrates IntentDetect → KnowledgeBase.search → Curator → GraphExpander → prompt injection. Receives profile config as injected `ResolvedConfig` — does not import ProfileManager.
+Orchestrates IntentDetect → KnowledgeBase.search → Curator → GraphExpander. Returns `{ items, tokens, formatted }`. Prompt injection is the caller's responsibility (F6 handler). Receives configuration via DI — raw `RecallConfig` fields before F7a, `ResolvedConfig` after F7a. Does not import ProfileManager.
+
+**Interface**: `recall(prompt: string): Promise<RecallResult>` — prompt + DI-resolved config. Extends to `RecallInput` in F5/F6 if needed (non-breaking).
+SessionId resolved internally via `SessionService.getActive()`. targetUri/topN/scoreThreshold from injected `RecallConfig`.
+
+**Graceful degradation**: RecallService catcha ConnectionError de KnowledgeBase e retorna resultado vazio (log warn). Os demais services (search, write, session) propagam ConnectionError — são operações explícitas do usuário que precisam reportar falha.
+
+**RecallConfig** (5 fields added to ConfigSchema in F4): `targetUri` (optional URI string, null=global), `topN` (number, default 5), `scoreThreshold` (number, default 0.5), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`).
+Profile behavioral fields (autoRecall, autoSaveMode, autoLinkMode) added in F7a via ProfileSchema expansion — these 5 RecallConfig fields are birth in F4, Profile overrides them in F7a.
 
 **Session Service**:
 Manages OV session lifecycle: create, send messages, commit.
+Owns the active OV session — callers get current session via `sessionService.getActive()`.
+`createAndSet()` creates a new OV session and sets it as active.
+Bindings: `pi.on('session_start')` → `createAndSet()`. SessionId is module-level state inside the service, not in index.ts.
+
+**Commit model split into two methods:** `commit(sessionId)` returns `CommitResult { sessionId, taskId }` immediately (no polling). `waitForCommit(taskId, timeout?)` optionally polls `getTaskStatus()` until complete or timeout. Caller chooses: F6 auto-recall uses both; F5 tools may expose `taskId` to user and skip the wait.
 
 **Write Service**:
-Handles content persistence: save resources, create directories, link relations.
+Handles content persistence: save, mkdir, mv. Wraps FsStore port. No write-back — OV `write()` modes (replace|append|create) cover all cases.
+Deferred to F5 — OV already handles implicit mkdir on create, extension validation, path normalization. Pure delegation, no orchestration logic in F4.
+
+**SearchService** is also deferred to F5 — pure delegation over KnowledgeBase.
+
+**F4 scope (revised)**: Domain logic only (scorers, IntentDetector, RecallCurator) + RecallService + SessionService + RecallConfig in schema. Thin service wrappers (SearchService, WriteService) born in F5 when tools need them.
 
 ## Flagged ambiguities
 
