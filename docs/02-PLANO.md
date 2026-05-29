@@ -173,7 +173,7 @@ Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 | 3 | F4.2 | ~~`domain/recall/intent/`~~ **Eliminado** | Intent Detection removido. Recall é toggle command. searchMode vem do RecallConfig. |
 | 4 | F4.3 | ✅ `domain/recall/recall-curator.ts` | `RecallCurator` wrapper sobre `curate()`. Lê `topN`, `scoreThreshold`, `maxTokens` do config, chama `curate()` com scorers, emite log. GraphExpander = optional. 6 tests. |
 | 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | ✅ `RecallConfigSchema` adicionado: `targetUri` (string?), `topN` (5), `scoreThreshold` (0.5), `maxTokens` (4000), `expandGraph` (false), `searchMode` ('find'|'search'). Env vars: OV_TOP_N, OV_SCORE_THRESHOLD, OV_TARGET_URI, OV_EXPAND_GRAPH, OV_SEARCH_MODE. 36 tests config/. |
-| 6 | F4.5 | `application/services/recall.service.ts` | Orquestra: recall toggle check → `search()` → `curate()` → retorna. Input: `prompt: string`. Output: `{ items, tokens, formatted }`. Graceful degradation: ConnectionError → vazio. |
+| 6 | F4.5 | ✅ `domain/recall/recall-service.ts` | RecallService: orquestra toggle check → `kb.find()`/`kb.search()` (by searchMode) → `curator.curate()` → `RecallResult { items, tokens, formatted, total }`. Constructor: `(kb, curator, config, logger, enabled)`. ConnectionError → empty + warn. 5 tests. |
 | 7 | F4.6 | `domain/services/session-service.ts` ✅ | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
 | — | Testes | Unit com port mocks (vitest). Cobertura ≥90%. |
 

@@ -200,13 +200,14 @@ _Avoid_: generic Error, exception
 
 ### Services
 
-**Recall Service**:
-Orchestrates IntentDetect → KnowledgeBase.search → Curator → GraphExpander. Returns `{ items, tokens, formatted }`. Prompt injection is the caller's responsibility (F6 handler). Receives configuration via DI — raw `RecallConfig` fields before F7a, `ResolvedConfig` after F7a. Does not import ProfileManager.
+**Recall Service** *(implemented — `domain/recall/recall-service.ts`)*:
+Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` call. Constructor takes `KnowledgeBase`, `RecallCurator`, `RecallConfig`, `Logger`, `enabled: boolean` (toggle state). Returns `RecallResult { items, tokens, formatted, total }`. 5 tests.
 
-**Interface**: `recall(prompt: string): Promise<RecallResult>` — prompt + DI-resolved config. Extends to `RecallInput` in F5/F6 if needed (non-breaking).
-SessionId resolved internally via `SessionService.getActive()`. targetUri/topN/scoreThreshold from injected `RecallConfig`.
+**Interface**: `recall(prompt: string): Promise<RecallResult>` — F6 handler calls this on `before_agent_start`. No IntentDetector — toggle is explicit (`enabled` boolean from command state). SessionId not yet passed (added in F5/F6 when session context needed).
 
-**Graceful degradation**: RecallService catcha ConnectionError de KnowledgeBase e retorna resultado vazio (log warn). Os demais services (search, write, session) propagam ConnectionError — são operações explícitas do usuário que precisam reportar falha.
+**Flow**: (1) Check `enabled` toggle → if false, return empty without calling KB. (2) Route to `kb.find()` or `kb.search()` based on `config.searchMode`, passing `prompt`, `topN`, `targetUri`. (3) Pass raw results through `curator.curate()`. (4) Build `formatted` string from curated items. (5) Return `RecallResult`.
+
+**Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
 **RecallConfig** (6 fields added to ConfigSchema in F4): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`).
 Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported type `RecallConfig` inferred via `z.infer`.
