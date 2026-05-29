@@ -3,6 +3,7 @@ import { loadConfig } from "../infrastructure/config/cascade";
 import { FileLogger } from "../adapters/driven/logger/file-logger";
 import { createOVAdapter } from "../adapters/driven/openviking/adapter";
 import { RecallCurator } from "../domain/recall/recall-curator";
+import { relevanceScorer, temporalScorer } from "../domain/recall/curate";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
 import type { Logger } from "../domain/ports/logger";
@@ -28,7 +29,7 @@ export async function init(cwd: string): Promise<{
   container.register("sessionStore", () => adapter.sessionStore, true);
 
   // F4 — domain services
-  const recallCurator = new RecallCurator(config.recall, [], logger);
+  const recallCurator = new RecallCurator(config.recall, [relevanceScorer, temporalScorer], logger);
   container.register("recallCurator", () => recallCurator, true);
 
   const sessionService = new SessionService(adapter.sessionStore, {
