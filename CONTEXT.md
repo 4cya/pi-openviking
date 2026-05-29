@@ -114,7 +114,7 @@ _Avoid_: container, ioc
 
 **Lifecycle**:
 The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
-Single `init()` in `infrastructure/lifecycle.ts` — F4 services (SearchService, WriteService, SessionService, RecallService) and domain logic (IntentDetector, RecallCurator, scorers) are resolved and registered inside the same `init()`. No separate application lifecycle.
+Single `init()` in `infrastructure/lifecycle.ts`. Registers 10 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1-F3), plus recallCurator, sessionService, recallService (F4 wired). No IntentDetector — recall toggle is command-based. No scorers passed in F4 — empty array, added in later slices. No GraphExpander — absent until F8. 16 lifecycle smoke tests.
 _Avoid_: bootstrap lifecycle, module lifecycle
 
 ### Core Domain (future phases)
@@ -229,7 +229,7 @@ Deferred to F5 — OV already handles implicit mkdir on create, extension valida
 
 **SearchService** is also deferred to F5 — pure delegation over KnowledgeBase.
 
-**F4 scope (revised)**: Domain logic only (scorers, IntentDetector, RecallCurator) + RecallService + SessionService + RecallConfig in schema. Thin service wrappers (SearchService, WriteService) born in F5 when tools need them.
+**F4 scope (revised)**: Domain logic only (scorers, ~~IntentDetector~~, RecallCurator) + RecallService + SessionService + RecallConfig in schema + lifecycle wiring. IntentDetector eliminated — recall is a toggle command. Lifecycle wiring in `init()` creates and registers RecallCurator (no scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true). Thin service wrappers (SearchService, WriteService) born in F5 when tools need them.
 
 ## Flagged ambiguities
 

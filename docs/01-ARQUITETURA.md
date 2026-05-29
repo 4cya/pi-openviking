@@ -13,6 +13,7 @@
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
+| **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 10 singletons total no container. Ver `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -51,8 +52,14 @@ flowchart TB
     subgraph Domain["🧠 Domínio (3 Bounded Contexts)"]
         direction TB
         DOMAIN_KNOW["Knowledge Context\nKnowledgeItem, Resource,\nUri, SessionId"]
-        DOMAIN_RECALL["Recall Context\nRecallItem, TokenBudget,\nRecallCurator, GraphExpander"]
+        DOMAIN_RECALL["Recall Context\nRecallItem, TokenBudget,\nRecallCurator, RecallService,\nGraphExpander"]
         DOMAIN_PROFILE["Profile Context\nProfileConfig (value object),\nProfileManager, AutoDetect"]
+    end
+
+    subgraph DomainSvc["🎯 Domain Services (F4)"]
+        direction TB
+        RECALL_SVC["RecallService\ntoggle → KB → curator → result"]
+        SESSION_SVC["SessionService\nactive session + commit + poll"]
     end
 
     subgraph App["⚙️ Aplicação"]
@@ -91,6 +98,10 @@ flowchart TB
     APP_SVC --> DOMAIN_PROFILE
     APP_SVC -.-> APP_MW
 
+    RECALL_SVC --> PORT_KB
+    RECALL_SVC --> DOMAIN_RECALL
+    SESSION_SVC --> PORT_SESSION
+
     APP_SVC --> PORT_KB
     APP_SVC --> PORT_FS
     APP_SVC --> PORT_GRAPH
@@ -114,9 +125,11 @@ flowchart TB
     DI --> CACHE_IMPL
     DI --> LOG_IMPL
     DI --> EVENT_IMPL
+    DI --> RECALL_SVC
+    DI --> SESSION_SVC
     DI --> APP_SVC
-    CONFIG --> DI
     LIFECYCLE --> DI
+    CONFIG --> DI
 ```
 
 > **Nota sobre PiEventBridge:** não existe `pi-event-bridge.ts` como adaptador separado.
@@ -471,9 +484,13 @@ src/
 │   ├── knowledge/             # (futuro F2) Contexto: armazenamento e busca
 │   │   ├── model/             # ✅ KnowledgeItem, ResourceItem, SkillItem, SearchResult, Relation
 │   │   └── service/           # (futuro) SemanticSearch
-│   ├── recall/                # (futuro F2/F4) Contexto: curadoria
-│   │   ├── model/             # RecallItem, TokenBudget
-│   │   └── recall-curator.ts  # ✅ RecallCurator wrapper over curate()
+│   ├── recall/                # ✅ Contexto: curadoria
+│   │   ├── model/             # ✅ RecallItem, TokenBudget
+│   │   ├── curate.ts          # ✅ Curation pipeline + scorers + Scorer type
+│   │   ├── recall-curator.ts  # ✅ RecallCurator wrapper over curate()
+│   │   └── recall-service.ts  # ✅ RecallService: toggle → KB → curator → RecallResult
+│   ├── services/              # ✅ Domain services com estado
+│   │   └── session-service.ts  # ✅ SessionService: active session + commit + polling
 │   ├── profile/               # (futuro F7) Contexto: perfis de comportamento
 │   │   ├── model/             # ProfileConfig, AutoDetectRule
 │   │   └── service/           # ProfileManager, ProfileResolver, AutoDetect
@@ -487,7 +504,7 @@ src/
 │   │   └── event-bus.ts       # ✅ EventBus + DomainEvent, EventHandler
 │   └── errors/                # ✅ DomainError, NotFoundError, ConnectionError, ValidationError
 │
-├── application/               # (futuro F4) Casos de uso
+├── application/               # (futuro F5) Casos de uso
 │   ├── services/              # search, write, session, recall, backup, auto-actions
 │   └── middleware/            # Pipeline + middlewares
 │
@@ -518,15 +535,16 @@ src/
 │
 ├── infrastructure/
 │   ├── config/
-│   │   ├── schema.ts          # ✅ ConfigSchema raiz (Zod)
+│   │   ├── schema.ts          # ✅ ConfigSchema raiz (Zod) + RecallConfigSchema (F4)
 │   │   ├── logger-schema.ts   # ✅ LoggerConfigSchema
 │   │   ├── cascade.ts         # ✅ Config Cascade: defaults → env → file → profile
 │   │   ├── loader.ts          # ✅ Leitor .pi/settings.json
 │   │   └── profile-schema.ts  # ✅ ProfileSchema (só name+description em F1)
 │   ├── di/
-│   │   └── container.ts       # ✅ DI Container manual (21 linhas)
+│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 10 singletons)
 │   ├── event-bus/             # ✅ InMemoryEventBus (publish/subscribe, error isolation, event log)
-│   ├── lifecycle.ts           # ✅ init() + shutdown()
+│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F4 (10 singletons)
+│   ├── lifecycle.test.ts      # ✅ 16 smoke tests (F1–F3 adapters + F4 services)
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
 ├── _legacy/                   # (removido em F3 — 2026-05-27)
@@ -536,7 +554,8 @@ src/
 **Legenda:** ✅ existe agora | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
-> F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27. Próximo: F4 Operations.
+> F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27.
+> F4 ✅ — Issues #61–#66: RecallConfig + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring concluídos 2026-05-29. Próximo: F5 Tools + Commands.
 
 ---
 

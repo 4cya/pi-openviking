@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { init, shutdown } from "./lifecycle";
 import { FileLogger } from "../adapters/driven/logger/file-logger";
+import { RecallCurator } from "../domain/recall/recall-curator";
+import { RecallService } from "../domain/recall/recall-service";
+import { SessionService } from "../domain/services/session-service";
 import type { Logger } from "../domain/ports/logger";
 
 const OLD_ENV = process.env;
@@ -96,6 +99,61 @@ describe("init", () => {
     const kb1 = container.resolve("knowledgeBase");
     const kb2 = container.resolve("knowledgeBase");
     expect(kb1).toBe(kb2);
+  });
+
+  // ── F4 services ─────────────────────────────────────────────────────────────
+
+  it("container resolves recallCurator as RecallCurator instance", async () => {
+    const { container } = await init(tmpDir);
+    const curator = container.resolve<RecallCurator>("recallCurator");
+    expect(curator).toBeInstanceOf(RecallCurator);
+    expect(typeof curator.curate).toBe("function");
+  });
+
+  it("container resolves sessionService as SessionService instance", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve<SessionService>("sessionService");
+    expect(svc).toBeInstanceOf(SessionService);
+    expect(typeof svc.createAndSet).toBe("function");
+  });
+
+  it("container resolves recallService as RecallService instance", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve<RecallService>("recallService");
+    expect(svc).toBeInstanceOf(RecallService);
+    expect(typeof svc.recall).toBe("function");
+  });
+
+  it("F4 services are singletons (same reference on second resolve)", async () => {
+    const { container } = await init(tmpDir);
+    const c1 = container.resolve("recallCurator");
+    const c2 = container.resolve("recallCurator");
+    expect(c1).toBe(c2);
+
+    const s1 = container.resolve("sessionService");
+    const s2 = container.resolve("sessionService");
+    expect(s1).toBe(s2);
+
+    const r1 = container.resolve("recallService");
+    const r2 = container.resolve("recallService");
+    expect(r1).toBe(r2);
+  });
+
+  it("recallService.recall returns empty result when KB returns empty", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve<RecallService>("recallService");
+    // enabled=true but OV not running → ConnectionError caught → empty result
+    const result = await svc.recall("test query");
+    expect(result).toEqual({ items: [], tokens: 0, formatted: "", total: 0 });
+  });
+
+  it("sessionService is wired to sessionStore", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve<SessionService>("sessionService");
+    expect(svc).toBeInstanceOf(SessionService);
+    expect(typeof svc.createAndSet).toBe("function");
+    expect(typeof svc.commit).toBe("function");
+    expect(svc.getActive()).toBeNull();
   });
 });
 

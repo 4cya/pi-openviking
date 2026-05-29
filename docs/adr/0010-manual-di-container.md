@@ -2,7 +2,7 @@
 
 Use a hand-rolled DI container (21 lines, `register(token, factory, singleton)` + `resolve<T>(token)`) instead of Awilix.
 
-**Context:** Fase 1 registers ~5 singletons (config, logger, container, lifecycle, and a future profile manager). No circular dependencies exist and none are expected.
+**Context:** Fase 1–4 registers 10 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1–F3), plus recallCurator, sessionService, recallService (F4). No circular dependencies exist and none are expected.
 
 **Considered Options:**
 

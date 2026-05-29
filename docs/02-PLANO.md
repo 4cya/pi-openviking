@@ -175,6 +175,7 @@ Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 | 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | ✅ `RecallConfigSchema` adicionado: `targetUri` (string?), `topN` (5), `scoreThreshold` (0.5), `maxTokens` (4000), `expandGraph` (false), `searchMode` ('find'|'search'). Env vars: OV_TOP_N, OV_SCORE_THRESHOLD, OV_TARGET_URI, OV_EXPAND_GRAPH, OV_SEARCH_MODE. 36 tests config/. |
 | 6 | F4.5 | ✅ `domain/recall/recall-service.ts` | RecallService: orquestra toggle check → `kb.find()`/`kb.search()` (by searchMode) → `curator.curate()` → `RecallResult { items, tokens, formatted, total }`. Constructor: `(kb, curator, config, logger, enabled)`. ConnectionError → empty + warn. 5 tests. |
 | 7 | F4.6 | `domain/services/session-service.ts` ✅ | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
+| 8 | F4.7 | ✅ `infrastructure/lifecycle.ts` + `lifecycle.test.ts` | Lifecycle wiring: `init()` cria e registra RecallCurator (sem scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true). 3 singletons F4 → total 10 no container. Smoke test: resolve + invoke cada serviço. 16 lifecycle tests. |
 | — | Testes | Unit com port mocks (vitest). Cobertura ≥90%. |
 
 **Decisões de design (grill 2026-05-28, ver CONTEXT.md):**
@@ -209,7 +210,7 @@ F4 services não sabem de middleware. F5 tool handler chama `pipeline.execute(()
 **Testes:**
 Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integration se necessário.
 
-**Milestone:** Domain logic (scorers, RecallCurator) + RecallService + SessionService + RecallConfig implementados e testados (≥90%).
+**Milestone:** Domain logic (scorers, RecallCurator) + RecallService + SessionService + RecallConfig + lifecycle wiring implementados e testados (≥90%). F4 ✅ completo.
 
 ### F5 — Tools + Commands (15 dias)
 
