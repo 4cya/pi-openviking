@@ -218,20 +218,23 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 | Tarefa | Artefato | Descrição |
 |--------|----------|-----------|
-| F5.1 | `adapters/driving/pi/tool-registry.ts` | Registra 6 tools no Pi. Tools chamam services via `pipeline.execute()` (ver F5.6). |
-| F5.2 | `adapters/driving/pi/command-registry.ts` | Registra 6 commands no Pi. |
-| F5.3 | `adapters/driving/pi/pi-event-bridge.ts` | Traduz Pi events → EventBus |
-| F5.4 | `adapters/driving/pi/status-bar.ts` | Status bar integration |
-| F5.5 | `adapters/driving/tui/renderers/*.ts` | TUI renderers |
-| F5.6 | `application/middleware/pipeline.ts` | Middleware Pipeline (orchestrator genérico). Aplica-se em tool-handler level — services não sabem de middleware. |
-| F5.7 | `application/middleware/logging.ts` | Logging middleware |
-| — | Cache middleware | **Adiado**: implementar após OV adapter (F3+) quando cache existir |
-| **F5.8** | `application/services/search.service.ts` | **Deferido de F4.** Wrapper thin sobre KnowledgeBase (search + glob + grep). |
-| **F5.9** | `application/services/write.service.ts` | **Deferido de F4.** Wrapper thin sobre FsStore (save + mkdir + mv). Sem write-back. |
-| F5.10 | `index.ts` | Entry point: init DI → connect → register. **Capturar retorno de `init()`** em variáveis module-level (`container`, `config`, `logger`). Ver `docs/DEFERRED.md`. |
-| F5.11 | Testes integração | Testes contra Pi real |
+| **F5.1** | `index.ts` | Entry point: init DI → connect → register. **Capturar retorno de `init()`** em variáveis module-level (`container`, `config`, `logger`). Ver `docs/DEFERRED.md`. |
+| **F5.2** | `application/services/search.service.ts` | **Deferido de F4.** Wrapper thin sobre KnowledgeBase (find + search + glob + grep). |
+| **F5.3** | `application/services/write.service.ts` | **Deferido de F4.** Wrapper thin sobre FsStore (save + mkdir + mv). Sem write-back. |
+| F5.4 | `adapters/driving/pi/tool-registry.ts` | Registra 6 tools no Pi. Tools chamam services via `pipeline.execute()` (ver F5.8). |
+| F5.5 | `adapters/driving/pi/command-registry.ts` | Registra 6 commands no Pi. |
+| F5.6 | `adapters/driving/pi/status-bar.ts` | Status bar integration. |
+| F5.7 | `adapters/driving/tui/renderers/*.ts` | TUI renderers. |
+| F5.8 | `application/middleware/pipeline.ts` | Middleware Pipeline (orchestrator genérico). Aplica-se em tool-handler level — services não sabem de middleware. |
+| F5.9 | `application/middleware/logging.ts` | Logging middleware. |
+| — | Cache middleware | **Adiado**: implementar após OV adapter (F3+) quando cache existir. |
+| F5.10 | Testes integração | Testes contra Pi real. |
 
-**Nota:** F5.8 e F5.9 não têm lógica de orquestração (OV já trata criação de parent directory, validação de extensão, etc.). São wrappers de 1:1 que nascem em F5 porque as tools precisam deles.
+**Nota 1 — Ordem de dependência:** `index.ts` (F5.1) deve vir primeiro — chama `init()` que retorna `{ container, config, logger }`. tool-registry e command-registry (F5.4–F5.5) recebem essas dependências via closure e só podem ser registrados após `init()`.
+
+**Nota 2 — PiEventBridge eliminado:** `adapters/driving/pi/pi-event-bridge.ts` não será criado. Per ADR-011 e CONTEXT.md: eventos de infra (session_start, message_end, before_agent_start) são tratados diretamente por `pi.on()` em `index.ts` — não passam pelo EventBus de domínio. O EventBus só transporta eventos de domínio internos (MEMORY_SAVED, RECALL_EXECUTED, etc.) entre bounded contexts.
+
+**Nota 3 — SearchService + WriteService:** Camada de aplicação (application layer), não domínio. Wrappers 1:1 sem orquestração — OV já trata criação de parent directory, validação de extensão, etc.
 
 **Milestone:** Plugin funcional. Tools e commands operacionais.
 

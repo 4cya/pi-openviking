@@ -24,11 +24,11 @@ postergados para fases futuras intencionalmente.
 | Campo | Valor |
 |-------|-------|
 | **Deferido de** | F1 |
-| **Deferido para** | F5 (Tools + Commands) |
+| **Deferido para** | F5.1 (index.ts — primeiro da fase) |
 | **Motivo** | Nenhum consumidor do container/config/logger até F5. |
 | **Arquivo** | `src/index.ts` |
 | **Problema** | `await init(ctx.cwd)` retorna `{ config, logger, container }` mas o valor é descartado. Em F5, tool-registry e command-registry precisarão do container. |
-| **Fix previsto** | Armazenar em variáveis module-level: |
+| **Fix previsto** | F5.1: Armazenar em variáveis module-level: |
 | | ```typescript |
 | | let container: DIContainer; |
 | | let config: PiOVConfig; |

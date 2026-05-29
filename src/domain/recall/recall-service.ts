@@ -19,8 +19,13 @@ export class RecallService {
     private readonly curator: RecallCurator,
     private readonly config: RecallConfig,
     private readonly logger: Logger,
-    private readonly enabled: boolean,
+    private enabled: boolean,
   ) {}
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.logger.info(`recall ${enabled ? "enabled" : "disabled"}`);
+  }
 
   async recall(prompt: string): Promise<RecallResult> {
     if (!this.enabled) {

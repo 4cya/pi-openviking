@@ -14,6 +14,7 @@
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
 | **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 10 singletons total no container. Ver `02-PLANO.md`. |
+| **F5 Tools + Commands** | 🔧 Planejado | 6 tools (ov_search, ov_glob, ov_grep, ov_read, ov_write, ov_recall) + 6 commands (/ov-recall, /ov-status, /ov-tree, /ov-commit, /ov-search, /ov-delete) + SearchService + WriteService + Middleware Pipeline + OVWidget. Detalhado no grill F5 em `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -40,7 +41,7 @@ flowchart TB
 
     subgraph Ports["🚪 Portas (Interfaces)"]
         direction TB
-        PORT_KB["KnowledgeBase\nsearch / glob / grep"]
+        PORT_KB["KnowledgeBase\nfind / search / glob / grep"]
         PORT_FS["FsStore\nread / write / list / tree / stat\nmkdir / mv / delete"]
         PORT_GRAPH["GraphStore\nlink / unlink / graph"]
         PORT_SESSION["SessionStore\ncreate / send / commit / ..."]
@@ -137,6 +138,11 @@ flowchart TB
 > Application Services. O EventBus de domínio só transporta eventos de domínio
 > (MEMORY_SAVED, RELATION_LINKED, RECALL_EXECUTED, etc.) — ver ADR-011.
 > Ver [seção 4.4](#44-event-bus--domínio-puro) para detalhes.
+>
+> **Nota sobre Widget:** OVWidget usa `ctx.ui.setWidget()` com info rica em 2 linhas:
+> status de conexão, recall toggle, sessão ativa, escopo, métricas do último recall.
+> Não há `status-bar.ts` separado — o widget é registrado em `index.ts` e atualizado
+> por eventos.
 
 ---
 
@@ -146,7 +152,7 @@ A ordem de criação dos artefatos de domínio segue dependências entre eles:
 
 | Passo | Artefato | Depende |
 |-------|----------|---------|
-| 1 | `domain/common/` — Uri (class), SessionId (class), ContentLevel, WriteMode, SearchQuery (interface), Part (discriminated union) | — |
+| 1 | `domain/common/` — Uri (class), SessionId (class), ContentLevel, WriteMode, FindQuery + SearchRequest (interfaces), Part (discriminated union) | — |
 | 2 | `domain/errors/` — DomainError class + subtipos (NotFoundError, ConnectionError, etc.) | — |
 | 3 | `domain/{knowledge,recall,profile}/model/` — value objects + aggregates | common, errors |
 | 4 | `domain/ports/` — KnowledgeBase, FsStore, GraphStore, SessionStore, CacheStore, EventBus | models (tipos de retorno) |
@@ -172,13 +178,17 @@ Dois endpoints de busca OV:
 ```typescript
 interface KnowledgeBase {
   /** Simple semantic search, no session context. POST /api/v1/search/find */
-  find(query: FindQuery): Promise<SearchResult>;
+  find(query: FindQuery, signal?: AbortSignal): Promise<SearchResult>;
   /** Deep search with session + intent analysis. POST /api/v1/search/search */
-  search(request: SearchRequest): Promise<SearchResult>;
-  glob(pattern: string, uri?: Uri, limit?: number): Promise<GlobResult>;
-  grep(pattern: string, opts?: GrepOptions): Promise<GrepResult>;
+  search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResult>;
+  /** URI pattern discovery. POST /api/v1/search/glob */
+  glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult>;
+  /** Content regex search. POST /api/v1/search/grep */
+  grep(pattern: string, opts?: GrepOptions, signal?: AbortSignal): Promise<GrepResult>;
+}
+```
 
-GrepOptions:
+**GrepOptions:**
 - `pattern` — padrão de busca
 - `caseInsensitive?` — case insensitive match
 - `excludeUri?` — URI a excluir
@@ -186,8 +196,6 @@ GrepOptions:
 - `nodeLimit?` — max resultados
 
 OV: `POST /api/v1/search/grep {uri, pattern, case_insensitive, exclude_uri, level_limit, node_limit}`
-}
-```
 
 ### GraphStore — navegação de relações
 
@@ -195,9 +203,9 @@ Mapeamento OV: `POST /api/v1/relations/link`, `DELETE /api/v1/relations/link`, `
 
 ```typescript
 interface GraphStore {
-  link(source: Uri, targets: Uri | Uri[], reason?: string): Promise<LinkResult>;
-  unlink(source: Uri, target: Uri): Promise<void>;
-  graph(uri: Uri): Promise<Relation[]>;
+  link(source: Uri, targets: Uri | Uri[], reason?: string, signal?: AbortSignal): Promise<LinkResult>;
+  unlink(source: Uri, target: Uri, signal?: AbortSignal): Promise<void>;
+  graph(uri: Uri, signal?: AbortSignal): Promise<Relation[]>;
 }
 ```
 
@@ -215,14 +223,14 @@ Mapeamento OV:
 
 ```typescript
 interface SessionStore {
-  create(): Promise<SessionId>;
-  sendMessage(sessionId: SessionId, role: string, content: Part[]): Promise<void>;
-  sendMessages(sessionId: SessionId, messages: { role: string; content: Part[] }[]): Promise<void>;
-  commit(sessionId: SessionId, options?: CommitOptions): Promise<CommitResult>;
-  getTaskStatus(taskId: string): Promise<TaskStatus>;
-  listTasks(filter?: TaskFilter): Promise<TaskStatus[]>;
-  sessionUsed(sessionId: SessionId, contexts: Uri[]): Promise<void>;
-  deleteSession(sessionId: SessionId): Promise<void>;
+  create(signal?: AbortSignal): Promise<SessionId>;
+  sendMessage(sessionId: SessionId, role: string, content: Part[], signal?: AbortSignal): Promise<void>;
+  sendMessages(sessionId: SessionId, messages: { role: string; content: Part[] }[], signal?: AbortSignal): Promise<void>;
+  commit(sessionId: SessionId, options?: CommitOptions, signal?: AbortSignal): Promise<CommitResult>;
+  getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus>;
+  listTasks(filter?: TaskFilter, signal?: AbortSignal): Promise<TaskStatus[]>;
+  sessionUsed(sessionId: SessionId, contexts: Uri[], signal?: AbortSignal): Promise<void>;
+  deleteSession(sessionId: SessionId, signal?: AbortSignal): Promise<void>;
 }
 ```
 
@@ -239,43 +247,57 @@ Mapeamento OV:
 
 ```typescript
 interface FsStore {
-  read(uri: Uri, level?: ContentLevel, offset?: number, limit?: number): Promise<Content>;
-  write(uri: Uri, content: string, mode?: WriteMode): Promise<WriteResult>;
-  list(uri: Uri, recursive?: boolean): Promise<FsEntry[]>;
-  tree(uri: Uri): Promise<FsEntry[]>;
-  stat(uri: Uri): Promise<FsEntry>;
-  mkdir(uri: Uri): Promise<void>;
-  mv(from: Uri, to: Uri): Promise<void>;
-  delete(uri: Uri, recursive?: boolean): Promise<void>;
+  read(uri: Uri, level?: ContentLevel, offset?: number, limit?: number, signal?: AbortSignal): Promise<Content>;
+  write(uri: Uri, content: string, mode?: WriteMode, signal?: AbortSignal): Promise<WriteResult>;
+  list(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<FsEntry[]>;
+  tree(uri: Uri, signal?: AbortSignal): Promise<FsEntry[]>;
+  stat(uri: Uri, signal?: AbortSignal): Promise<FsEntry>;
+  mkdir(uri: Uri, signal?: AbortSignal): Promise<void>;
+  mv(from: Uri, to: Uri, signal?: AbortSignal): Promise<void>;
+  delete(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<void>;
 }
 ```
 
-> `read()` aceita `offset` (linha inicial, default 0) e `limit` (linhas, default -1).
-> OV: `GET /api/v1/content/read?uri=&offset=&limit=`.
+> `read()` aceita `level` que mapeia para as camadas L0/L1/L2 do OV:
+> - `"abstract"` → L0 (~100 tokens, vetor de busca). OV: `GET /api/v1/content/abstract?uri=`
+> - `"overview"` → L1 (~2k tokens, resumo intermediário). OV: `GET /api/v1/content/overview?uri=`
+> - `"read"` → L2 (conteúdo completo). OV: `GET /api/v1/content/read?uri=&offset=&limit=`
+>
+> `offset` (linha inicial, default 0) e `limit` (linhas, default -1) aplicam-se apenas ao nível `"read"`.
 >
 > `write()` não expõe `wait` no domínio — espera síncrona é detalhe de transporte OV,
 > resolvido no adapter (F3) via `wait: true` com timeout default de 30s.
 > Domínio não sabe de async processing. OV `POST /api/v1/content/write` aceita
 > `wait: bool` e `timeout: float`.
+>
+> **Nota sobre scopes OV:** OV organiza conteúdo em 4 scopes públicos sob `viking://`:
+> `resources/` (documentos), `user/{user_id}/` (memórias de usuário), `agent/{agent_id}/` (memórias/experiências do agent),
+> `session/{user_space}/{session_id}/` (dados de sessão). O extension mapeia Pi sessions → OV sessions.
+> Scopes `temp/` e `queue/` são internos, não acessíveis via API pública.
 
 **Tipos de suporte (definidos em `domain/common/`):**
 
 ```typescript
 // domain/common/content-level.ts
+// Mapeia para camadas OV: L0 (abstract, ~100 tokens) / L1 (overview, ~2k tokens) / L2 (read, full)
 type ContentLevel = "abstract" | "overview" | "read";
 
 // domain/common/write-mode.ts
 type WriteMode = "replace" | "append" | "create";
 
 // domain/common/search-query.ts
-type SearchMode = "auto" | "fast" | "deep";
-
-interface SearchQuery {
+// Dois types separados — OV tem endpoints distintos (ver decisão F2 em CONTEXT.md).
+// SearchMode removido: KnowledgeBase.find() vs KnowledgeBase.search() resolve o mode.
+interface FindQuery {
   query: string;
   limit?: number;
-  mode?: SearchMode;
   targetUri?: Uri;
+}
+interface SearchRequest {
+  query: string;
+  limit?: number;
   sessionId?: SessionId;
+  targetUri?: Uri;
 }
 
 // domain/common/part.ts
@@ -296,20 +318,19 @@ interface ContextPart { type: "context"; uri: string; contextType: "memory" | "r
 type Part = TextPart | ToolPart | ContextPart;
 ```
 
-> **Nota:** `ResourceKind` foi removido — escrita de conteúdo textual é via `write()`,
+> **Nota:** `ResourceKind` e `SearchMode` foram removidos — escrita de conteúdo textual é via `write()`,
 > adição de resources via `POST /api/v1/resources` (adaptador OV, não port).
 > OV v3 não possui endpoint `reindex`. `write()` sempre atualiza semântica/vectors automaticamente.
-
-> `SearchQuery` e `Part` vivem em `domain/common/` por serem consumidos por múltiplas ports
-e adaptadores. Não são private de port nenhuma.
+> `FindQuery`/`SearchRequest` e `Part` vivem em `domain/common/` por serem consumidos por múltiplas ports
+> e adaptadores. Não são private de port nenhuma.
 
 ### CacheStore — cache de operações repetidas
 
 ```typescript
 interface CacheStore {
-  get(key: string): Promise<unknown | undefined>;
-  set(key: string, value: unknown, ttl?: number): Promise<void>;
-  invalidate(pattern: string): Promise<void>;
+  get(key: string, signal?: AbortSignal): Promise<unknown | undefined>;
+  set(key: string, value: unknown, ttl?: number, signal?: AbortSignal): Promise<void>;
+  invalidate(pattern: string, signal?: AbortSignal): Promise<void>;
 }
 ```
 
@@ -326,6 +347,8 @@ interface Logger {
   isEnabled(level: LogLevel): boolean;
 }
 ```
+
+> Logger é síncrono por design — não precisa de `AbortSignal`.
 
 ### EventBus — eventos de domínio entre bounded contexts (ADR-011)
 
@@ -384,11 +407,22 @@ No intent detection — user decides when recall fires.
 
 ### 4.3 Middleware Pipeline — Cross-cutting concerns
 
+Pipeline genérico (`Pipeline<T>`) empilhando middlewares em tool-handler level.
+Services não sabem de middleware — tool handler chama `pipeline.execute(() => service.method())`.
+
 ```
 Request → LoggingMiddleware → Handler → Response
 
-# Cache middleware: adiado. Implementar após OV adapter (F3+).
+# Cache middleware: adiado. Implementar após OV adapter (F3+) quando cache existir.
 ```
+
+**Design (F5):**
+- `Pipeline` recebe handler assíncrono e aplica middlewares em cadeia
+- Logging middleware: mede duração, loga tool executada
+- ToolContext (estado compartilhado entre middlewares) **não criado em F5** — adicionado quando cache middleware precisar interceptar chamadas idempotentes
+- Uso nas tools: `pipeline.execute(() => searchService.search(params))`
+
+**Arquivo:** `application/middleware/pipeline.ts` + `application/middleware/logging.ts`
 
 ### 4.4 Event Bus — Domínio puro
 
@@ -401,8 +435,9 @@ RecallService.publish(RECALL_EXECUTED) → ProfileAutoDetect (ajusta auto-detect
                                         → Logger (métrica)
 
 # Eventos de infra: pi.on() → Application Service direto (sem EventBus)
-pi.on("session_start",   (e, ctx) => sessionService.sync(ctx))
-pi.on("message_end",     (e, ctx) => autoRecall.maybeRecall(ctx))
+pi.on("session_start",   (e, ctx) => sessionService.createAndSet())
+pi.on("message_end",     (e, ctx) => sessionService.sendMessage(...))
+pi.on("before_agent_start", (e, ctx) => recallService.recall(ctx)  // (F6)
 
 # Não existe PiEventBridge separado — o index.ts registra os handlers.
 ```
@@ -411,7 +446,10 @@ pi.on("message_end",     (e, ctx) => autoRecall.maybeRecall(ctx))
 
 ## 5. Fluxos Principais
 
-### 5.1 Auto-Recall
+### 5.1 Auto-Recall (visão completa — F5–F8)
+
+Diagrama mostra fluxo completo incluindo componentes futuros (profileManager em F7, expandGraph em F8).
+Em F5, apenas o caminho `before_agent_start → recall toggle → KB.find/search → curator → inject` existe.
 
 ```mermaid
 flowchart TD
@@ -480,7 +518,7 @@ sequenceDiagram
 ```
 src/
 ├── domain/                    # Pure TS. Sem imports externos.
-│   ├── common/                # ✅ Shared kernel: Uri, SessionId, ContentLevel, WriteMode, SearchQuery, Part
+│   ├── common/                # ✅ Shared kernel: Uri, SessionId, ContentLevel, WriteMode, FindQuery, SearchRequest, Part
 │   ├── knowledge/             # (futuro F2) Contexto: armazenamento e busca
 │   │   ├── model/             # ✅ KnowledgeItem, ResourceItem, SkillItem, SearchResult, Relation
 │   │   └── service/           # (futuro) SemanticSearch
@@ -504,16 +542,33 @@ src/
 │   │   └── event-bus.ts       # ✅ EventBus + DomainEvent, EventHandler
 │   └── errors/                # ✅ DomainError, NotFoundError, ConnectionError, ValidationError
 │
-├── application/               # (futuro F5) Casos de uso
-│   ├── services/              # search, write, session, recall, backup, auto-actions
-│   └── middleware/            # Pipeline + middlewares
+├── application/               # 🔧 F5: Casos de uso
+│   ├── services/              # 🔧 F5: search.service.ts + write.service.ts
+│   │   ├── search.service.ts  # 🔧 Thin wrapper: find/search/glob/grep delega ao KB
+│   │   └── write.service.ts   # 🔧 Thin wrapper: save/mkdir/mv delega ao FsStore
+│   └── middleware/            # 🔧 F5: Pipeline + middlewares
+│       ├── pipeline.ts        # 🔧 Pipeline<T> genérico
+│       └── logging.ts         # 🔧 Logging middleware
 │
 ├── adapters/
-│   ├── driving/pi/            # (futuro F5) Callbacks registrados no Pi
-│   │   ├── tool-registry.ts   # registerTool()
-│   │   ├── command-registry.ts # registerCommand()
-│   │   ├── status-bar.ts       # ctx.ui.setStatus()
-│   │   └── autocomplete.ts     # ctx.ui.addAutocompleteProvider()
+│   ├── driving/pi/            # 🔧 F5: Tools + Commands + Widget
+│   │   ├── tool-registry.ts   # 🔧 Importa + chama register*Tool()
+│   │   ├── command-registry.ts# 🔧 Importa + chama register*Command()
+│   │   ├── tools/             # 🔧 1 arquivo por tool
+│   │   │   ├── search.tool.ts
+│   │   │   ├── glob.tool.ts
+│   │   │   ├── grep.tool.ts
+│   │   │   ├── read.tool.ts
+│   │   │   ├── write.tool.ts
+│   │   │   └── recall.tool.ts
+│   │   ├── commands/          # 🔧 1 arquivo por command
+│   │   │   ├── recall.cmd.ts
+│   │   │   ├── status.cmd.ts
+│   │   │   ├── tree.cmd.ts
+│   │   │   ├── commit.cmd.ts
+│   │   │   ├── search.cmd.ts
+│   │   │   └── delete.cmd.ts
+│   │   └── widget.ts          # 🔧 OVWidget — setWidget() com info rica
 │   └── driven/
 │       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
 │       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort
@@ -548,14 +603,17 @@ src/
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
 ├── _legacy/                   # (removido em F3 — 2026-05-27)
-├── index.ts                   # ✅ Entry point: pi.on("session_start") → init()
+├── index.ts                   # 🔧 F5: init → resolve → registerAll → listen
+                               # Guard initialized, bootstrap único,
+                               # tools + commands registrados uma vez.
 ```
 
-**Legenda:** ✅ existe agora | (futuro) ainda não implementado
+**Legenda:** ✅ existe agora | 🔧 F5 (em planejamento/implementação) | (futuro) ainda não implementado
 
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
 > F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27.
-> F4 ✅ — Issues #61–#66: RecallConfig + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring concluídos 2026-05-29. Próximo: F5 Tools + Commands.
+> F4 ✅ — Issues #61–#66: RecallConfig + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring concluídos 2026-05-29.
+> F5 🔧 — Grill concluído 2026-05-29: 6 tools, 6 commands, SearchService, WriteService, Pipeline, Widget, index.ts redesign.
 
 ---
 
