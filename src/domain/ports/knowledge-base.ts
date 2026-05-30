@@ -7,7 +7,6 @@ export interface GlobResult {
 }
 
 export interface GrepOptions {
-  pattern: string;
   caseInsensitive?: boolean;
   excludeUri?: string;
   levelLimit?: number;

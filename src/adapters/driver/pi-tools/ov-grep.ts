@@ -26,7 +26,6 @@ export function createOvGrepTool(
       try {
         const result = await pipeline.execute(
           () => svc.grep(params.pattern!, {
-            pattern: params.pattern!,
             caseInsensitive: params.caseInsensitive,
             levelLimit: params.levelLimit,
             nodeLimit: params.nodeLimit,

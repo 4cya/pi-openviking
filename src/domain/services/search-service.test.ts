@@ -101,7 +101,7 @@ describe("SearchService", () => {
       grep: async (...args) => { grepCalls.push(args); return expected; },
     });
     const svc = new SearchService(kb, { searchMode: "find" } as RecallConfig, makeLogger());
-    const result = await svc.grep("hello", { pattern: "hello", caseInsensitive: true });
+    const result = await svc.grep("hello", { caseInsensitive: true });
     expect(result).toBe(expected);
     expect(grepCalls).toHaveLength(1);
     expect((grepCalls[0] as any[])[0]).toBe("hello");

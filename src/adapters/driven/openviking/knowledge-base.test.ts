@@ -189,7 +189,7 @@ describe("KnowledgeBaseAdapter.grep", () => {
     });
 
     const kb = new KnowledgeBaseAdapter(transport);
-    const result = await kb.grep("import", { pattern: "import" });
+    const result = await kb.grep("import");
 
     const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(label).toBe("KnowledgeBase.grep");
@@ -208,7 +208,6 @@ describe("KnowledgeBaseAdapter.grep", () => {
 
     const kb = new KnowledgeBaseAdapter(transport);
     await kb.grep("function", {
-      pattern: "function",
       caseInsensitive: true,
       excludeUri: "viking://node_modules/",
       levelLimit: 3,
@@ -230,7 +229,7 @@ describe("KnowledgeBaseAdapter.grep", () => {
     });
 
     const kb = new KnowledgeBaseAdapter(transport);
-    await kb.grep("todo", { pattern: "todo" });
+    await kb.grep("todo");
 
     const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(opts.body);

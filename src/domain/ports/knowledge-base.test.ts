@@ -50,8 +50,9 @@ describe("GlobResult", () => {
 
 describe("GrepOptions", () => {
   it("accepts optional fields", () => {
-    const opts: GrepOptions = { pattern: "TODO", caseInsensitive: true, nodeLimit: 10 };
-    expect(opts.pattern).toBe("TODO");
+    const opts: GrepOptions = { caseInsensitive: true, nodeLimit: 10 };
+    expect(opts.caseInsensitive).toBe(true);
+    expect(opts.nodeLimit).toBe(10);
   });
 });
 
