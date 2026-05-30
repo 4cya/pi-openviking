@@ -1,79 +1,72 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { init } from "./infrastructure/lifecycle";
-import { Pipeline } from "./domain/pipeline/pipeline";
-import { loggingMiddleware } from "./domain/pipeline/logging-middleware";
-import { SearchService } from "./domain/services/search-service";
-import { WriteService } from "./domain/services/write-service";
-import { ReadService } from "./domain/services/read-service";
-import { createOvSearchTool } from "./adapters/driver/pi-tools/ov-search";
-import { createOvGlobTool } from "./adapters/driver/pi-tools/ov-glob";
-import { createOvGrepTool } from "./adapters/driver/pi-tools/ov-grep";
-import { createOvWriteTool } from "./adapters/driver/pi-tools/ov-write";
-import { createOvReadTool } from "./adapters/driver/pi-tools/ov-read";
-import { createOvRecallTool } from "./adapters/driver/pi-tools/ov-recall";
-import type { KnowledgeBase } from "./domain/ports/knowledge-base";
-import type { FsStore } from "./domain/ports/fs-store";
-import type { Content } from "./domain/ports/fs-store";
-import type { SearchResult } from "./domain/knowledge/model/search-result";
-import type { GlobResult, GrepResult } from "./domain/ports/knowledge-base";
+import type { PiOVConfig } from "./infrastructure/config/schema";
+import type { DIContainer } from "./infrastructure/di/container";
 import type { Logger } from "./domain/ports/logger";
-import { RecallService, type RecallResult } from "./domain/recall/recall-service";
-import { RecallCurator } from "./domain/recall/recall-curator";
-import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
+import type { SearchService } from "./domain/services/search-service";
+import type { WriteService } from "./domain/services/write-service";
+import type { ReadService } from "./domain/services/read-service";
+import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
+import type { FsStore } from "./domain/ports/fs-store";
+import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
+import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
+import { OVWidget } from "./adapters/driver/ov-widget";
+
+let initialized = false;
+let config: PiOVConfig;
+let logger: Logger;
+let container: DIContainer;
+let widget: OVWidget;
 
 export default async function openVikingExtension(pi: ExtensionAPI): Promise<void> {
   pi.on("session_start", async (_event, ctx) => {
-    const { config, logger, container } = await init(ctx.cwd);
+    // One-time initialization (guard prevents re-init on fork/resume/reload)
+    if (!initialized) {
+      initialized = true;
+      const result = await init(ctx.cwd);
+      config = result.config;
+      logger = result.logger;
+      container = result.container;
 
-    const kb = container.resolve<KnowledgeBase>("knowledgeBase");
-    const typedLogger = container.resolve<Logger>("logger");
-    const searchService = new SearchService(kb, config.recall, typedLogger);
+      // Create shared widget
+      widget = new OVWidget();
 
-    const fsStore = container.resolve<FsStore>("fsStore");
-    const writeService = new WriteService(fsStore);
-    const readService = new ReadService(fsStore);
+      // Resolve services from container
+      const searchService = container.resolve<SearchService>("searchService");
+      const writeService = container.resolve<WriteService>("writeService");
+      const readService = container.resolve<ReadService>("readService");
+      const recallService = container.resolve<RecallService>("recallService");
+      const sessionService = container.resolve<SessionService>("sessionService");
+      const fsStore = container.resolve<FsStore>("fsStore");
 
-    // Pipelines per tool type
-    const searchPipeline = new Pipeline<SearchResult>();
-    searchPipeline.use(loggingMiddleware("search", typedLogger));
+      // Register all 6 tools (once per process)
+      registerAllTools(pi, { searchService, writeService, readService, recallService }, logger);
 
-    const globPipeline = new Pipeline<GlobResult>();
-    globPipeline.use(loggingMiddleware("glob", typedLogger));
+      // Register all 6 commands (once per process)
+      registerAllCommands(pi, {
+        recallService,
+        sessionService,
+        searchService,
+        fsStore,
+        ovConfig: config.ov,
+        recallConfig: config.recall,
+        widgetUpdater: (field, value) => widget.update(field, value),
+      });
+    }
 
-    const grepPipeline = new Pipeline<GrepResult>();
-    grepPipeline.use(loggingMiddleware("grep", typedLogger));
+    // Every session_start: attach widget and try to create OV session
+    widget.attach(ctx.ui);
 
-    // Write/read pipelines
-    const writePipeline = new Pipeline<unknown>();
-    writePipeline.use(loggingMiddleware("write", typedLogger));
-
-    const readPipeline = new Pipeline<Content>();
-    readPipeline.use(loggingMiddleware("read", typedLogger));
-
-    // Register tools
-    pi.registerTool(createOvSearchTool(searchService, searchPipeline));
-    pi.registerTool(createOvGlobTool(searchService, globPipeline));
-    pi.registerTool(createOvGrepTool(searchService, grepPipeline));
-    pi.registerTool(createOvWriteTool(writeService, writePipeline));
-    pi.registerTool(createOvReadTool(readService, readPipeline));
-
-    // Recall pipeline
-    const curator = new RecallCurator(config.recall, [], typedLogger);
-    const recallService = new RecallService(kb, curator, config.recall, typedLogger, true);
-    const recallPipeline = new Pipeline<RecallResult>();
-    recallPipeline.use(loggingMiddleware("recall", typedLogger));
-    pi.registerTool(createOvRecallTool(recallService, recallPipeline));
-
-    // Register slash commands
-    const sessionService = container.resolve<SessionService>("sessionService");
-    registerAllCommands(pi, {
-      recallService,
-      sessionService,
-      searchService,
-      fsStore,
-      ovConfig: config.ov,
-      recallConfig: config.recall,
-    });
+    try {
+      const sessionService = container.resolve<SessionService>("sessionService");
+      await sessionService.createAndSet();
+      widget.update("conn", "connected");
+      const active = sessionService.getActive();
+      widget.update("session", active?.toString() ?? "-");
+      widget.update("scope", config.recall.targetUri ?? "(global)");
+    } catch {
+      widget.update("conn", "disconnected");
+    }
   });
 }

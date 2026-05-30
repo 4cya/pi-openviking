@@ -123,4 +123,40 @@ describe("ov-commit command", () => {
 
     expect(waitForCommit).not.toHaveBeenCalled();
   });
+
+  it("calls widgetUpdater on successful wait", async () => {
+    const widgetUpdater = vi.fn();
+    const sessionId = { toString: () => "sess-1" };
+    const commit = vi.fn().mockResolvedValue({ taskId: "task-789" });
+    const waitForCommit = vi.fn().mockResolvedValue({ status: "completed" });
+    const sessionService = {
+      getActive: () => sessionId,
+      commit,
+      waitForCommit,
+    };
+    const cmd = createOvCommitCommand(sessionService as any, widgetUpdater);
+    const ctx = mockCtx();
+
+    await cmd.handler("--wait", ctx);
+
+    expect(widgetUpdater).toHaveBeenCalledWith("memories", "updated");
+  });
+
+  it("does not call widgetUpdater on failed wait", async () => {
+    const widgetUpdater = vi.fn();
+    const sessionId = { toString: () => "sess-1" };
+    const commit = vi.fn().mockResolvedValue({ taskId: "task-000" });
+    const waitForCommit = vi.fn().mockResolvedValue({ status: "failed" });
+    const sessionService = {
+      getActive: () => sessionId,
+      commit,
+      waitForCommit,
+    };
+    const cmd = createOvCommitCommand(sessionService as any, widgetUpdater);
+    const ctx = mockCtx();
+
+    await cmd.handler("--wait", ctx);
+
+    expect(widgetUpdater).not.toHaveBeenCalled();
+  });
 });

@@ -78,4 +78,37 @@ describe("ov-recall command", () => {
     const completions = cmd.getArgumentCompletions!("x");
     expect(completions).toBeNull();
   });
+
+  it("calls widgetUpdater when recall is toggled on", async () => {
+    const widgetUpdater = vi.fn();
+    const setEnabled = vi.fn();
+    const cmd = createOvRecallCommand({ setEnabled } as any, widgetUpdater);
+    const ctx = mockCtx();
+
+    await cmd.handler("on", ctx);
+
+    expect(widgetUpdater).toHaveBeenCalledWith("recall", "on");
+  });
+
+  it("calls widgetUpdater when recall is toggled off", async () => {
+    const widgetUpdater = vi.fn();
+    const setEnabled = vi.fn();
+    const cmd = createOvRecallCommand({ setEnabled } as any, widgetUpdater);
+    const ctx = mockCtx();
+
+    await cmd.handler("off", ctx);
+
+    expect(widgetUpdater).toHaveBeenCalledWith("recall", "off");
+  });
+
+  it("does not call widgetUpdater for invalid arg", async () => {
+    const widgetUpdater = vi.fn();
+    const setEnabled = vi.fn();
+    const cmd = createOvRecallCommand({ setEnabled } as any, widgetUpdater);
+    const ctx = mockCtx();
+
+    await cmd.handler("maybe", ctx);
+
+    expect(widgetUpdater).not.toHaveBeenCalled();
+  });
 });

@@ -114,7 +114,7 @@ _Avoid_: container, ioc
 
 **Lifecycle**:
 The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
-Single `init()` in `infrastructure/lifecycle.ts`. Registers 11 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1-F3), plus recallCurator, sessionService, recallService (F4), plus searchService (F5.1). No IntentDetector — recall toggle is command-based. Scorers `[relevanceScorer, temporalScorer]` wired in F4. No GraphExpander — absent until F8. 18 lifecycle smoke tests.
+Single `init()` in `infrastructure/lifecycle.ts`. Registers 13 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1-F3), plus recallCurator, sessionService, recallService (F4), plus searchService, writeService, readService (F5). No IntentDetector — recall toggle is command-based. Scorers `[relevanceScorer, temporalScorer]` wired in F4. No GraphExpander — absent until F8. 22 lifecycle smoke tests.
 _Avoid_: bootstrap lifecycle, module lifecycle
 
 ### Core Domain (future phases)
@@ -286,7 +286,20 @@ Calls `searchService.search({ query, mode: "fast" })`. Formats results as readab
 **`/ov-delete <uri>`** *(implemented — `adapters/driver/pi-commands/ov-delete-command.ts`)*:
 Shows `ctx.ui.confirm()` confirmation dialog before calling `fsStore.delete(parsedUri)`. Validates URI. Cancels gracefully on user rejection. Shows error on failure. 5 tests.
 
-**Remaining F5 tasks**: OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69). ov_recall = third slice (F5.3, issue #70). 6 slash commands = fourth slice (F5.4, issue #71).
+### OVWidget (F5.5)
+
+**OVWidget** *(implemented — `adapters/driver/ov-widget.ts`)*:
+A class that renders an OV status widget via `ctx.ui.setWidget("ov", ...)`. Compact 2-line format with icons:
+- Line 1: connection status (🟢/🔴), recall toggle (🔵/⚪ recall:on/off), target scope
+- Line 2: session ID
+
+The widget exposes `attach(ui)` (binds to a UI context and renders immediately), `update(field, value)` (changes state and re-renders), and `render()` (returns string[]). Commands that modify state (`/ov-recall`, `/ov-commit`) call `widget.update()` via a `widgetUpdater` callback passed through `CommandServices`. 5 unit tests.
+
+**Guard pattern** in `index.ts`: An `initialized` flag ensures `init()` runs once per process. On first `session_start`, the guard runs `init()`, resolves services from the DI container, calls `registerAllTools()` and `registerAllCommands()`, and creates the shared `OVWidget`. On every `session_start` (including fork/resume/reload), the widget is attached to the current UI context and an OV session is created via `SessionService.createAndSet()`. If OV is unavailable, the widget shows `🔴 disconnected` and operation continues gracefully.
+
+**Tool barrel** (`adapters/driver/pi-tools/tool-registry.ts`): `registerAllTools(pi, services, logger)` creates typed Pipelines with LoggingMiddleware for each tool and registers all 6 in one call.
+
+**Remaining F5 tasks**: status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69). ov_recall = third slice (F5.3, issue #70). 6 slash commands = fourth slice (F5.4, issue #71). Wiring + OVWidget = fifth slice (F5.5, issue #72).
 
 ## Flagged ambiguities
 

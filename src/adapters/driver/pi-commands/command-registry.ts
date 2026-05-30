@@ -18,13 +18,15 @@ export interface CommandServices {
   fsStore: FsStore;
   ovConfig: OVAdapterConfig;
   recallConfig: RecallConfig;
+  /** Callback to update OVWidget when command changes state */
+  widgetUpdater?: (field: string, value: string) => void;
 }
 
 export function registerAllCommands(pi: ExtensionAPI, svcs: CommandServices): void {
-  pi.registerCommand("ov-recall", createOvRecallCommand(svcs.recallService));
+  pi.registerCommand("ov-recall", createOvRecallCommand(svcs.recallService, svcs.widgetUpdater));
   pi.registerCommand("ov-status", createOvStatusCommand(svcs.ovConfig, svcs.sessionService, svcs.recallService, svcs.recallConfig));
   pi.registerCommand("ov-tree", createOvTreeCommand(svcs.fsStore));
-  pi.registerCommand("ov-commit", createOvCommitCommand(svcs.sessionService));
+  pi.registerCommand("ov-commit", createOvCommitCommand(svcs.sessionService, svcs.widgetUpdater));
   pi.registerCommand("ov-search", createOvSearchCommand(svcs.searchService));
   pi.registerCommand("ov-delete", createOvDeleteCommand(svcs.fsStore));
 }

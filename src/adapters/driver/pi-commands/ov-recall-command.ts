@@ -1,7 +1,7 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { RecallService } from "../../../domain/recall/recall-service";
 
-export function createOvRecallCommand(svc: RecallService) {
+export function createOvRecallCommand(svc: RecallService, widgetUpdater?: (field: string, value: string) => void) {
   return {
     description: "Enable or disable automatic recall. Usage: /ov-recall on|off",
     getArgumentCompletions: (prefix: string) => {
@@ -16,6 +16,7 @@ export function createOvRecallCommand(svc: RecallService) {
         return;
       }
       svc.setEnabled(trimmed === "on");
+      widgetUpdater?.("recall", trimmed);
       ctx.ui.notify(`Recall ${trimmed === "on" ? "enabled" : "disabled"}`, "info");
     },
   };

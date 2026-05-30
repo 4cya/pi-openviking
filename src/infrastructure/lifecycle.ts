@@ -7,6 +7,8 @@ import { relevanceScorer, temporalScorer } from "../domain/recall/curate";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
+import { WriteService } from "../domain/services/write-service";
+import { ReadService } from "../domain/services/read-service";
 import type { Logger } from "../domain/ports/logger";
 import type { PiOVConfig } from "../infrastructure/config/schema";
 
@@ -47,9 +49,15 @@ export async function init(cwd: string): Promise<{
   );
   container.register("recallService", () => recallService, true);
 
-  // F5 — search service
+  // F5 — application services
   const searchService = new SearchService(adapter.knowledgeBase, config.recall, logger);
   container.register("searchService", () => searchService, true);
+
+  const writeService = new WriteService(adapter.fsStore);
+  container.register("writeService", () => writeService, true);
+
+  const readService = new ReadService(adapter.fsStore);
+  container.register("readService", () => readService, true);
 
   return { config, logger, container };
 }

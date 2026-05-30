@@ -1,7 +1,7 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { SessionService } from "../../../domain/services/session-service";
 
-export function createOvCommitCommand(sessionService: SessionService) {
+export function createOvCommitCommand(sessionService: SessionService, widgetUpdater?: (field: string, value: string) => void) {
   return {
     description: "Commit the current OV session. Usage: /ov-commit [--wait]",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
@@ -21,6 +21,9 @@ export function createOvCommitCommand(sessionService: SessionService) {
           ctx.ui.notify("Waiting for commit to complete...", "info");
           const status = await sessionService.waitForCommit(result.taskId);
           msg += `\nStatus: ${status.status}`;
+          if (status.status === "completed") {
+            widgetUpdater?.("memories", "updated");
+          }
         }
 
         ctx.ui.notify(msg, "info");

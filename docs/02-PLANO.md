@@ -247,7 +247,9 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 **Milestone F5.4 ✅:** 6 user-facing slash commands via `pi.registerCommand()`. Commands bypass the middleware pipeline and call services directly. Each command in its own file, barrel-exported from `command-registry.ts`. Commands: `/ov-recall on|off`, `/ov-status`, `/ov-tree [uri]`, `/ov-commit [--wait]`, `/ov-search <query>`, `/ov-delete <uri>`. 29 unit tests. Issue #71.
 
-**Milestone F5 completo:** Plugin funcional. 6 tools + 6 commands operacionais. Pendente: OVWidget + status bar.
+**Milestone F5.5 ✅:** Final wiring — guard pattern in `index.ts` (one-time init), barrel exports for tools (`tool-registry.ts`) and commands (`command-registry.ts`), all services resolved from DI container, `WriteService`/`ReadService` registered as singletons in `lifecycle.ts` (13 total). `OVWidget` class renders 2-line status via `ctx.ui.setWidget()`. Session created per `session_start`, graceful degradation on OV unavailability. 5 OVWidget tests. Issue #72.
+
+**Milestone F5 completo:** Plugin funcional. 6 tools + 6 commands + OVWidget operacionais. Pendente: status bar.
 
 ### F6 — Auto-Recall + Session Sync (15 dias)
 
@@ -328,8 +330,8 @@ flowchart LR
     F7b --> F8["F8 Features"]
 ```
 
-> **F5 concluída (6 tools + 6 commands, 425 tests):** F5.1–F5.4 implementados.
-> Pendente: OVWidget + status bar.
+> **F5 concluída (6 tools + 6 commands + OVWidget, 439 tests):** F5.1–F5.5 implementados.
+> Pendente: status bar.
 
 Cada fase depende da anterior. Sem atalhos. Cada fase testada antes
 de iniciar a próxima.

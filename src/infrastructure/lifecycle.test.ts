@@ -8,6 +8,8 @@ import { RecallCurator } from "../domain/recall/recall-curator";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
+import { WriteService } from "../domain/services/write-service";
+import { ReadService } from "../domain/services/read-service";
 import type { Logger } from "../domain/ports/logger";
 import type { KnowledgeBase } from "../domain/ports/knowledge-base";
 import type { FsStore } from "../domain/ports/fs-store";
@@ -176,6 +178,36 @@ describe("init", () => {
     const { container } = await init(tmpDir);
     const s1 = container.resolve("searchService");
     const s2 = container.resolve("searchService");
+    expect(s1).toBe(s2);
+  });
+
+  it("container resolves writeService as WriteService instance", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve<WriteService>("writeService");
+    expect(svc).toBeInstanceOf(WriteService);
+    expect(typeof svc.save).toBe("function");
+    expect(typeof svc.mkdir).toBe("function");
+    expect(typeof svc.mv).toBe("function");
+  });
+
+  it("writeService is singleton", async () => {
+    const { container } = await init(tmpDir);
+    const s1 = container.resolve("writeService");
+    const s2 = container.resolve("writeService");
+    expect(s1).toBe(s2);
+  });
+
+  it("container resolves readService as ReadService instance", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve<ReadService>("readService");
+    expect(svc).toBeInstanceOf(ReadService);
+    expect(typeof svc.read).toBe("function");
+  });
+
+  it("readService is singleton", async () => {
+    const { container } = await init(tmpDir);
+    const s1 = container.resolve("readService");
+    const s2 = container.resolve("readService");
     expect(s1).toBe(s2);
   });
 });
