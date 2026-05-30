@@ -572,7 +572,8 @@ src/
 │   │   ├── tool-registry.ts     # ✅ registerAllTools() barrel
 │   └── driven/
 │       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
-│       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort
+│       │   ├── circuit-breaker.ts # ✅ Pure state machine: CLOSED→OPEN→HALF_OPEN (8 tests)
+│       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort, CB decorator (3 integration tests)
 │       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read/write/list/tree/stat/mkdir/mv/delete)
 │       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find/search/glob/grep)
 │       │   ├── session-store.ts   # ✅ SessionStoreAdapter (create/send/commit/tasks/lifecycle)

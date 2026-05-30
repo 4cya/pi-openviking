@@ -3,6 +3,12 @@ import { toDomainError } from "./mappers/error-mapper";
 import { ConnectionError } from "../../../domain/errors/connection-error";
 import { DomainError } from "../../../domain/errors/domain-error";
 import type { Logger } from "../../../domain/ports/logger";
+import {
+  createCircuitBreaker,
+  circuitBreakerReducer,
+  allowsRequest,
+  type CircuitBreakerState,
+} from "./circuit-breaker";
 
 export interface RequestOptions {
   method?: string;
@@ -83,6 +89,7 @@ export class Transport {
   };
   private readonly logger?: Logger;
   private readonly rateLimiter: TokenBucket;
+  private cb: CircuitBreakerState | null;
 
   constructor(config: OVAdapterConfig, logger?: Logger) {
     this.baseUrl = config.endpoint.replace(/\/+$/, "");
@@ -95,6 +102,9 @@ export class Transport {
     };
     this.logger = logger;
     this.rateLimiter = new TokenBucket(config.rateLimitPerSecond ?? 0);
+    this.cb = config.circuitBreaker
+      ? createCircuitBreaker(config.circuitBreaker.threshold, config.circuitBreaker.resetTimeoutMs)
+      : null;
   }
 
   async request<T>(
@@ -120,6 +130,16 @@ export class Transport {
     const requestTimeout = opts?.timeout ?? this.defaults.timeout;
     let lastError: Error | null = null;
     let status: number | null = null;
+
+    // Circuit breaker check — reject fast if OPEN
+    if (this.cb && !allowsRequest(this.cb)) {
+      this.logger?.debug(
+        `[${methodLabel}] ${method} ${path} -> REJECTED (circuit breaker OPEN)`,
+      );
+      throw new ConnectionError(
+        `[${methodLabel}] Circuit breaker OPEN — request rejected`,
+      );
+    }
 
     // Acquire rate-limit token before sending
     await this.rateLimiter.acquire(signal);
@@ -168,7 +188,13 @@ export class Transport {
             }
 
             if (response.status >= 400 && response.status < 500) {
+              // 4xx — client error, don't feed to CB
               throw toDomainError(response.status, responseBody, methodLabel);
+            }
+
+            // 5xx — feed to CB
+            if (this.cb) {
+              this.cb = circuitBreakerReducer(this.cb, { type: "RECORD_FAILURE", now: Date.now() });
             }
 
             if (attempt < maxRetries) {
@@ -180,12 +206,21 @@ export class Transport {
             throw toDomainError(response.status, responseBody, methodLabel);
           }
 
+          // Success — reset CB fail count
+          if (this.cb) {
+            this.cb = circuitBreakerReducer(this.cb, { type: "RECORD_SUCCESS" });
+          }
+
           const text = await response.text();
           if (!text) return undefined as T;
           return JSON.parse(text) as T;
         } catch (err: unknown) {
           if (err instanceof DOMException || (err instanceof Error && err.name === "AbortError")) {
             if (err.name === "TimeoutError" || (err as Error).message === "Timeout") {
+              // Timeout — feed to CB
+              if (this.cb) {
+                this.cb = circuitBreakerReducer(this.cb, { type: "RECORD_FAILURE", now: Date.now() });
+              }
               if (attempt < maxRetries) {
                 lastError = err as Error;
                 await sleep(Math.pow(2, attempt) * 1000);
@@ -200,6 +235,10 @@ export class Transport {
             err instanceof TypeError ||
             (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ECONNREFUSED")
           ) {
+            // Network error — feed to CB
+            if (this.cb) {
+              this.cb = circuitBreakerReducer(this.cb, { type: "RECORD_FAILURE", now: Date.now() });
+            }
             if (attempt < maxRetries) {
               lastError = new ConnectionError(`Network error — ${(err as Error).message}`);
               await sleep(Math.pow(2, attempt) * 1000);
@@ -215,7 +254,10 @@ export class Transport {
             throw err;
           }
 
-          // Unknown error — retryable
+          // Unknown error — feed to CB
+          if (this.cb) {
+            this.cb = circuitBreakerReducer(this.cb, { type: "RECORD_FAILURE", now: Date.now() });
+          }
           if (attempt < maxRetries) {
             lastError = err as Error;
             await sleep(Math.pow(2, attempt) * 1000);

@@ -292,3 +292,67 @@ describe("Transport", () => {
     await expect(promise).rejects.toThrow();
   });
 });
+
+describe("Circuit breaker integration", () => {
+  it("rejects with ConnectionError when circuit breaker is OPEN (no fetch)", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 0,
+      circuitBreaker: { threshold: 1, resetTimeoutMs: 10_000 },
+    });
+
+    // First request fails → CB opens (threshold=1)
+    await expect(t.request("test", "/api/v1/always-500")).rejects.toThrow(ConnectionError);
+
+    // Second request → should reject instantly without making HTTP call
+    const result = t.request("test", "/api/v1/success");
+    await expect(result).rejects.toThrow(ConnectionError);
+  });
+
+  it("allows requests when circuit breaker is CLOSED", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 0,
+      circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000 },
+    });
+
+    const result = await t.request<{ status: string }>("test", "/api/v1/success");
+    expect(result.status).toBe("ok");
+  });
+
+  it("records success and resets failure count", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 0,
+      circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000 },
+    });
+
+    // One failure should not open breaker
+    await expect(t.request("test", "/api/v1/always-500")).rejects.toThrow();
+
+    // A successful request should reset the counter
+    const result = await t.request<{ status: string }>("test", "/api/v1/success");
+    expect(result.status).toBe("ok");
+
+    // Should be able to make one more failure without tripping
+    await expect(t.request("test", "/api/v1/always-500")).rejects.toThrow();
+  });
+});

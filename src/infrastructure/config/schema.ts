@@ -9,6 +9,11 @@ export { ProfileConfig, ProfileSectionConfig, BUILTIN_PROFILES } from "./profile
 
 // ── OV Adapter config ─────────────────────────────────────────────────────────
 
+const CircuitBreakerConfigSchema = z.object({
+  threshold: z.coerce.number().int().min(1).default(3),
+  resetTimeoutMs: z.coerce.number().int().positive().default(30_000),
+});
+
 export const OVAdapterConfigSchema = z.object({
   endpoint: z.string().url().default("http://localhost:1933"),
   apiKey: z.string().default(""),
@@ -18,6 +23,7 @@ export const OVAdapterConfigSchema = z.object({
   commitTimeout: z.number().positive().default(120_000),
   maxRetries: z.number().int().min(0).default(3),
   rateLimitPerSecond: z.number().min(0).default(0),
+  circuitBreaker: CircuitBreakerConfigSchema.optional(),
 });
 
 export type OVAdapterConfig = z.infer<typeof OVAdapterConfigSchema>;

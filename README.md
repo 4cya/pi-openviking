@@ -119,7 +119,11 @@ Sessions are committed only when the user (or agent) explicitly calls `/ov-commi
 
 ### Health check with graceful degradation
 
-On startup, the plugin probes `GET /health`. If OpenViking is unreachable, all tools and commands still register, but auto-recall is disabled. Recovery is on-demand — the next tool call or auto-recall attempt retries the health check. Session sync has a circuit breaker: 3 consecutive failures → stop trying until recovery.
+On startup, the plugin probes `GET /health`. If OpenViking is unreachable, all tools and commands still register, but auto-recall is disabled. Recovery is on-demand — the next tool call or auto-recall attempt retries the health check.
+
+### Circuit breaker
+
+The Transport layer has a configurable circuit breaker that protects against OV unavailability. States: **CLOSED** (normal) → `threshold` consecutive failures → **OPEN** (rejects instantly with `ConnectionError`, no HTTP call) → `resetTimeoutMs` → **HALF_OPEN** (allows 1 probe request) → success = back to CLOSED, failure = back to OPEN with `resetTimeoutMs × 2`. Driven by real request failures (5xx/network/timeout), not health check. Config via `OVAdapterConfig.circuitBreaker`, env vars `OV_CIRCUIT_BREAKER_THRESHOLD` and `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`.
 
 ### Fire-and-forget async operations
 
@@ -244,13 +248,14 @@ export OV_DEBUG=true
 3. Check logs for `"auto-recall failed"` messages.
 4. Use `/ov-recall` to toggle or check state.
 
-### Session not syncing
+### Requests being rejected
 
-Session sync has a circuit breaker — after 3 consecutive failures, it stops trying. Check:
+If the circuit breaker is OPEN (3 consecutive failures by default), requests are rejected instantly with `ConnectionError`. Check:
 
 1. Server connectivity (`/health`).
-2. Logs for `"session sync"` errors.
-3. Recovery happens automatically on next successful tool call.
+2. Logs for `"circuit breaker OPEN"` messages.
+3. Recovery happens automatically after `resetTimeoutMs` (30s default) — next request acts as probe.
+4. Each probe failure doubles the reset timeout.
 
 ### Commit seems to do nothing
 

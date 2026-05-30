@@ -123,6 +123,33 @@ describe("TypeScript type inference", () => {
   });
 });
 
+describe("CircuitBreaker config", () => {
+  it("defaults to undefined (no circuit breaker)", () => {
+    const config = ConfigSchema.parse({});
+    expect(config.ov.circuitBreaker).toBeUndefined();
+  });
+
+  it("accepts circuitBreaker config with defaults", () => {
+    const config = ConfigSchema.parse({
+      ov: { circuitBreaker: { threshold: 5, resetTimeoutMs: 60_000 } },
+    });
+    expect(config.ov.circuitBreaker?.threshold).toBe(5);
+    expect(config.ov.circuitBreaker?.resetTimeoutMs).toBe(60_000);
+  });
+
+  it("rejects invalid threshold (< 1)", () => {
+    expect(() =>
+      ConfigSchema.parse({ ov: { circuitBreaker: { threshold: 0 } } }),
+    ).toThrow();
+  });
+
+  it("rejects invalid resetTimeoutMs (negative)", () => {
+    expect(() =>
+      ConfigSchema.parse({ ov: { circuitBreaker: { resetTimeoutMs: -1 } } }),
+    ).toThrow();
+  });
+});
+
 describe("No OV-specific fields", () => {
   it("extra fields are stripped by default", () => {
     const config = ConfigSchema.parse({

@@ -58,7 +58,7 @@ An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers
 _Avoid_: http client, fetcher
 
 **CircuitBreaker**:
-A decorator wrapper inside `Transport` that protects against OV unavailability. States: **CLOSED** (normal) → 3 consecutive failures → **OPEN** (rejects instantly with `ConnectionError`) → 30s timeout (configurable via `resetTimeout`) → **HALF_OPEN** (allows 1 probe request) → success = back to CLOSED, failure = back to OPEN with `resetTimeout × 2`. Circuit breaker is driven by real request failures — not by health check. Config lives in `OVAdapterConfig.circuitBreaker? { threshold: number, resetTimeout: number }`. Env vars: `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`.
+A decorator wrapper inside `Transport` that protects against OV unavailability. States: **CLOSED** (normal) → 3 failures (configurable `threshold`) → **OPEN** (rejects instantly with `ConnectionError`) → `resetTimeoutMs` (default 30s, configurable) → **HALF_OPEN** (allows 1 probe request) → success = back to CLOSED, failure = back to OPEN with `resetTimeoutMs × 2`. Circuit breaker is driven by real request failures — not by health check. Config lives in `OVAdapterConfig.circuitBreaker? { threshold: number, resetTimeoutMs: number }`. Env vars: `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`. Module at `adapters/driven/openviking/circuit-breaker.ts`. 8 pure reducer tests + 3 Transport integration tests. Issue #74.
 _Avoid_: cb, breaker, fault tolerance
 
 **HealthCheck**:
