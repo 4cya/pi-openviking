@@ -13,6 +13,7 @@ import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
 import { OVWidget } from "./adapters/driver/ov-widget";
 import { HealthCheck } from "./adapters/driven/openviking/health";
+import { agentMessageToParts } from "./adapters/driver/pi-session-sync/message-mapper";
 
 let initialized = false;
 let config: PiOVConfig;
@@ -20,6 +21,7 @@ let logger: Logger;
 let container: DIContainer;
 let widget: OVWidget;
 let healthCheck: HealthCheck;
+let sessionService: SessionService;
 
 export default async function openVikingExtension(pi: ExtensionAPI): Promise<void> {
   pi.on("session_start", async (_event, ctx) => {
@@ -39,11 +41,13 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const writeService = container.resolve<WriteService>("writeService");
       const readService = container.resolve<ReadService>("readService");
       const recallService = container.resolve<RecallService>("recallService");
-      const sessionService = container.resolve<SessionService>("sessionService");
       const fsStore = container.resolve<FsStore>("fsStore");
 
       // Create health check adapter
       healthCheck = new HealthCheck(config.ov.endpoint);
+
+      // Session service — module-level for hooks
+      sessionService = container.resolve<SessionService>("sessionService");
 
       // Register all 6 tools (once per process)
       registerAllTools(pi, { searchService, writeService, readService, recallService }, logger);
@@ -58,13 +62,41 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         recallConfig: config.recall,
         widgetUpdater: (field, value) => widget.update(field, value),
       });
+
+      // ── message_end: sync user/assistant messages to OV session ──────────
+      pi.on("message_end", (event) => {
+        const parts = agentMessageToParts(event.message);
+        if (parts.length === 0) return;
+
+        const active = sessionService.getActive();
+        if (!active) {
+          logger?.debug("message_end: no active session, skipping sync");
+          return;
+        }
+
+        sessionService.sendMessage(active, event.message.role, parts).catch((err) => {
+          logger?.warn("message_end: failed to send message", { error: (err as Error).message });
+        });
+      });
+
+      // ── session_shutdown: commit active session to OV ───────────────────
+      pi.on("session_shutdown", () => {
+        const active = sessionService.getActive();
+        if (!active) {
+          logger?.debug("session_shutdown: no active session, skipping commit");
+          return;
+        }
+
+        sessionService.commit(active).catch((err) => {
+          logger?.warn("session_shutdown: failed to commit session", { error: (err as Error).message });
+        });
+      });
     }
 
     // Every session_start: attach widget, create session, then check health
     widget.attach(ctx.ui);
 
     try {
-      const sessionService = container.resolve<SessionService>("sessionService");
       await sessionService.createAndSet();
       const active = sessionService.getActive();
       widget.update("session", active?.toString() ?? "-");

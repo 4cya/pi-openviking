@@ -561,6 +561,10 @@ src/
 │   │   ├── ov-read.test.ts    # ✅ 4 unit tests
 │   │   └── integration.test.ts # ✅ 8 integration tests (mock HTTP server)
 │   ├── driver/pi-commands/    # ✅ F5.4: 6 slash commands
+│   ├── driver/pi-session-sync/ # ✅ F6: MessageMapper
+│   │   ├── message-mapper.ts   # ✅ agentMessageToParts() — 9 tests
+│   │   └── message-mapper.test.ts # ✅ 9 tests (user/assistant/tool/empty/null/ImageContent)
+│   ├── driver/pi-commands/    # ✅ F5.4: 6 slash commands
 │   │   ├── ov-recall-command.ts  # ✅ /ov-recall on|off
 │   │   ├── ov-status-command.ts  # ✅ /ov-status
 │   │   ├── ov-tree-command.ts    # ✅ /ov-tree [uri]
