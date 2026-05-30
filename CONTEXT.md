@@ -114,7 +114,7 @@ _Avoid_: container, ioc
 
 **Lifecycle**:
 The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
-Single `init()` in `infrastructure/lifecycle.ts`. Registers 10 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1-F3), plus recallCurator, sessionService, recallService (F4 wired). No IntentDetector — recall toggle is command-based. No scorers passed in F4 — empty array, added in later slices. No GraphExpander — absent until F8. 16 lifecycle smoke tests.
+Single `init()` in `infrastructure/lifecycle.ts`. Registers 11 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1-F3), plus recallCurator, sessionService, recallService (F4), plus searchService (F5.1). No IntentDetector — recall toggle is command-based. Scorers `[relevanceScorer, temporalScorer]` wired in F4. No GraphExpander — absent until F8. 18 lifecycle smoke tests.
 _Avoid_: bootstrap lifecycle, module lifecycle
 
 ### Core Domain (future phases)
@@ -138,9 +138,13 @@ Injected into RecallService as optional (`GraphExpander?`). Absent until F8 — 
 **EventBus**:
 An in-memory publish/subscribe mechanism that decouples reactions to domain events (SESSION_STARTED, MEMORY_SAVED, INTENT_DETECTED, etc.). Domain events are what cross bounded contexts; infra events stay local.
 
-**Middleware Pipeline**:
-A stack of cross-cutting concerns (Logging → Cache → Metrics) that wraps application service calls. Each middleware can inspect or short-circuit a request before reaching the handler.
-Applied at tool-handler level (F5), not inside services (F4). Services are plain classes; tool handlers call `pipeline.execute(() => service.method())` to wrap.
+**Middleware Pipeline** *(implemented — `domain/pipeline/pipeline.ts`)*:
+Generic `Pipeline<T>` class that wraps async handlers with a middleware chain. Middlewares compose in last-registered = outermost-wraps order. Supports optional `AbortSignal` passthrough. 5 tests.
+
+**LoggingMiddleware** *(implemented — `domain/pipeline/logging-middleware.ts`)*:
+Factory function `loggingMiddleware(label, logger)` that measures handler duration and logs via the Logger port. Logs `info` on success, `error` on failure, with `durationMs` in context. Transparent — does not modify results. 2 tests.
+
+Applied at tool-handler level (F5), not inside services (F4). Services are plain classes; tool handlers call `pipeline.execute(() => service.method(params), signal)` to wrap. ToolContext (shared state between middlewares) deferred — added when cache middleware needs it.
 
 ### Shared Types (shared kernel)
 
@@ -225,11 +229,27 @@ _Avoid_: session manager, session handler
 
 **Write Service**:
 Handles content persistence: save, mkdir, mv. Wraps FsStore port. No write-back — OV `write()` modes (replace|append|create) cover all cases.
-Deferred to F5 — OV already handles implicit mkdir on create, extension validation, path normalization. Pure delegation, no orchestration logic in F4.
+Deferred to F5.2 — OV already handles implicit mkdir on create, extension validation, path normalization. Pure delegation, no orchestration logic.
 
-**SearchService** is also deferred to F5 — pure delegation over KnowledgeBase.
+**SearchService** *(implemented — `domain/services/search-service.ts`)*:
+Thin application service delegating to the `KnowledgeBase` port. Three methods: `search(params, signal?)` routes `mode` param (`fast` → `kb.find()`, `deep` → `kb.search()`, `auto` → `RecallConfig.searchMode`); `glob(pattern, uri?, limit?, signal?)` delegates directly; `grep(pattern, opts?, signal?)` delegates directly. Constructor takes `KnowledgeBase`, `RecallConfig`, `Logger`. 7 tests. Registered as singleton in lifecycle.
 
-**F4 scope (revised)**: Domain logic only (scorers, ~~IntentDetector~~, RecallCurator) + RecallService + SessionService + RecallConfig in schema + lifecycle wiring. IntentDetector eliminated — recall is a toggle command. Lifecycle wiring in `init()` creates and registers RecallCurator (no scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true). Thin service wrappers (SearchService, WriteService) born in F5 when tools need them.
+**F4 scope (revised)**: Domain logic only (scorers, ~~IntentDetector~~, RecallCurator) + RecallService + SessionService + RecallConfig in schema + lifecycle wiring. IntentDetector eliminated — recall is a toggle command. Lifecycle wiring in `init()` creates and registers RecallCurator (with scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true), SearchService (wired to KB + config). WriteService born in F5.2 when ov_write tool needs it.
+
+### Tools (F5.1 — first vertical slice)
+
+**ov_search** *(implemented — `adapters/driver/pi-tools/ov-search.ts`)*:
+Pi tool registered via `pi.registerTool()`. TypeBox schema: `{ query: string, mode?: "auto"|"fast"|"deep", limit?: number, targetUri?: string }`. Handler calls `pipeline.execute(() => searchService.search(params), signal)`. Returns JSON-formatted `SearchResult`. Error message on failure. 3 unit tests + 2 integration tests.
+
+**ov_glob** *(implemented — `adapters/driver/pi-tools/ov-glob.ts`)*:
+Pi tool for URI pattern discovery. Schema: `{ pattern: string, uri?: string, limit?: number }`. Handler wraps `searchService.glob()` via pipeline. Returns `GlobResult` as JSON. 2 unit tests + 1 integration test.
+
+**ov_grep** *(implemented — `adapters/driver/pi-tools/ov-grep.ts`)*:
+Pi tool for content regex search. Schema: `{ pattern: string, uri?: string, caseInsensitive?: boolean, levelLimit?: number, nodeLimit?: number }`. Handler wraps `searchService.grep()` via pipeline. Returns `GrepResult` as JSON. 2 unit tests + 1 integration test.
+
+**Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines (`Pipeline<SearchResult>`, `Pipeline<GlobResult>`, `Pipeline<GrepResult>`) with `LoggingMiddleware` and passes both service and pipeline to each factory.
+
+**Remaining F5 tasks**: ov_read, ov_write, ov_recall tools; 6 commands; OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68).
 
 ## Flagged ambiguities
 

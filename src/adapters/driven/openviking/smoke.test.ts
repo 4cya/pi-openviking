@@ -68,6 +68,7 @@ beforeAll(async () => {
     timeout: 5000,
     commitTimeout: 120_000,
     maxRetries: 0,
+    rateLimitPerSecond: 0,
   });
 });
 

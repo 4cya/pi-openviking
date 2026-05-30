@@ -47,10 +47,10 @@ describe("InMemoryEventBus", () => {
   it("getLog() returns all published events", () => {
     const bus = new InMemoryEventBus();
     bus.publish({ type: "MEMORY_SAVED", uri: "viking://a", source: "s1" });
-    bus.publish({ type: "INTENT_DETECTED", category: "q", confidence: 0.9 });
+    bus.publish({ type: "RELATION_LINKED", source: "viking://a", target: "viking://b", predicate: "related" });
     expect(bus.getLog()).toHaveLength(2);
     expect(bus.getLog()[0].type).toBe("MEMORY_SAVED");
-    expect(bus.getLog()[1].type).toBe("INTENT_DETECTED");
+    expect(bus.getLog()[1].type).toBe("RELATION_LINKED");
   });
 
   it("clearLog() empties the event log", () => {

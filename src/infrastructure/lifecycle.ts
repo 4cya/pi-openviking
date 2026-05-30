@@ -6,6 +6,7 @@ import { RecallCurator } from "../domain/recall/recall-curator";
 import { relevanceScorer, temporalScorer } from "../domain/recall/curate";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
+import { SearchService } from "../domain/services/search-service";
 import type { Logger } from "../domain/ports/logger";
 import type { PiOVConfig } from "../infrastructure/config/schema";
 
@@ -45,6 +46,10 @@ export async function init(cwd: string): Promise<{
     true,
   );
   container.register("recallService", () => recallService, true);
+
+  // F5 — search service
+  const searchService = new SearchService(adapter.knowledgeBase, config.recall, logger);
+  container.register("searchService", () => searchService, true);
 
   return { config, logger, container };
 }

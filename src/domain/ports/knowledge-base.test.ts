@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { KnowledgeBase, GlobResult, GrepResult } from "./knowledge-base";
+import type { KnowledgeBase, GlobResult, GrepResult, GrepOptions } from "./knowledge-base";
 import type { FindQuery, SearchRequest } from "../common/search-query";
 import type { SearchResult } from "../knowledge/model/search-result";
 
@@ -50,7 +50,7 @@ describe("GlobResult", () => {
 
 describe("GrepOptions", () => {
   it("accepts optional fields", () => {
-    const opts: GrepOptions = { pattern: "TODO", caseSensitive: false, maxResults: 10 };
+    const opts: GrepOptions = { pattern: "TODO", caseInsensitive: true, nodeLimit: 10 };
     expect(opts.pattern).toBe("TODO");
   });
 });

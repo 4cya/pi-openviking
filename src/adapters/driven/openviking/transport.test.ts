@@ -114,6 +114,7 @@ function makeTransport(opts?: Partial<{
     timeout: opts?.timeout ?? 5000,
     commitTimeout: 120_000,
     maxRetries: opts?.maxRetries ?? 2,
+    rateLimitPerSecond: 0,
   });
 }
 
@@ -170,13 +171,13 @@ describe("Transport", () => {
     // Track call count
     let callCount = 0;
     const origFetch = globalThis.fetch;
-    globalThis.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       callCount++;
       return new Response(JSON.stringify({ message: "not found" }), {
         status: 404,
         headers: { "Content-Type": "application/json" },
       });
-    };
+    }) as any;
 
     try {
       const t = makeTransport();

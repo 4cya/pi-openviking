@@ -19,22 +19,17 @@ postergados para fases futuras intencionalmente.
 
 ---
 
-## `index.ts` — `init()` retorno descartado
+## ~~`index.ts` — `init()` retorno descartado~~ **RESOLVIDO em F5.1**
 
 | Campo | Valor |
 |-------|-------|
 | **Deferido de** | F1 |
-| **Deferido para** | F5.1 (index.ts — primeiro da fase) |
+| **Resolvido em** | F5.1 (issue #68) |
 | **Motivo** | Nenhum consumidor do container/config/logger até F5. |
 | **Arquivo** | `src/index.ts` |
-| **Problema** | `await init(ctx.cwd)` retorna `{ config, logger, container }` mas o valor é descartado. Em F5, tool-registry e command-registry precisarão do container. |
-| **Fix previsto** | F5.1: Armazenar em variáveis module-level: |
-| | ```typescript |
-| | let container: DIContainer; |
-| | let config: PiOVConfig; |
-| | let logger: Logger; |
-| | ```
-| **Status** | Pendente |
+| **Problema** | `await init(ctx.cwd)` retorna `{ config, logger, container }` mas o valor era descartado. |
+| **Fix aplicado** | `session_start` handler captura `{ config, logger, container }`, resolve KB via `container.resolve<KnowledgeBase>()`, cria pipelines tipados com LoggingMiddleware, instancia SearchService, registra tools via `pi.registerTool()`. 11 singletons no container. |
+| **Status** | **RESOLVIDO** |
 
 ---
 

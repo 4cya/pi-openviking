@@ -37,7 +37,7 @@ describe("toDomainError", () => {
     const err = toDomainError(422, { details: "invalid" }, label);
     expect(err).toBeInstanceOf(ValidationError);
     expect(err.message).toContain("Validation failed");
-    expect(err.details).toEqual({ details: "invalid" });
+    expect((err as ValidationError).details).toEqual({ details: "invalid" });
   });
 
   it("maps unknown 4xx to ValidationError", () => {

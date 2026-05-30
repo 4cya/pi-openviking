@@ -14,7 +14,7 @@
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
 | **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 10 singletons total no container. Ver `02-PLANO.md`. |
-| **F5 Tools + Commands** | 🔧 Planejado | 6 tools (ov_search, ov_glob, ov_grep, ov_read, ov_write, ov_recall) + 6 commands (/ov-recall, /ov-status, /ov-tree, /ov-commit, /ov-search, /ov-delete) + SearchService + WriteService + Middleware Pipeline + OVWidget. Detalhado no grill F5 em `02-PLANO.md`. |
+| **F5 Tools + Commands** | 🔧 Em progresso (F5.1 ✅) | F5.1 ✅: Pipeline + LoggingMiddleware + SearchService + ov_search + ov_glob + ov_grep + index.ts wiring + lifecycle wiring. 11 singletons total. Pendente: ov_read, ov_write, ov_recall tools + 6 commands + OVWidget + status bar. Ver `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -422,7 +422,7 @@ Request → LoggingMiddleware → Handler → Response
 - ToolContext (estado compartilhado entre middlewares) **não criado em F5** — adicionado quando cache middleware precisar interceptar chamadas idempotentes
 - Uso nas tools: `pipeline.execute(() => searchService.search(params))`
 
-**Arquivo:** `application/middleware/pipeline.ts` + `application/middleware/logging.ts`
+**Arquivo:** `domain/pipeline/pipeline.ts` + `domain/pipeline/logging-middleware.ts`
 
 ### 4.4 Event Bus — Domínio puro
 
@@ -528,7 +528,8 @@ src/
 │   │   ├── recall-curator.ts  # ✅ RecallCurator wrapper over curate()
 │   │   └── recall-service.ts  # ✅ RecallService: toggle → KB → curator → RecallResult
 │   ├── services/              # ✅ Domain services com estado
-│   │   └── session-service.ts  # ✅ SessionService: active session + commit + polling
+│   │   ├── session-service.ts  # ✅ SessionService: active session + commit + polling
+│   │   └── search-service.ts  # ✅ F5.1: SearchService: find/search/glob/grep delegation
 │   ├── profile/               # (futuro F7) Contexto: perfis de comportamento
 │   │   ├── model/             # ProfileConfig, AutoDetectRule
 │   │   └── service/           # ProfileManager, ProfileResolver, AutoDetect
@@ -542,32 +543,19 @@ src/
 │   │   └── event-bus.ts       # ✅ EventBus + DomainEvent, EventHandler
 │   └── errors/                # ✅ DomainError, NotFoundError, ConnectionError, ValidationError
 │
-├── application/               # 🔧 F5: Casos de uso
-│   ├── services/              # 🔧 F5: search.service.ts + write.service.ts
-│   │   ├── search.service.ts  # 🔧 Thin wrapper: find/search/glob/grep delega ao KB
-│   │   └── write.service.ts   # 🔧 Thin wrapper: save/mkdir/mv delega ao FsStore
-│   └── middleware/            # 🔧 F5: Pipeline + middlewares
-│       ├── pipeline.ts        # 🔧 Pipeline<T> genérico
-│       └── logging.ts         # 🔧 Logging middleware
+├── application/               # (não utilizado — SearchService em domain/services/, Pipeline em domain/pipeline/)
 │
 ├── adapters/
-│   ├── driving/pi/            # 🔧 F5: Tools + Commands + Widget
-│   │   ├── tool-registry.ts   # 🔧 Importa + chama register*Tool()
-│   │   ├── command-registry.ts# 🔧 Importa + chama register*Command()
-│   │   ├── tools/             # 🔧 1 arquivo por tool
-│   │   │   ├── search.tool.ts
-│   │   │   ├── glob.tool.ts
-│   │   │   ├── grep.tool.ts
-│   │   │   ├── read.tool.ts
-│   │   │   ├── write.tool.ts
-│   │   │   └── recall.tool.ts
+│   ├── driver/pi-tools/       # ✅ F5.1: 3 search tools registradas
+│   │   ├── ov-search.ts       # ✅ ov_search tool + TypeBox schema
+│   │   ├── ov-search.test.ts  # ✅ 3 unit tests
+│   │   ├── ov-glob.ts         # ✅ ov_glob tool
+│   │   ├── ov-glob.test.ts    # ✅ 2 unit tests
+│   │   ├── ov-grep.ts         # ✅ ov_grep tool
+│   │   ├── ov-grep.test.ts    # ✅ 2 unit tests
+│   │   └── integration.test.ts # ✅ 4 integration tests (mock HTTP server)
+│   ├── driving/pi/            # 🔧 F5 restante: Commands + Widget
 │   │   ├── commands/          # 🔧 1 arquivo por command
-│   │   │   ├── recall.cmd.ts
-│   │   │   ├── status.cmd.ts
-│   │   │   ├── tree.cmd.ts
-│   │   │   ├── commit.cmd.ts
-│   │   │   ├── search.cmd.ts
-│   │   │   └── delete.cmd.ts
 │   │   └── widget.ts          # 🔧 OVWidget — setWidget() com info rica
 │   └── driven/
 │       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
@@ -613,7 +601,7 @@ src/
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
 > F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27.
 > F4 ✅ — Issues #61–#66: RecallConfig + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring concluídos 2026-05-29.
-> F5 🔧 — Grill concluído 2026-05-29: 6 tools, 6 commands, SearchService, WriteService, Pipeline, Widget, index.ts redesign.
+> F5 🔧 — F5.1 ✅ (issue #68): Pipeline + LoggingMiddleware + SearchService + ov_search + ov_glob + ov_grep + index.ts wiring. Pendente: F5.2+ (ov_read, ov_write, ov_recall tools + 6 commands + Widget).
 
 ---
 

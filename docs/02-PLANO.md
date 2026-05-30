@@ -216,27 +216,30 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 **Objetivo:** Conectar o domínio ao Pi. Primeiro momento em que algo roda.
 
-| Tarefa | Artefato | Descrição |
-|--------|----------|-----------|
-| **F5.1** | `index.ts` | Entry point: init DI → connect → register. **Capturar retorno de `init()`** em variáveis module-level (`container`, `config`, `logger`). Ver `docs/DEFERRED.md`. |
-| **F5.2** | `application/services/search.service.ts` | **Deferido de F4.** Wrapper thin sobre KnowledgeBase (find + search + glob + grep). |
-| **F5.3** | `application/services/write.service.ts` | **Deferido de F4.** Wrapper thin sobre FsStore (save + mkdir + mv). Sem write-back. |
-| F5.4 | `adapters/driving/pi/tool-registry.ts` | Registra 6 tools no Pi. Tools chamam services via `pipeline.execute()` (ver F5.8). |
-| F5.5 | `adapters/driving/pi/command-registry.ts` | Registra 6 commands no Pi. |
-| F5.6 | `adapters/driving/pi/status-bar.ts` | Status bar integration. |
-| F5.7 | `adapters/driving/tui/renderers/*.ts` | TUI renderers. |
-| F5.8 | `application/middleware/pipeline.ts` | Middleware Pipeline (orchestrator genérico). Aplica-se em tool-handler level — services não sabem de middleware. |
-| F5.9 | `application/middleware/logging.ts` | Logging middleware. |
-| — | Cache middleware | **Adiado**: implementar após OV adapter (F3+) quando cache existir. |
-| F5.10 | Testes integração | Testes contra Pi real. |
+| Tarefa | Artefato | Descrição | Status |
+|--------|----------|-----------|--------|
+| **F5.1** | `domain/pipeline/pipeline.ts` + `logging-middleware.ts` | Pipeline genérico `Pipeline<T>` + LoggingMiddleware. 7 tests. | ✅ |
+| **F5.2** | `domain/services/search-service.ts` | SearchService: thin wrapper delegating find/search/glob/grep ao KB. Mode routing. 7 tests. | ✅ |
+| **F5.3** | `adapters/driver/pi-tools/ov-{search,glob,grep}.ts` | 3 tools registradas via `pi.registerTool()`, cada uma chama `pipeline.execute()`. TypeBox schemas. 11 tests. | ✅ |
+| **F5.4** | `src/index.ts` + `infrastructure/lifecycle.ts` | Entry point: `session_start` → `init()` → resolve KB → create pipelines/services → register tools. 11 singletons. | ✅ |
+| F5.5 | `adapters/driver/pi-tools/ov-read.ts` | ov_read tool (delegating to FsStore.read). | Pendente |
+| F5.6 | `adapters/driver/pi-tools/ov-write.ts` | ov_write tool + WriteService (delegating to FsStore). | Pendente |
+| F5.7 | `adapters/driver/pi-tools/ov-recall.ts` | ov_recall tool (delegating to RecallService). | Pendente |
+| F5.8 | `adapters/driver/pi-commands/` | 6 commands (/ov-recall, /ov-status, /ov-tree, /ov-commit, /ov-search, /ov-delete). | Pendente |
+| F5.9 | `adapters/driver/pi-tools/widget.ts` | OVWidget — setWidget() com info rica. | Pendente |
+| F5.10 | `adapters/driver/pi-tools/status-bar.ts` | Status bar integration. | Pendente |
 
-**Nota 1 — Ordem de dependência:** `index.ts` (F5.1) deve vir primeiro — chama `init()` que retorna `{ container, config, logger }`. tool-registry e command-registry (F5.4–F5.5) recebem essas dependências via closure e só podem ser registrados após `init()`.
+**Nota 1 — F5.1–F5.4 concluídos:** `index.ts` chama `init()` e resolve `{ container, config, logger }`, cria pipelines tipados, resolve KB, instancia SearchService, registra tools.
 
 **Nota 2 — PiEventBridge eliminado:** `adapters/driving/pi/pi-event-bridge.ts` não será criado. Per ADR-011 e CONTEXT.md: eventos de infra (session_start, message_end, before_agent_start) são tratados diretamente por `pi.on()` em `index.ts` — não passam pelo EventBus de domínio. O EventBus só transporta eventos de domínio internos (MEMORY_SAVED, RECALL_EXECUTED, etc.) entre bounded contexts.
 
-**Nota 3 — SearchService + WriteService:** Camada de aplicação (application layer), não domínio. Wrappers 1:1 sem orquestração — OV já trata criação de parent directory, validação de extensão, etc.
+**Nota 3 — SearchService no domínio:** SearchService vive em `domain/services/` junto com SessionService — ambos são serviços finos sobre ports. A camada `application/` ficou vazia.
 
-**Milestone:** Plugin funcional. Tools e commands operacionais.
+**Nota 4 — Tools em adapters/driver/pi-tools/:** Cada tool é uma factory function `create*Tool(svc, pipeline)` retornando `ToolDefinition`. Index.ts instancia pipelines tipados (`Pipeline<SearchResult>`, etc.) com LoggingMiddleware e passa ambos para cada factory.
+
+**Milestone F5.1 ✅:** Pipeline + LoggingMiddleware + SearchService + 3 tools (ov_search, ov_glob, ov_grep) + index.ts wiring + lifecycle wiring. 25 tests. Issue #68.
+
+**Milestone F5 completo:** Plugin funcional. Tools e commands operacionais.
 
 ### F6 — Auto-Recall + Session Sync (15 dias)
 

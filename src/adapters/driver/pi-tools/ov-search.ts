@@ -1,0 +1,52 @@
+import { Type } from "@sinclair/typebox";
+import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { Pipeline } from "../../../domain/pipeline/pipeline";
+import type { SearchService } from "../../../domain/services/search-service";
+import type { SearchResult } from "../../../domain/knowledge/model/search-result";
+
+const SearchSchema = Type.Object({
+  query: Type.String({ description: "Search query" }),
+  mode: Type.Optional(
+    Type.Union(
+      [Type.Literal("auto"), Type.Literal("fast"), Type.Literal("deep")],
+      { description: 'Search mode: "auto" uses config default, "fast" uses find(), "deep" uses search()' },
+    ),
+  ),
+  limit: Type.Optional(Type.Number({ description: "Maximum results" })),
+  targetUri: Type.Optional(Type.String({ description: "Target URI scope" })),
+});
+
+export function createOvSearchTool(
+  svc: SearchService,
+  pipeline: Pipeline<SearchResult>,
+): ToolDefinition<typeof SearchSchema> {
+  return defineTool({
+    name: "ov_search",
+    label: "Search Knowledge",
+    description: "Search the OpenViking knowledge base. Supports fast (semantic find) and deep (intent-aware search) modes.",
+    promptSnippet: "ov_search(query, mode?, limit?, targetUri?) — search knowledge base",
+    parameters: SearchSchema,
+    async execute(_toolCallId, params, signal) {
+      try {
+        const result = await pipeline.execute(
+          () => svc.search({
+            query: params.query!,
+            mode: params.mode ?? "auto",
+            limit: params.limit,
+            targetUri: params.targetUri,
+          }, signal ?? undefined),
+          signal ?? undefined,
+        );
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+          details: undefined,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text" as const, text: `Search failed: ${err instanceof Error ? err.message : String(err)}` }],
+          details: undefined,
+        };
+      }
+    },
+  });
+}

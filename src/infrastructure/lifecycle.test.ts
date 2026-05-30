@@ -7,7 +7,12 @@ import { FileLogger } from "../adapters/driven/logger/file-logger";
 import { RecallCurator } from "../domain/recall/recall-curator";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
+import { SearchService } from "../domain/services/search-service";
 import type { Logger } from "../domain/ports/logger";
+import type { KnowledgeBase } from "../domain/ports/knowledge-base";
+import type { FsStore } from "../domain/ports/fs-store";
+import type { GraphStore } from "../domain/ports/graph-store";
+import type { SessionStore } from "../domain/ports/session-store";
 
 const OLD_ENV = process.env;
 
@@ -64,7 +69,7 @@ describe("init", () => {
 
   it("container resolves knowledgeBase adapter", async () => {
     const { container } = await init(tmpDir);
-    const kb = container.resolve("knowledgeBase");
+    const kb = container.resolve<KnowledgeBase>("knowledgeBase");
     expect(kb).toBeDefined();
     expect(typeof kb.find).toBe("function");
     expect(typeof kb.search).toBe("function");
@@ -72,7 +77,7 @@ describe("init", () => {
 
   it("container resolves fsStore adapter", async () => {
     const { container } = await init(tmpDir);
-    const fs = container.resolve("fsStore");
+    const fs = container.resolve<FsStore>("fsStore");
     expect(fs).toBeDefined();
     expect(typeof fs.read).toBe("function");
     expect(typeof fs.write).toBe("function");
@@ -80,7 +85,7 @@ describe("init", () => {
 
   it("container resolves graphStore adapter", async () => {
     const { container } = await init(tmpDir);
-    const gs = container.resolve("graphStore");
+    const gs = container.resolve<GraphStore>("graphStore");
     expect(gs).toBeDefined();
     expect(typeof gs.link).toBe("function");
     expect(typeof gs.graph).toBe("function");
@@ -88,7 +93,7 @@ describe("init", () => {
 
   it("container resolves sessionStore adapter", async () => {
     const { container } = await init(tmpDir);
-    const ss = container.resolve("sessionStore");
+    const ss = container.resolve<SessionStore>("sessionStore");
     expect(ss).toBeDefined();
     expect(typeof ss.create).toBe("function");
     expect(typeof ss.commit).toBe("function");
@@ -154,6 +159,24 @@ describe("init", () => {
     expect(typeof svc.createAndSet).toBe("function");
     expect(typeof svc.commit).toBe("function");
     expect(svc.getActive()).toBeNull();
+  });
+
+  // ── F5 services ─────────────────────────────────────────────────────────────
+
+  it("container resolves searchService as SearchService instance", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve<SearchService>("searchService");
+    expect(svc).toBeInstanceOf(SearchService);
+    expect(typeof svc.search).toBe("function");
+    expect(typeof svc.glob).toBe("function");
+    expect(typeof svc.grep).toBe("function");
+  });
+
+  it("searchService is singleton", async () => {
+    const { container } = await init(tmpDir);
+    const s1 = container.resolve("searchService");
+    const s2 = container.resolve("searchService");
+    expect(s1).toBe(s2);
   });
 });
 

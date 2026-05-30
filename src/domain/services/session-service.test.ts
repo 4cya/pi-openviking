@@ -61,7 +61,7 @@ describe("SessionService", () => {
       const store = createMockStore();
       const service = new SessionService(store, { commitTimeout: 120_000 });
       const sid = { value: "sess_1" } as SessionId;
-      const parts = [{ type: "text", text: "hello" }];
+      const parts = [{ type: "text" as const, text: "hello" }];
 
       await service.sendMessage(sid, "user", parts);
 
