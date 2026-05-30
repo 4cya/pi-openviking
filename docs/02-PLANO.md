@@ -255,62 +255,88 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 **Objetivo:** Memória persistente funcional.
 
-| Tarefa | Artefato |
-|--------|----------|
-| F6.1 | `application/services/session.service.ts` — sync engine |
-| F6.2 | `application/event-handlers/session-sync.ts` |
-| F6.3 | `application/event-handlers/auto-recall.ts` |
-| F6.4 | `adapters/driven/openviking/health.ts` |
-| F6.5 | Circuit breaker integration |
-
-**Milestone:** Sessões sincronizadas. Memórias injetadas automaticamente.
-
-### F7a — Profiles Essential (5 dias)
-
-**Objetivo:** Schema estendido com campos comportamentais. ProfileManager operacional. Integração com recall.
+> **Design definido em Grill 2026-05-30.**
+> Nenhuma camada `application/` — hooks vivem em `index.ts` + 2 adapters novos.
+> Ver `CONTEXT.md` para termos e `docs/adr/ADR-012-auto-recall-injection.md` para rationale.
 
 | Tarefa | Artefato | Descrição |
 |--------|----------|-----------|
-| F7a.1 | `infrastructure/config/profile-schema.ts` (expandir) | Adicionar autoRecall, scope, automation ao schema |
-| F7a.2 | `domain/profile/service/ProfileManager.ts` + `ProfileResolver.ts` | ProfileManager + ResolvedConfig merge |
-| F7a.3 | `infrastructure/config/cascade.ts` (expandir) | Merge profile no cascade |
-| F7a.4 | Integration: recall → profile.resolve() | targetUri, topN, scoreThreshold, searchMode, expandGraph |
-| F7a.5 | ~~Integration: intent~~ **Eliminado** | Recall toggle substitui intent detection |
-| — | Testes | ProfileManager.test, resolver.test, cascade update |
+| F6.1 | `index.ts` — hook `pi.on("before_agent_start")` | Auto-recall: `RecallService.recall(prompt, sessionService.getActive())` → retorna custom message `{ customType: "memory_context", display: false }` pro prompt. GraphExpander (F8) mergeia na mesma mensagem. |
+| F6.2 | `index.ts` — hook `pi.on("message_end")` | Session sync: mapeia `AgentMessage` → `Part[]` via message-mapper, chama `SessionService.sendMessage()`. Sincroniza só role=user|assistant (texto). Tool calls adiados pra F8. |
+| F6.3 | `index.ts` — hook `pi.on("session_shutdown")` | Session commit: `SessionService.commit()`. OV extrai memórias async. |
+| F6.4 | `adapters/driven/openviking/health.ts` | Health check adapter. Método `check(): Promise<HealthStatus>` → `GET /ready` (no auth). Status alimenta `OVWidget.update("conn", ...)`. Chamado em `session_start` + on-demand. |
+| F6.5 | `adapters/driven/openviking/transport.ts` (circuit breaker) | Circuit breaker decorator no Transport. States: CLOSED → 3 falhas consecutivas → OPEN (reject instant) → 30s → HALF_OPEN (probe 1) → sucesso=fecha, falha=volta OPEN com resetTimeout*2. `OVAdapterConfig.circuitBreaker? { threshold, resetTimeout }`. |
+| F6.6 | `adapters/driver/pi-session-sync/message-mapper.ts` | Função pura `agentMessageToParts(msg: AgentMessage): Part[]`. Só mapeia TextContent de mensagens user/assistant. Testável isoladamente. |
+| — | Tests | Unit (message-mapper, health, circuit breaker) + integration (hooks via mock Pi). Cobertura ≥90%. |
 
-**Milestone:** Profiles existem como dados comportamentais. Recall consome.
+**Notas de design:**
+- `RecallService.recall(prompt, sessionId?)` — sessionId opcional, passado em `before_agent_start` pra `search()` endpoint
+- Circuit breaker configuração em `OVAdapterConfig` (detalhe de transporte),
+  env vars `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`
+- Health check **não** drive circuit breaker — só alimenta widget. Circuit breaker é driven by falhas reais.
+
+**Milestone:** Sessões sincronizadas. Memórias injetadas automaticamente no prompt.
+
+### F7a — Profiles Essential (5 dias)
+
+**Objetivo:** Schema estendido com campos comportamentais. ProfileManager stateful operacional. Integração com recall.
+
+> **Design definido em Grill 2026-05-30.**
+> ProfileBehavior = 6 campos comportamentais que sobrescrevem RecallConfig.
+> ProfileManager stateful (espelha SessionService). Cascade faz merge.
+> activeProfile lido da config file (`.pi/settings.json`). Comando `/ov-profile` é F7b.
+
+| Tarefa | Artefato | Descrição |
+|--------|----------|-----------|
+| F7a.1 | `infrastructure/config/profile-schema.ts` (expandir) | Adicionar `ProfileBehavior`: `targetUri`, `topN`, `scoreThreshold`, `searchMode`, `expandGraph`, `autoRecall`. 6 campos opcionais que sobrescrevem `RecallConfig`. |
+| F7a.2 | `domain/profile/service/ProfileManager.ts` | Stateful. Métodos: `getActive(): string`, `resolve(name): Partial<PiOVConfig>`, `apply(name): void`. `resolve()` retorna campos do profile — cascade faz merge. `apply()` valida nome, atualiza estado. Constructor recebe `profiles: Record<string, ProfileBehavior>` do config. |
+| F7a.3 | `infrastructure/config/cascade.ts` (expandir) | Merge profile no cascade: depois de `.pi/settings.json`, antes do activeProfile. `loadConfig()` chama `ProfileManager.resolve(activeProfile)` e mergeia resultado como último override. |
+| F7a.4 | Integration: `RecallService` + `ProfileManager` | `RecallService` recebe `activeProfile` via container. `RecallConfig` resolvido = base recall config sobrescrito por `ProfileBehavior` do profile ativo. `targetUri`, `topN`, `scoreThreshold`, `searchMode`, `expandGraph` consumidos do merged config. |
+| — | Testes | ProfileManager.test (state + resolve + apply), cascade update, recall integration |
+
+**Milestone:** Profiles existem como dados comportamentais. Recall consome profile ativo.
 
 ### F7b — Profiles Expansion (7 dias)
 
-**Objetivo:** Auto-detect, comando /ov-profile, integração com auto-actions.
+**Objetivo:** Auto-detect (minimatch rules), comando `/ov-profile`, perfil integrado ao lifecycle.
 
-| Tarefa | Artefato |
-|--------|----------|
-| F7b.1 | `domain/profile/service/AutoDetect.ts` — minimatch rules + regras built-in |
-| F7b.2 | `domain/profile/service/AutoDetect.test.ts` |
-| F7b.3 | ~~`domain/recall/intent/ContextProfiler.ts`~~ **Eliminado** | Intent detection removido |
-| F7b.4 | `adapters/driving/pi/commands/profile.ts` — /ov-profile {apply,list,show,detect} |
-| F7b.5 | Integration: auto-actions → profile.autoSaveMode |
-| F7b.6 | Integration: auto-actions → profile.autoLinkMode |
-| — | Testes de integração |
+> **Design definido em Grill 2026-05-30.**
+> AutoDetect usa minimatch rules em config. autoSaveMode/autoLinkMode adiados pra F8.
+> ProfileBehavior mantém 6 campos (não expande em F7b).
 
-**Milestone:** Profile system completo.
+| Tarefa | Artefato | Descrição |
+|--------|----------|-----------|
+| F7b.1 | `domain/profile/service/AutoDetect.ts` | `AutoDetect.detect(cwd, rules): string|null`. Minimatch rules do config. Regras built-in: `**/web*/**` → web-dev, `**/doc*/**` → docs. Retorna nome do profile ou null. |
+| F7b.2 | `domain/profile/service/AutoDetect.test.ts` | Testes com minimatch mock + regras built-in |
+| F7b.3 | `adapters/driver/pi-commands/ov-profile-command.ts` | `/ov-profile {apply,list,show,detect}`. `apply <name>` → `ProfileManager.apply()`. `list` → mostra profiles disponíveis. `show` → mostra profile ativo + behavior resolvido. `detect` → roda AutoDetect no cwd. Command factory pattern (espelha F5.4). |
+| F7b.4 | Integration: index.ts + lifecycle | AutoDetect roda em `session_start` se activeProfile = "auto". Results notifica usuário via widget. |
+| — | Testes | AutoDetect.test, ov-profile-command.test (4 subcommands) |
+
+> ~~F7b.5 autoSaveMode~~ → **adiado F8**
+> ~~F7b.6 autoLinkMode~~ → **adiado F8**
+> ~~F7b.3 ContextProfiler~~ → **Eliminado** (intent detection removido)
+
+**Milestone:** Profile system completo. Auto-detect operacional.
 
 ### F8 — Features (19 dias)
 
 **Objetivo:** Funcionalidades avançadas.
 
-| Tarefa | Artefato |
-|--------|----------|
-| F8.1 | `application/services/auto-actions/` — detector + proposer + executor |
-| F8.2 | `domain/recall/curator/GraphExpander.ts` — GraphExpander |
-| F8.3 | Glob + Grep operations |
-| F8.4 | Batch import + delete |
-| F8.5 | Pack export/import operations |
-| F8.6 | Watch operations |
-| F8.7 | `adapters/driven/spi/mcp.ts` — MCP server export |
-| F8.8 | `adapters/driven/spi/webhook.ts` — Webhook handler |
-| F8.9 | E2E tests + documentation |
+> **Design definido em Grill 2026-05-30.**
+> GraphExpander mergeia na mesma custom message do recall (separador `[graph]`).
+> autoSaveMode/autoLinkMode adiados de F7b pra F8.
+
+| Tarefa | Artefato | Descrição |
+|--------|----------|-----------|
+| F8.1 | `application/services/auto-actions/` — detector + proposer + executor | Auto-actions: autoSaveMode ("off"|"propose"|"auto"), autoLinkMode. Criam memórias e relations automaticamente. Hook `pi.on("message_end")` expandido pra incluir tool results. |
+| F8.2 | `domain/recall/curator/GraphExpander.ts` | Optional `GraphExpander` injetado no `RecallCurator`. Percorre relações OV de seed items. Resultados mergeiam na mesma custom message `memory_context` com prefixo `[graph] uri — reason`. |
+| F8.3 | Glob + Grep operations | SearchService tem glob/grep desde F5 — expandir com filtros adicionais. |
+| F8.4 | Batch import + delete | Operações em lote no FsStore. |
+| F8.5 | Pack export/import operations | Exportar/importar conjunto de memórias e resources. |
+| F8.6 | Watch operations | Monitorar mudanças no filesystem OV. |
+| F8.7 | `adapters/driven/spi/mcp.ts` | MCP server export — expor OV operations como MCP tools. |
+| F8.8 | `adapters/driven/spi/webhook.ts` | Webhook handler — receber notificações do OV server. |
+| F8.9 | E2E tests + documentation | Testes end-to-end + docs de usuário. |
 
 **Milestone:** Plugin completo. Release v1.0.
 

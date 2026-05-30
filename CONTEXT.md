@@ -57,6 +57,14 @@ _Avoid_: ov config, transport config
 An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers (`X-API-Key`, `X-OpenViking-Account`, `X-OpenViking-User`), exponential backoff retry (5xx/network), configurable timeout, and AbortSignal passthrough. Single method `request<T>(methodLabel, path, opts?, signal?)`. Lives in `adapters/driven/openviking/transport.ts`.
 _Avoid_: http client, fetcher
 
+**CircuitBreaker**:
+A decorator wrapper inside `Transport` that protects against OV unavailability. States: **CLOSED** (normal) → 3 consecutive failures → **OPEN** (rejects instantly with `ConnectionError`) → 30s timeout (configurable via `resetTimeout`) → **HALF_OPEN** (allows 1 probe request) → success = back to CLOSED, failure = back to OPEN with `resetTimeout × 2`. Circuit breaker is driven by real request failures — not by health check. Config lives in `OVAdapterConfig.circuitBreaker? { threshold: number, resetTimeout: number }`. Env vars: `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`.
+_Avoid_: cb, breaker, fault tolerance
+
+**HealthCheck**:
+An adapter (`adapters/driven/openviking/health.ts`) that probes OV availability via `GET /ready` (no auth required). Method `check(): Promise<HealthStatus>` returns `{ ok: boolean, latency?: number, error?: string }`. Results feed `OVWidget.update("conn", ...)`. Called on `session_start` and on-demand. Does NOT drive the CircuitBreaker — the breaker is driven by real request failures. No polling by default.
+_Avoid_: health probe, ping, liveness
+
 **ErrorMapper**:
 A pure function `toDomainError(httpStatus, body, methodLabel)` that translates OV HTTP errors into typed `DomainError` subtypes: 401/403 → `ConnectionError`, 404 → `NotFoundError`, 409/422 → `ValidationError`, 5xx → `ConnectionError`. Lives in `adapters/driven/openviking/mappers/error-mapper.ts`.
 _Avoid_: error translator, http error handler
@@ -97,7 +105,16 @@ Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settin
 _Avoid_: merge, resolution chain
 
 **Profile**:
-A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Currently carries only `name` + `description`; future phases add behavioral fields (targetUri, searchMode, etc.).
+A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Carries `name` + `description` + optional `ProfileBehavior` fields (added in F7a).
+
+**ProfileBehavior**:
+6 optional behavioral fields that override `RecallConfig` when a profile is active: `targetUri` (string?, escopo de busca), `topN` (number?, max results), `scoreThreshold` (number 0-1?, relevância mínima), `searchMode` (`'find'|'search'`?), `expandGraph` (boolean?, F8+), `autoRecall` (boolean?, override do toggle default). Fields are optional — profile só sobrescreve o que define. Lives in `infrastructure/config/profile-schema.ts`.
+
+**ProfileManager** (stateful, F7a):
+Manages the active profile. Constructor receives `profiles: Record<string, ProfileBehavior>` from resolved config. Methods: `getActive(): string` (returns current name), `resolve(name): Partial<PiOVConfig>` (returns behavioral fields for cascade merge), `apply(name): void` (validates name exists, updates state). Cascade merges ProfileManager.resolve() as the last override layer (after env vars and `.pi/settings.json`). `activeProfile` lido da config file em F7a; comando `/ov-profile` é F7b.
+
+**AutoDetect** (F7b):
+Minimatch rules-based profile detection. `detect(cwd, rules): string | null`. Rules from config: `{ "pattern": "**/web*/**", "profile": "web-dev" }`. Built-in rules: `**/web*/**` → web-dev, `**/doc*/**` → docs. Runs in `session_start` when `activeProfile = "auto"`.
 _Avoid_: config profile, named preset
 
 **Logger Interface**:
@@ -207,7 +224,7 @@ _Avoid_: generic Error, exception
 **Recall Service** *(implemented — `domain/recall/recall-service.ts`)*:
 Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` call. Constructor takes `KnowledgeBase`, `RecallCurator`, `RecallConfig`, `Logger`, `enabled: boolean` (toggle state). Returns `RecallResult { items, tokens, formatted, total }`. 5 tests.
 
-**Interface**: `recall(prompt: string): Promise<RecallResult>` — F6 handler calls this on `before_agent_start`. No IntentDetector — toggle is explicit (`enabled` boolean from command state). SessionId not yet passed (added in F5/F6 when session context needed).
+**Interface**: `recall(prompt: string, sessionId?: SessionId): Promise<RecallResult>` — F6 `before_agent_start` handler calls this passing `sessionService.getActive()` as sessionId. SessionId is forwarded to `kb.search()` when `searchMode === "search"` (OV uses session context for intent analysis). Not passed to `kb.find()` — find() doesn't accept sessionId.
 
 **Flow**: (1) Check `enabled` toggle → if false, return empty without calling KB. (2) Route to `kb.find()` or `kb.search()` based on `config.searchMode`, passing `prompt`, `topN`, `targetUri`. (3) Pass raw results through `curator.curate()`. (4) Build `formatted` string from curated items. (5) Return `RecallResult`.
 
@@ -295,18 +312,47 @@ A class that renders an OV status widget via `ctx.ui.setWidget("ov", ...)`. Comp
 
 The widget exposes `attach(ui)` (binds to a UI context and renders immediately), `update(field, value)` (changes state and re-renders), and `render()` (returns string[]). Commands that modify state (`/ov-recall`, `/ov-commit`) call `widget.update()` via a `widgetUpdater` callback passed through `CommandServices`. 5 unit tests.
 
-**Guard pattern** in `index.ts`: An `initialized` flag ensures `init()` runs once per process. On first `session_start`, the guard runs `init()`, resolves services from the DI container, calls `registerAllTools()` and `registerAllCommands()`, and creates the shared `OVWidget`. On every `session_start` (including fork/resume/reload), the widget is attached to the current UI context and an OV session is created via `SessionService.createAndSet()`. If OV is unavailable, the widget shows `🔴 disconnected` and operation continues gracefully.
+**Guard pattern** in `index.ts`:
+An `initialized` flag ensures `init()` runs once per process.
+
+**On first `session_start`:**
+- Guard runs `init()`, resolves services from DI container
+- Calls `registerAllTools()` and `registerAllCommands()`
+- Creates the shared `OVWidget`
+- Registers 4 F6 lifecycle hooks (`before_agent_start`, `message_end`, `session_shutdown`, `session_start` health check)
+
+**On every `session_start`** (including fork/resume/reload):
+- Widget attached to current UI context
+- Health check via `GET /ready` → updates widget connection status
+- OV session created via `SessionService.createAndSet()`
+- If OV is unavailable, widget shows `🔴 disconnected`, operation continues gracefully
 
 **Tool barrel** (`adapters/driver/pi-tools/tool-registry.ts`): `registerAllTools(pi, services, logger)` creates typed Pipelines with LoggingMiddleware for each tool and registers all 6 in one call.
 
 **Remaining F5 tasks**: status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69). ov_recall = third slice (F5.3, issue #70). 6 slash commands = fourth slice (F5.4, issue #71). Wiring + OVWidget = fifth slice (F5.5, issue #72).
 
+### F6 — Auto-Recall + Session Sync
+
+**F6 hooks** (in `index.ts`, no `application/` layer):
+4 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
+
+- **`before_agent_start`** → `RecallService.recall(prompt, sessionService.getActive())`. Returns custom message `{ customType: "memory_context", content: recallResult.formatted, display: false }`. GraphExpander results (F8+) merge into the same message with `[graph]` prefix. Circuit breaker OPEN → skip recall silently.
+- **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Only syncs `user` and `assistant` messages (text parts). Tool results adiados para F8.
+- **`session_shutdown`** → `SessionService.commit(activeSessionId)`. OV server extracts memories async (memory_diff.json).
+- **`session_start`** → health check via `HealthCheck.check()` + widget update.
+
+**MessageMapper** (`adapters/driver/pi-session-sync/message-mapper.ts`):
+Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `AgentMessage` (role + TextContent) to domain `Part[]` (TextPart[].). Ignores non-text messages (tool calls, bash execution, custom). Role `"user"` or `"assistant"` only. Returns empty array for unmatched roles. 3+ tests.
+
 ## Flagged ambiguities
 
 - **"Profile"** is overloaded three ways: (1) **Profile** — a named config preset in the Foundation layer; (2) **OV cProfile** — the server's own profiling mode; (3) **Memory Profile** — extracted user preferences from session memory. Use **Config Profile** for the Foundation concept, **OV cProfile** for the server concept, and **Memory Profile** for extracted preferences.
+- **"ProfileBehavior"** is a subset of Profile that overrides `RecallConfig`. Not to be confused with **Memory Profile** (OV's memory category) or **Profile** (the named config itself).
+- **"Auto-Recall"** refers to the F6 hook that calls `RecallService.recall()` automatically on `before_agent_start`. Not to be confused with **RecallService** (the domain service class, born in F4) or **RecallCurator** (the curation wrapper).
 - **Uri** and **SessionId** live in a shared kernel (`domain/common/`), not inside any single bounded context. Every context imports from `common/`; no context imports from another context.
 - **"Logger"** can refer either to the **Logger Interface** in `domain/ports/` or the **File Logger** implementation in `adapters/driven/`. Prefer the qualified name.
 - **"Config"** without qualification refers to the plugin's configuration managed by the **Config Schema**. Not to be confused with Pi's own settings (`.pi/settings.json`) or OV's server configuration.
+- **"application/"** layer is empty and will remain empty. Application services live in `domain/services/` (SessionService, SearchService, WriteService, ReadService). Middleware pipeline lives in `domain/pipeline/`. Lifecycle hooks live in `index.ts`. No F6 tasks create an `application/` directory.
 
 ## Example dialogue
 

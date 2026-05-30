@@ -130,6 +130,12 @@
 | **/ov-commit command** | Registered via `pi.registerCommand("ov-commit", ...)`. Calls `sessionService.commit()`. Optional `--wait` flag triggers `sessionService.waitForCommit()`. Shows warning if no active session. Lives in `adapters/driver/pi-commands/ov-commit-command.ts`. 5 tests. | commit command |
 | **/ov-search command** | Registered via `pi.registerCommand("ov-search", ...)`. Calls `searchService.search()` in fast mode. Formats results as URI + score + abstract lines. Lives in `adapters/driver/pi-commands/ov-search-command.ts`. 6 tests. | search command |
 | **/ov-delete command** | Registered via `pi.registerCommand("ov-delete", ...)`. Shows `ctx.ui.confirm()` before calling `fsStore.delete()`. Validates URI. Lives in `adapters/driver/pi-commands/ov-delete-command.ts`. 5 tests. | delete command |
+| **CircuitBreaker** | Decorator wrapper inside `Transport`. States CLOSED → 3 failures → OPEN (reject instantly) → 30s → HALF_OPEN (probe) → success=CLOSED, failure=OPEN+backoff. Driven by real failures, not health check. Config in `OVAdapterConfig.circuitBreaker?`. Env vars: `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`. | cb, breaker |
+| **HealthCheck** | Adapter at `adapters/driven/openviking/health.ts`. Probes `GET /ready`. Method `check(): Promise<HealthStatus>`. Feeds `OVWidget.update()`. Does NOT drive CircuitBreaker. | health probe, ping |
+| **MessageMapper** | Pure function `agentMessageToParts(msg: AgentMessage): Part[]` at `adapters/driver/pi-session-sync/message-mapper.ts`. Converts Pi AgentMessage to domain Part[] for session sync. Only user/assistant text parts in F6. | message converter |
+| **ProfileBehavior** | 6 optional behavioral fields on a Profile: `targetUri`, `topN`, `scoreThreshold`, `searchMode`, `expandGraph`, `autoRecall`. Override RecallConfig when profile active. Added in F7a. | behavioral fields, profile options |
+| **ProfileManager** | Stateful service (F7a). Methods: `getActive()`, `resolve(name)`, `apply(name)`. Cascade merges `resolve()` as last override layer. `activeProfile` from config file; `/ov-profile` command in F7b. | profile resolver, profile handler |
+| **AutoDetect** | Minimatch rules-based profile detection (F7b). `detect(cwd, rules): string | null`. Built-in rules map project patterns to profiles. Runs when `activeProfile = "auto"`. | auto profile, profile detection |
 
 ## Example dialogue
 
@@ -152,5 +158,8 @@
 ## Flagged ambiguities
 
 - **"Profile"** is overloaded three ways: (1) **Profile** — a named config preset in the Foundation layer (default, web-dev, docs, learning), (2) OV's internal `cProfile` concept (the server's own profiling mode), (3) a memory category extracted from sessions ("category: profile"). Use **Config Profile** for the Foundation concept, **OV cProfile** for the server concept, and **Memory Profile** for extracted user preferences.
+- **"ProfileBehavior"** is a subset of Profile that overrides `RecallConfig`. Not to be confused with **Memory Profile** (OV's memory category) or **Profile** (the named config itself).
+- **"Auto-Recall"** refers to the F6 hook that calls `RecallService.recall()` automatically on `before_agent_start`. Not to be confused with **RecallService** (the domain service class, born in F4) or **RecallCurator** (the curation wrapper).
 - **"Logger"** can refer either to the `Logger` interface in `domain/ports/` or the `FileLogger` implementation in `adapters/driven/`. Prefer **Logger Interface** vs **File Logger** when disambiguation matters.
 - **"Config"** without qualification refers to the plugin's configuration managed by the **Config Schema**. Not to be confused with Pi's own settings (`.pi/settings.json`) or OV's server configuration.
+- **"application/"** layer is empty and will remain empty. Application services live in `domain/services/`. F6 hooks live in `index.ts`.

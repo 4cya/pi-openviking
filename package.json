@@ -11,7 +11,8 @@
     ]
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "prototype:f6": "bun src/_prototype/terminal-tui.ts"
   },
   "dependencies": {
     "fflate": "^0.8.2"
