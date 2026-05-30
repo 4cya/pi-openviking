@@ -25,12 +25,12 @@ Pi coding agent is stateless between sessions. pi-openviking gives it persistent
 
 | Tool | Action |
 |------|--------|
-| `memsearch` | Semantic search across memories, resources, and skills. Modes: `fast` (simple), `deep` (context-aware), `auto` (decides based on query complexity). |
-| `memread` | Read content at a `viking://` URI with tiered loading (L0 abstract, L1 overview, L2 full content). |
-| `membrowse` | Browse the `viking://` filesystem — list, tree, or stat entries. |
-| `memcommit` | Commit current session to OpenViking. Triggers async memory extraction. Returns `task_id`. |
-| `memimport` | Import URL, local file, or directory (zipped) as a resource or skill. |
-| `memdelete` | Delete a resource or skill by `viking://` URI. |
+| `ov_search` | Semantic search across memories, resources, and skills. Modes: `fast` (simple), `deep` (context-aware), `auto` (decides based on query complexity). |
+| `ov_recall` | Explicit recall trigger — inject curated memories relevant to current context into the prompt. Wraps `RecallService.recall()`. |
+| `ov_glob` | Discover URIs by glob pattern (e.g. `viking://**/*.md`). |
+| `ov_grep` | Regex content search across stored knowledge. |
+| `ov_read` | Read content at a `viking://` URI with tiered loading (L0 abstract, L1 overview, L2 full content). |
+| `ov_write` | Save, create directories, or move resources in the `viking://` filesystem. Single tool with `action` enum (`save`/`mkdir`/`mv`). |
 
 ### Commands (user-facing)
 

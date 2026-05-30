@@ -14,7 +14,7 @@
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
 | **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 10 singletons total no container. Ver `02-PLANO.md`. |
-| **F5 Tools + Commands** | 🔧 Em progresso (F5.1–F5.6 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: WriteService + ReadService + ov_write + ov_read. 5 tools operacionais. Pendente: ov_recall tool + 6 commands + OVWidget + status bar. Ver `02-PLANO.md`. |
+| **F5 Tools + Commands** | 🔧 Em progresso (F5.1–F5.3 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: WriteService + ReadService + ov_write + ov_read. F5.3 ✅: ov_recall tool. 6 tools operacionais. Pendente: 6 commands + OVWidget + status bar. Ver `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -607,7 +607,7 @@ src/
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
 > F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27.
 > F4 ✅ — Issues #61–#66: RecallConfig + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring concluídos 2026-05-29.
-> F5 🔧 — F5.1 ✅ (issue #68): Pipeline + SearchService + 3 search tools + index.ts wiring. F5.2 ✅ (issue #69): WriteService + ReadService + ov_write + ov_read. Pendente: F5.7+ (ov_recall tool + 6 commands + Widget).
+> F5 🔧 — F5.1 ✅ (issue #68): Pipeline + SearchService + 3 search tools + index.ts wiring. F5.2 ✅ (issue #69): WriteService + ReadService + ov_write + ov_read. F5.3 ✅ (issue #70): ov_recall tool. Pendente: 6 commands + Widget.
 
 ---
 

@@ -259,9 +259,12 @@ Pi tool for content mutations. Single tool with `action` enum to minimize prompt
 **ov_read** *(implemented — `adapters/driver/pi-tools/ov-read.ts`)*:
 Pi tool for reading content at three depth levels. TypeBox schema: `{ uri: string, level?: "abstract"|"overview"|"read", offset?: number, limit?: number }`. Handler wraps `ReadService.read()` via pipeline. Returns raw `body` string (not JSON) for direct consumption. 4 unit tests + 1 integration test. Born in F5.2 (issue #69).
 
+**ov_recall** *(implemented — `adapters/driver/pi-tools/ov-recall.ts`)*:
+Pi tool for explicit recall trigger. TypeBox schema: `{ prompt: string, limit?: number }`. Handler calls `pipeline.execute(() => recallService.recall(params.prompt), signal)`. Returns `RecallResult.formatted` text (items with URI + content). On empty result, returns informative message. Errors caught and reported. 4 unit tests + 1 integration test. Born in F5.3 (issue #70).
+
 **Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
 
-**Remaining F5 tasks**: ov_recall tool; 6 commands; OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69).
+**Remaining F5 tasks**: 6 commands; OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69). ov_recall = third slice (F5.3, issue #70).
 
 ## Flagged ambiguities
 

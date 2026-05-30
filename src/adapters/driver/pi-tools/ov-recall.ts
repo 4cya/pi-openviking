@@ -1,0 +1,39 @@
+import { Type } from "@sinclair/typebox";
+import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { Pipeline } from "../../../domain/pipeline/pipeline";
+import type { RecallService, RecallResult } from "../../../domain/recall/recall-service";
+
+const RecallSchema = Type.Object({
+  prompt: Type.String({ description: "Prompt describing what to recall" }),
+  limit: Type.Optional(Type.Number({ description: "Maximum number of items to return" })),
+});
+
+export function createOvRecallTool(
+  svc: RecallService,
+  pipeline: Pipeline<RecallResult>,
+): ToolDefinition<typeof RecallSchema> {
+  return defineTool({
+    name: "ov_recall",
+    label: "Recall Memories",
+    description: "Explicitly trigger recall of curated memories relevant to the current context.",
+    promptSnippet: "ov_recall(prompt, limit?) — recall relevant memories",
+    parameters: RecallSchema,
+    async execute(_toolCallId, params, signal) {
+      try {
+        const result = await pipeline.execute(
+          () => svc.recall(params.prompt!),
+          signal ?? undefined,
+        );
+        return {
+          content: [{ type: "text" as const, text: result.formatted || "No relevant memories found." }],
+          details: undefined,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text" as const, text: `Recall failed: ${err instanceof Error ? err.message : String(err)}` }],
+          details: undefined,
+        };
+      }
+    },
+  });
+}

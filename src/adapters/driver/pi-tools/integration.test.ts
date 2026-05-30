@@ -11,6 +11,7 @@ import { createOvGlobTool } from "./ov-glob";
 import { createOvGrepTool } from "./ov-grep";
 import { createOvWriteTool } from "./ov-write";
 import { createOvReadTool } from "./ov-read";
+import { createOvRecallTool } from "./ov-recall";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
 import { WriteService } from "../../../domain/services/write-service";
@@ -19,6 +20,8 @@ import { FsStoreAdapter } from "../../driven/openviking/fs-store";
 import type { SearchResult } from "../../../domain/knowledge/model/search-result";
 import type { GlobResult, GrepResult } from "../../../domain/ports/knowledge-base";
 import type { Content } from "../../../domain/ports/fs-store";
+import { RecallService, type RecallResult } from "../../../domain/recall/recall-service";
+import { RecallCurator } from "../../../domain/recall/recall-curator";
 
 let server: http.Server;
 let port: number;
@@ -169,12 +172,20 @@ function wireStack() {
   const readPipeline = new Pipeline<Content>();
   readPipeline.use(loggingMiddleware("read", logger as any));
 
+  // Recall
+  const recallConfig = { topN: 5, scoreThreshold: 0.5, maxTokens: 4000, expandGraph: false, searchMode: "find" as const };
+  const curator = new RecallCurator(recallConfig, [], logger as any);
+  const recallService = new RecallService(kb, curator, recallConfig, logger as any, true);
+  const recallPipeline = new Pipeline<RecallResult>();
+  recallPipeline.use(loggingMiddleware("recall", logger as any));
+
   return {
     searchTool: createOvSearchTool(svc, searchPipeline),
     globTool: createOvGlobTool(svc, globPipeline),
     grepTool: createOvGrepTool(svc, grepPipeline),
     writeTool: createOvWriteTool(writeService, writePipeline),
     readTool: createOvReadTool(readService, readPipeline),
+    recallTool: createOvRecallTool(recallService, recallPipeline),
   };
 }
 
@@ -235,5 +246,12 @@ describe("Tools integration (mock HTTP)", () => {
     const { readTool } = wireStack();
     const result = await exec(readTool, { uri: "viking://docs/a.md", level: "read" });
     expect(resultText(result)).toContain("hello from read");
+  });
+
+  it("ov_recall calls /api/v1/search/find and returns formatted memories", async () => {
+    const { recallTool } = wireStack();
+    const result = await exec(recallTool, { prompt: "what did we decide" });
+    expect(resultText(result)).toContain("viking://kb/test");
+    expect(resultText(result)).toContain("found content");
   });
 });

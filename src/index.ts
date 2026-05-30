@@ -10,12 +10,15 @@ import { createOvGlobTool } from "./adapters/driver/pi-tools/ov-glob";
 import { createOvGrepTool } from "./adapters/driver/pi-tools/ov-grep";
 import { createOvWriteTool } from "./adapters/driver/pi-tools/ov-write";
 import { createOvReadTool } from "./adapters/driver/pi-tools/ov-read";
+import { createOvRecallTool } from "./adapters/driver/pi-tools/ov-recall";
 import type { KnowledgeBase } from "./domain/ports/knowledge-base";
 import type { FsStore } from "./domain/ports/fs-store";
 import type { Content } from "./domain/ports/fs-store";
 import type { SearchResult } from "./domain/knowledge/model/search-result";
 import type { GlobResult, GrepResult } from "./domain/ports/knowledge-base";
 import type { Logger } from "./domain/ports/logger";
+import { RecallService, type RecallResult } from "./domain/recall/recall-service";
+import { RecallCurator } from "./domain/recall/recall-curator";
 
 export default async function openVikingExtension(pi: ExtensionAPI): Promise<void> {
   pi.on("session_start", async (_event, ctx) => {
@@ -52,5 +55,12 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
     pi.registerTool(createOvGrepTool(searchService, grepPipeline));
     pi.registerTool(createOvWriteTool(writeService, writePipeline));
     pi.registerTool(createOvReadTool(readService, readPipeline));
+
+    // Recall pipeline
+    const curator = new RecallCurator(config.recall, [], typedLogger);
+    const recallService = new RecallService(kb, curator, config.recall, typedLogger, true);
+    const recallPipeline = new Pipeline<RecallResult>();
+    recallPipeline.use(loggingMiddleware("recall", typedLogger));
+    pi.registerTool(createOvRecallTool(recallService, recallPipeline));
   });
 }

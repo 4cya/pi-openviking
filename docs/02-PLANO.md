@@ -224,7 +224,7 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 | **F5.4** | `src/index.ts` + `infrastructure/lifecycle.ts` | Entry point: `session_start` → `init()` → resolve KB → create pipelines/services → register tools. 11 singletons. | ✅ |
 | **F5.5** | `adapters/driver/pi-tools/ov-read.ts` + `domain/services/read-service.ts` | ReadService + ov_read tool (delegating to FsStore.read). TypeBox schema `{ uri, level?, offset?, limit? }`. 4 unit + 1 integration tests. | ✅ |
 | **F5.6** | `adapters/driver/pi-tools/ov-write.ts` + `domain/services/write-service.ts` | WriteService + ov_write tool (delegating to FsStore.write/mkdir/mv). Single tool with `action` enum. TypeBox schema `{ action, uri, content?, targetUri?, mode? }`. 6 unit + 3 integration tests. | ✅ |
-| F5.7 | `adapters/driver/pi-tools/ov-recall.ts` | ov_recall tool (delegating to RecallService). | Pendente |
+| F5.7 | `adapters/driver/pi-tools/ov-recall.ts` | ov_recall tool (delegating to RecallService). | ✅ |
 | F5.8 | `adapters/driver/pi-commands/` | 6 commands (/ov-recall, /ov-status, /ov-tree, /ov-commit, /ov-search, /ov-delete). | Pendente |
 | F5.9 | `adapters/driver/pi-tools/widget.ts` | OVWidget — setWidget() com info rica. | Pendente |
 | F5.10 | `adapters/driver/pi-tools/status-bar.ts` | Status bar integration. | Pendente |
@@ -240,6 +240,8 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 **Milestone F5.1 ✅:** Pipeline + LoggingMiddleware + SearchService + 3 tools (ov_search, ov_glob, ov_grep) + index.ts wiring + lifecycle wiring. 25 tests. Issue #68.
 
 **Milestone F5.2 ✅:** WriteService + ReadService + ov_write (save/mkdir/mv) + ov_read (abstract/overview/read). 17 tests (4 WriteService + 3 ReadService + 6 ov_write + 4 ov_read + 4 integration). Issue #69.
+
+**Milestone F5.3 ✅:** ov_recall tool — wraps RecallService.recall() through middleware pipeline. TypeBox schema `{ prompt, limit? }`. Returns formatted RecallResult text. 4 unit tests + 1 integration test. Issue #70.
 
 **Milestone F5 completo:** Plugin funcional. Tools e commands operacionais.
 
