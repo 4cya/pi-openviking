@@ -19,6 +19,8 @@ import type { GlobResult, GrepResult } from "./domain/ports/knowledge-base";
 import type { Logger } from "./domain/ports/logger";
 import { RecallService, type RecallResult } from "./domain/recall/recall-service";
 import { RecallCurator } from "./domain/recall/recall-curator";
+import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
+import type { SessionService } from "./domain/services/session-service";
 
 export default async function openVikingExtension(pi: ExtensionAPI): Promise<void> {
   pi.on("session_start", async (_event, ctx) => {
@@ -62,5 +64,16 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
     const recallPipeline = new Pipeline<RecallResult>();
     recallPipeline.use(loggingMiddleware("recall", typedLogger));
     pi.registerTool(createOvRecallTool(recallService, recallPipeline));
+
+    // Register slash commands
+    const sessionService = container.resolve<SessionService>("sessionService");
+    registerAllCommands(pi, {
+      recallService,
+      sessionService,
+      searchService,
+      fsStore,
+      ovConfig: config.ov,
+      recallConfig: config.recall,
+    });
   });
 }

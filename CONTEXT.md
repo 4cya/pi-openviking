@@ -264,7 +264,29 @@ Pi tool for explicit recall trigger. TypeBox schema: `{ prompt: string, limit?: 
 
 **Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
 
-**Remaining F5 tasks**: 6 commands; OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69). ov_recall = third slice (F5.3, issue #70).
+### Commands (F5.4 — slash commands)
+
+**Command factory pattern**: Each command is a `create*Command(svc, ...)` function returning an options object compatible with `pi.registerCommand()`. The barrel export `command-registry.ts` provides `registerAllCommands(pi, services)` that registers all 6 commands in one call. Commands bypass the middleware pipeline and call services directly. All commands live in `adapters/driver/pi-commands/`. 29 unit tests total.
+
+**`/ov-recall on|off`** *(implemented — `adapters/driver/pi-commands/ov-recall-command.ts`)*:
+Toggles `RecallService.setEnabled()`. Validates arg is `on` or `off`, shows usage on invalid input. Provides argument completions (`on`, `off`). Notifies user of new state. 6 tests.
+
+**`/ov-status`** *(implemented — `adapters/driver/pi-commands/ov-status-command.ts`)*:
+Reads current state from `config.ov.endpoint`, `sessionService.getActive()`, `recallService.isEnabled()`, `config.recall.targetUri`, and `config.recall.searchMode`. Formats and displays via `ctx.ui.notify()`. Shows `"(global)"` when no target URI set. Shows `"none"` when no active session. 2 tests.
+
+**`/ov-tree [uri]`** *(implemented — `adapters/driver/pi-commands/ov-tree-command.ts`)*:
+Calls `fsStore.tree(parsedUri)` with parsed `Uri` value object. Defaults to `viking://` when no URI provided. Formats result as indented tree with 📁 (directory) and 📄 (file) icons. Computes relative paths via common prefix. Shows `"(empty)"` for empty result. Validates URI, shows error on failure. 5 tests.
+
+**`/ov-commit [--wait]`** *(implemented — `adapters/driver/pi-commands/ov-commit-command.ts`)*:
+Calls `sessionService.commit(activeSessionId)`. Shows warning if no active session. When `--wait` flag passed and `taskId` returned, calls `sessionService.waitForCommit(taskId)` and shows task status (completed/failed). 5 tests.
+
+**`/ov-search <query>`** *(implemented — `adapters/driver/pi-commands/ov-search-command.ts`)*:
+Calls `searchService.search({ query, mode: "fast" })`. Formats results as readable lines with URI, score (3 decimal places), and abstract. Shows memories, resources, and skills sections. Shows `"No results found."` for empty results. Shows usage on empty query. 6 tests.
+
+**`/ov-delete <uri>`** *(implemented — `adapters/driver/pi-commands/ov-delete-command.ts`)*:
+Shows `ctx.ui.confirm()` confirmation dialog before calling `fsStore.delete(parsedUri)`. Validates URI. Cancels gracefully on user rejection. Shows error on failure. 5 tests.
+
+**Remaining F5 tasks**: OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69). ov_recall = third slice (F5.3, issue #70). 6 slash commands = fourth slice (F5.4, issue #71).
 
 ## Flagged ambiguities
 

@@ -225,7 +225,7 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 | **F5.5** | `adapters/driver/pi-tools/ov-read.ts` + `domain/services/read-service.ts` | ReadService + ov_read tool (delegating to FsStore.read). TypeBox schema `{ uri, level?, offset?, limit? }`. 4 unit + 1 integration tests. | ✅ |
 | **F5.6** | `adapters/driver/pi-tools/ov-write.ts` + `domain/services/write-service.ts` | WriteService + ov_write tool (delegating to FsStore.write/mkdir/mv). Single tool with `action` enum. TypeBox schema `{ action, uri, content?, targetUri?, mode? }`. 6 unit + 3 integration tests. | ✅ |
 | F5.7 | `adapters/driver/pi-tools/ov-recall.ts` | ov_recall tool (delegating to RecallService). | ✅ |
-| F5.8 | `adapters/driver/pi-commands/` | 6 commands (/ov-recall, /ov-status, /ov-tree, /ov-commit, /ov-search, /ov-delete). | Pendente |
+| F5.8 | `adapters/driver/pi-commands/` | 6 commands (/ov-recall, /ov-status, /ov-tree, /ov-commit, /ov-search, /ov-delete). | ✅ |
 | F5.9 | `adapters/driver/pi-tools/widget.ts` | OVWidget — setWidget() com info rica. | Pendente |
 | F5.10 | `adapters/driver/pi-tools/status-bar.ts` | Status bar integration. | Pendente |
 
@@ -243,7 +243,11 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 **Milestone F5.3 ✅:** ov_recall tool — wraps RecallService.recall() through middleware pipeline. TypeBox schema `{ prompt, limit? }`. Returns formatted RecallResult text. 4 unit tests + 1 integration test. Issue #70.
 
-**Milestone F5 completo:** Plugin funcional. Tools e commands operacionais.
+**Milestone F5.3 ✅:** ov_recall tool — wraps RecallService.recall() through middleware pipeline. TypeBox schema `{ prompt, limit? }`. Returns formatted RecallResult text. 4 unit tests + 1 integration test. Issue #70.
+
+**Milestone F5.4 ✅:** 6 user-facing slash commands via `pi.registerCommand()`. Commands bypass the middleware pipeline and call services directly. Each command in its own file, barrel-exported from `command-registry.ts`. Commands: `/ov-recall on|off`, `/ov-status`, `/ov-tree [uri]`, `/ov-commit [--wait]`, `/ov-search <query>`, `/ov-delete <uri>`. 29 unit tests. Issue #71.
+
+**Milestone F5 completo:** Plugin funcional. 6 tools + 6 commands operacionais. Pendente: OVWidget + status bar.
 
 ### F6 — Auto-Recall + Session Sync (15 dias)
 
@@ -323,6 +327,9 @@ flowchart LR
     F7a --> F7b["F7b Profiles Expansion"]
     F7b --> F8["F8 Features"]
 ```
+
+> **F5 concluída (6 tools + 6 commands, 425 tests):** F5.1–F5.4 implementados.
+> Pendente: OVWidget + status bar.
 
 Cada fase depende da anterior. Sem atalhos. Cada fase testada antes
 de iniciar a próxima.

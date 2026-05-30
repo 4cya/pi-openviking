@@ -56,7 +56,7 @@ The implementation follows a strict dependency order — each module must be tes
    - Calls `pipeline.execute(() => service.method(params), signal)` for tools, or `service.method()` directly for commands
    - Registers via `pi.registerTool()`
 
-6. **Command handlers (6)** — One file per command. Commands bypass the pipeline and call services directly. Destructive commands (`/ov-delete`) use `ctx.ui.confirm()` for safety.
+6. **Command handlers (6)** — One file per command. Commands bypass the pipeline and call services directly. Destructive commands (`/ov-delete`) use `ctx.ui.confirm()` for safety. All 6 commands implemented in F5.4 (issue #71).
 
 7. **Entry point (`index.ts`)** — Bootstrap wiring:
    - Guard `initialized` flag ensures `init()` runs once

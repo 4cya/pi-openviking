@@ -14,7 +14,7 @@
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
 | **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 10 singletons total no container. Ver `02-PLANO.md`. |
-| **F5 Tools + Commands** | 🔧 Em progresso (F5.1–F5.3 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: WriteService + ReadService + ov_write + ov_read. F5.3 ✅: ov_recall tool. 6 tools operacionais. Pendente: 6 commands + OVWidget + status bar. Ver `02-PLANO.md`. |
+| **F5 Tools + Commands** | ✅ Completo (F5.1–F5.4 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: WriteService + ReadService + ov_write + ov_read. F5.3 ✅: ov_recall tool. F5.4 ✅: 6 slash commands. 6 tools + 6 commands operacionais. Pendente: OVWidget + status bar. Ver `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -560,9 +560,14 @@ src/
 │   │   ├── ov-read.ts         # ✅ ov_read tool (level: abstract|overview|read)
 │   │   ├── ov-read.test.ts    # ✅ 4 unit tests
 │   │   └── integration.test.ts # ✅ 8 integration tests (mock HTTP server)
-│   ├── driving/pi/            # 🔧 F5 restante: Commands + Widget
-│   │   ├── commands/          # 🔧 1 arquivo por command
-│   │   └── widget.ts          # 🔧 OVWidget — setWidget() com info rica
+│   ├── driver/pi-commands/    # ✅ F5.4: 6 slash commands
+│   │   ├── ov-recall-command.ts  # ✅ /ov-recall on|off
+│   │   ├── ov-status-command.ts  # ✅ /ov-status
+│   │   ├── ov-tree-command.ts    # ✅ /ov-tree [uri]
+│   │   ├── ov-commit-command.ts  # ✅ /ov-commit [--wait]
+│   │   ├── ov-search-command.ts  # ✅ /ov-search <query>
+│   │   ├── ov-delete-command.ts  # ✅ /ov-delete <uri>
+│   │   └── command-registry.ts   # ✅ registerAllCommands() barrel
 │   └── driven/
 │       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
 │       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort
@@ -597,7 +602,7 @@ src/
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
 ├── _legacy/                   # (removido em F3 — 2026-05-27)
-├── index.ts                   # 🔧 F5: init → resolve → registerAll → listen
+├── index.ts                   # ✅ F5: init → resolve → registerAll → listen
                                # Guard initialized, bootstrap único,
                                # tools + commands registrados uma vez.
 ```
@@ -607,7 +612,7 @@ src/
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
 > F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27.
 > F4 ✅ — Issues #61–#66: RecallConfig + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring concluídos 2026-05-29.
-> F5 🔧 — F5.1 ✅ (issue #68): Pipeline + SearchService + 3 search tools + index.ts wiring. F5.2 ✅ (issue #69): WriteService + ReadService + ov_write + ov_read. F5.3 ✅ (issue #70): ov_recall tool. Pendente: 6 commands + Widget.
+> F5 ✅ — F5.1 ✅ (issue #68): Pipeline + SearchService + 3 search tools + index.ts wiring. F5.2 ✅ (issue #69): WriteService + ReadService + ov_write + ov_read. F5.3 ✅ (issue #70): ov_recall tool. F5.4 ✅ (issue #71): 6 slash commands. Pendente: Widget + status bar.
 
 ---
 

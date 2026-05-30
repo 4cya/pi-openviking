@@ -27,6 +27,10 @@ export class RecallService {
     this.logger.info(`recall ${enabled ? "enabled" : "disabled"}`);
   }
 
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
   async recall(prompt: string): Promise<RecallResult> {
     if (!this.enabled) {
       return { items: [], tokens: 0, formatted: "", total: 0 };
