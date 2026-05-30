@@ -274,6 +274,11 @@ export class Transport {
       );
     }
   }
+
+  /** Returns true when the circuit breaker is OPEN (reject fast). */
+  isCircuitBreakerOpen(): boolean {
+    return this.cb !== null && !allowsRequest(this.cb);
+  }
 }
 
 function sleep(ms: number): Promise<void> {

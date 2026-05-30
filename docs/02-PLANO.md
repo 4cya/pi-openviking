@@ -261,13 +261,13 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 | Tarefa | Artefato | Descrição |
 |--------|----------|-----------|
-| F6.1 | `index.ts` — hook `pi.on("before_agent_start")` | Auto-recall: `RecallService.recall(prompt, sessionService.getActive())` → retorna custom message `{ customType: "memory_context", display: false }` pro prompt. GraphExpander (F8) mergeia na mesma mensagem. |
+| F6.1 | `index.ts` — hook `pi.on("before_agent_start")` | ✅ Auto-recall: guard order (toggle → CB → session), `RecallService.recall(prompt, sessionId)`, returns custom message `{ customType: "memory_context", display: false }`. `RecallService.recall()` now accepts optional `sessionId`. Issue #77. |
 | F6.2 | `index.ts` — hook `pi.on("message_end")` | ✅ Session sync: mapeia `AgentMessage` → `Part[]` via MessageMapper, chama `SessionService.sendMessage()`. Sincroniza só role=user|assistant (texto). Ignora ImageContent. Issue #76. |
 | F6.3 | `index.ts` — hook `pi.on("session_shutdown")` | ✅ Session commit: `SessionService.commit()` if active session exists. OV extrai memórias async. Issue #76. |
 | F6.4 | `adapters/driven/openviking/health.ts` + `index.ts` | ✅ Health check adapter (direct fetch, bypasses CB Transport). 4 tests. Widget integration: `session_start` → session create → health check → widget conn update. Issue #75. |
 | F6.5 | `adapters/driven/openviking/circuit-breaker.ts` + `transport.ts` (CB decorator) | ✅ Pure reducer (8 tests) + Transport decorator (3 integration tests). States: CLOSED → `threshold` (default 3) → OPEN → `resetTimeoutMs` (default 30s) → HALF_OPEN → success=CLOSED, failure=OPEN+×2. Config in `OVAdapterConfig.circuitBreaker?`. Env vars `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`. Issue #74. |
 | F6.6 | `adapters/driver/pi-session-sync/message-mapper.ts` | ✅ Função pura `agentMessageToParts(msg): Part[]`. 9 tests: string content, TextContent array, ImageContent ignored, empty/whitespace, null, tool/custom roles. Issue #76. |
-| — | Tests | ✅ circuit breaker (8 pure state + 3 integration) + config schema (4 tests) + health check (4 tests) + MessageMapper (9 tests). Pendente: hooks integration (via mock Pi in F8). |
+| — | Tests | ✅ CB (8+3) + config schema (4) + health (4) + MessageMapper (9) + CB state getter (2) + RecallService sessionId (2). Pendente: hooks integration (via mock Pi in F8). |
 
 **Notas de design:**
 - `RecallService.recall(prompt, sessionId?)` — sessionId opcional, passado em `before_agent_start` pra `search()` endpoint

@@ -15,6 +15,8 @@ export interface OVAdapter {
   fsStore: FsStore;
   graphStore: GraphStore;
   sessionStore: SessionStore;
+  /** True when the circuit breaker is OPEN — fast fail for recall guard */
+  readonly circuitBreakerOpen: boolean;
 }
 
 export function createOVAdapter(config: OVAdapterConfig, logger?: Logger): OVAdapter {
@@ -25,5 +27,6 @@ export function createOVAdapter(config: OVAdapterConfig, logger?: Logger): OVAda
     fsStore: new FsStoreAdapter(transport),
     graphStore: new GraphStoreAdapter(transport),
     sessionStore: new SessionStoreAdapter(transport, config.commitTimeout),
+    get circuitBreakerOpen() { return transport.isCircuitBreakerOpen(); },
   };
 }

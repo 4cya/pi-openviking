@@ -355,4 +355,40 @@ describe("Circuit breaker integration", () => {
     // Should be able to make one more failure without tripping
     await expect(t.request("test", "/api/v1/always-500")).rejects.toThrow();
   });
+
+  it("isCircuitBreakerOpen returns correct state", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 0,
+      circuitBreaker: { threshold: 1, resetTimeoutMs: 10_000 },
+    });
+
+    // Initially CLOSED
+    expect(t.isCircuitBreakerOpen()).toBe(false);
+
+    // Trip to OPEN
+    await expect(t.request("test", "/api/v1/always-500")).rejects.toThrow();
+    expect(t.isCircuitBreakerOpen()).toBe(true);
+  });
+
+  it("isCircuitBreakerOpen returns false when no CB configured", () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 0,
+    });
+
+    expect(t.isCircuitBreakerOpen()).toBe(false);
+  });
 });

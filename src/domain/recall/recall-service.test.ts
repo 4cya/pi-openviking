@@ -106,7 +106,7 @@ describe("RecallService", () => {
     expect(result.formatted).toContain("viking://a");
   });
 
-  it("calls kb.search() when searchMode is search", async () => {
+  it("calls kb.search() when searchMode is search, without sessionId", async () => {
     const config = makeConfig({ searchMode: "search" });
     const kb = makeKB();
     (kb.search as ReturnType<typeof vi.fn>).mockResolvedValue(sampleKBResult);
@@ -125,8 +125,45 @@ describe("RecallService", () => {
     const [arg] = searchCalls[0];
     expect(arg.query).toBe("deep query");
     expect(arg.limit).toBe(5);
+    expect(arg.sessionId).toBeUndefined();
     expect(result.items).toHaveLength(1);
     expect(result.formatted).toContain("viking://a");
+  });
+
+  it("forwards sessionId to kb.search() when provided", async () => {
+    const config = makeConfig({ searchMode: "search" });
+    const kb = makeKB();
+    (kb.search as ReturnType<typeof vi.fn>).mockResolvedValue(sampleKBResult);
+    const curator = makeCurator();
+    const logger = makeLogger();
+    const sid = { toString: () => "sess-123" } as any;
+
+    const service = new RecallService(kb, curator, config, logger, true);
+    await service.recall("with session", sid);
+
+    const searchCalls = (kb.search as ReturnType<typeof vi.fn>).mock.calls;
+    expect(searchCalls).toHaveLength(1);
+    const [arg] = searchCalls[0];
+    expect(arg.sessionId).toBe(sid);
+  });
+
+  it("ignores sessionId when searchMode is find", async () => {
+    const config = makeConfig({ searchMode: "find" });
+    const kb = makeKB();
+    (kb.find as ReturnType<typeof vi.fn>).mockResolvedValue(sampleKBResult);
+    const curator = makeCurator();
+    const logger = makeLogger();
+    const sid = { toString: () => "sess-456" } as any;
+
+    const service = new RecallService(kb, curator, config, logger, true);
+    await service.recall("find with session", sid);
+
+    const findCalls = (kb.find as ReturnType<typeof vi.fn>).mock.calls;
+    expect(findCalls).toHaveLength(1);
+    // find() does not receive sessionId
+    const [arg] = findCalls[0];
+    expect(arg.sessionId).toBeUndefined();
+    expect(kb.search).not.toHaveBeenCalled();
   });
 
   it("returns empty result and logs warn on ConnectionError", async () => {

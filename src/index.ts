@@ -8,6 +8,7 @@ import type { WriteService } from "./domain/services/write-service";
 import type { ReadService } from "./domain/services/read-service";
 import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
+import type { OVAdapter } from "./adapters/driven/openviking/adapter";
 import type { FsStore } from "./domain/ports/fs-store";
 import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
@@ -42,6 +43,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const readService = container.resolve<ReadService>("readService");
       const recallService = container.resolve<RecallService>("recallService");
       const fsStore = container.resolve<FsStore>("fsStore");
+      const adapter = container.resolve<OVAdapter>("adapter");
 
       // Create health check adapter
       healthCheck = new HealthCheck(config.ov.endpoint);
@@ -90,6 +92,33 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         sessionService.commit(active).catch((err) => {
           logger?.warn("session_shutdown: failed to commit session", { error: (err as Error).message });
         });
+      });
+
+      // ── before_agent_start: auto-recall with guard chain ───────────────
+      pi.on("before_agent_start", async (event) => {
+        // Guard 1: recall toggle
+        if (!recallService.isEnabled()) {
+          return { message: { customType: "memory_context", content: "recall OFF", display: false } };
+        }
+
+        // Guard 2: circuit breaker OPEN
+        if (adapter.circuitBreakerOpen) {
+          return { message: { customType: "memory_context", content: "CB OPEN", display: false } };
+        }
+
+        // Guard 3: no active session
+        const sessionId = sessionService.getActive();
+        if (!sessionId) {
+          return { message: { customType: "memory_context", content: "no session context", display: false } };
+        }
+
+        // Recall
+        const result = await recallService.recall(event.prompt ?? "", sessionId);
+        if (!result.formatted) {
+          return { message: { customType: "memory_context", content: "no memories found", display: false } };
+        }
+
+        return { message: { customType: "memory_context", content: result.formatted, display: false } };
       });
     }
 
