@@ -9,10 +9,16 @@ import { loggingMiddleware } from "../../../domain/pipeline/logging-middleware";
 import { createOvSearchTool } from "./ov-search";
 import { createOvGlobTool } from "./ov-glob";
 import { createOvGrepTool } from "./ov-grep";
+import { createOvWriteTool } from "./ov-write";
+import { createOvReadTool } from "./ov-read";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
+import { WriteService } from "../../../domain/services/write-service";
+import { ReadService } from "../../../domain/services/read-service";
+import { FsStoreAdapter } from "../../driven/openviking/fs-store";
 import type { SearchResult } from "../../../domain/knowledge/model/search-result";
 import type { GlobResult, GrepResult } from "../../../domain/ports/knowledge-base";
+import type { Content } from "../../../domain/ports/fs-store";
 
 let server: http.Server;
 let port: number;
@@ -62,6 +68,38 @@ beforeAll(async () => {
           matches: [{ uri: "viking://docs/a.md", line: "hello world", line_number: 5 }],
           total: 1,
         }));
+        return;
+      }
+
+      // FsStore endpoints
+      if (url.pathname === "/api/v1/content/read") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          uri: "viking://docs/a.md",
+          body: "hello from read",
+          level: "read",
+        }));
+        return;
+      }
+
+      if (url.pathname === "/api/v1/content/write") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          uri: "viking://docs/a.md",
+          success: true,
+        }));
+        return;
+      }
+
+      if (url.pathname === "/api/v1/fs/mkdir") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
+      if (url.pathname === "/api/v1/fs/mv") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
 
@@ -122,10 +160,21 @@ function wireStack() {
   const grepPipeline = new Pipeline<GrepResult>();
   grepPipeline.use(loggingMiddleware("grep", logger as any));
 
+  const fsStore = new FsStoreAdapter(transport);
+  const writeService = new WriteService(fsStore);
+  const readService = new ReadService(fsStore);
+
+  const writePipeline = new Pipeline<unknown>();
+  writePipeline.use(loggingMiddleware("write", logger as any));
+  const readPipeline = new Pipeline<Content>();
+  readPipeline.use(loggingMiddleware("read", logger as any));
+
   return {
     searchTool: createOvSearchTool(svc, searchPipeline),
     globTool: createOvGlobTool(svc, globPipeline),
     grepTool: createOvGrepTool(svc, grepPipeline),
+    writeTool: createOvWriteTool(writeService, writePipeline),
+    readTool: createOvReadTool(readService, readPipeline),
   };
 }
 
@@ -162,5 +211,29 @@ describe("Tools integration (mock HTTP)", () => {
     const { grepTool } = wireStack();
     const result = await exec(grepTool, { pattern: "hello" });
     expect(resultText(result)).toContain("hello world");
+  });
+
+  it("ov_write action=save calls /api/v1/content/write and returns result", async () => {
+    const { writeTool } = wireStack();
+    const result = await exec(writeTool, { action: "save", uri: "viking://docs/a.md", content: "new content", mode: "replace" });
+    expect(resultText(result)).toContain("success");
+  });
+
+  it("ov_write action=mkdir calls /api/v1/fs/mkdir", async () => {
+    const { writeTool } = wireStack();
+    const result = await exec(writeTool, { action: "mkdir", uri: "viking://docs/new-dir" });
+    expect(resultText(result)).not.toContain("failed");
+  });
+
+  it("ov_write action=mv calls /api/v1/fs/mv", async () => {
+    const { writeTool } = wireStack();
+    const result = await exec(writeTool, { action: "mv", uri: "viking://docs/a.md", targetUri: "viking://docs/b.md" });
+    expect(resultText(result)).not.toContain("failed");
+  });
+
+  it("ov_read calls /api/v1/content/read and returns body", async () => {
+    const { readTool } = wireStack();
+    const result = await exec(readTool, { uri: "viking://docs/a.md", level: "read" });
+    expect(resultText(result)).toContain("hello from read");
   });
 });

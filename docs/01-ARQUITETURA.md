@@ -14,7 +14,7 @@
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
 | **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 10 singletons total no container. Ver `02-PLANO.md`. |
-| **F5 Tools + Commands** | 🔧 Em progresso (F5.1 ✅) | F5.1 ✅: Pipeline + LoggingMiddleware + SearchService + ov_search + ov_glob + ov_grep + index.ts wiring + lifecycle wiring. 11 singletons total. Pendente: ov_read, ov_write, ov_recall tools + 6 commands + OVWidget + status bar. Ver `02-PLANO.md`. |
+| **F5 Tools + Commands** | 🔧 Em progresso (F5.1–F5.6 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: WriteService + ReadService + ov_write + ov_read. 5 tools operacionais. Pendente: ov_recall tool + 6 commands + OVWidget + status bar. Ver `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -529,7 +529,9 @@ src/
 │   │   └── recall-service.ts  # ✅ RecallService: toggle → KB → curator → RecallResult
 │   ├── services/              # ✅ Domain services com estado
 │   │   ├── session-service.ts  # ✅ SessionService: active session + commit + polling
-│   │   └── search-service.ts  # ✅ F5.1: SearchService: find/search/glob/grep delegation
+│   │   ├── search-service.ts  # ✅ SearchService: find/search/glob/grep delegation
+│   │   ├── write-service.ts   # ✅ WriteService: save/mkdir/mv → FsStore delegation
+│   │   └── read-service.ts    # ✅ ReadService: read → FsStore delegation
 │   ├── profile/               # (futuro F7) Contexto: perfis de comportamento
 │   │   ├── model/             # ProfileConfig, AutoDetectRule
 │   │   └── service/           # ProfileManager, ProfileResolver, AutoDetect
@@ -546,14 +548,18 @@ src/
 ├── application/               # (não utilizado — SearchService em domain/services/, Pipeline em domain/pipeline/)
 │
 ├── adapters/
-│   ├── driver/pi-tools/       # ✅ F5.1: 3 search tools registradas
+│   ├── driver/pi-tools/       # ✅ F5.1–F5.6: 5 tools registradas
 │   │   ├── ov-search.ts       # ✅ ov_search tool + TypeBox schema
 │   │   ├── ov-search.test.ts  # ✅ 3 unit tests
 │   │   ├── ov-glob.ts         # ✅ ov_glob tool
 │   │   ├── ov-glob.test.ts    # ✅ 2 unit tests
 │   │   ├── ov-grep.ts         # ✅ ov_grep tool
 │   │   ├── ov-grep.test.ts    # ✅ 2 unit tests
-│   │   └── integration.test.ts # ✅ 4 integration tests (mock HTTP server)
+│   │   ├── ov-write.ts        # ✅ ov_write tool (action: save|mkdir|mv)
+│   │   ├── ov-write.test.ts   # ✅ 6 unit tests
+│   │   ├── ov-read.ts         # ✅ ov_read tool (level: abstract|overview|read)
+│   │   ├── ov-read.test.ts    # ✅ 4 unit tests
+│   │   └── integration.test.ts # ✅ 8 integration tests (mock HTTP server)
 │   ├── driving/pi/            # 🔧 F5 restante: Commands + Widget
 │   │   ├── commands/          # 🔧 1 arquivo por command
 │   │   └── widget.ts          # 🔧 OVWidget — setWidget() com info rica
@@ -601,7 +607,7 @@ src/
 > F2 — domain/common/ (#47), domain/errors/ + knowledge/recall models (#48), 6 port interfaces (#49) implementados 2026-05-27.
 > F3 ✅ — Issues #52–#58: Transport + 6 mappers + 4 port implementations + adapter factory + DI wiring + smoke test concluídos 2026-05-27.
 > F4 ✅ — Issues #61–#66: RecallConfig + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring concluídos 2026-05-29.
-> F5 🔧 — F5.1 ✅ (issue #68): Pipeline + LoggingMiddleware + SearchService + ov_search + ov_glob + ov_grep + index.ts wiring. Pendente: F5.2+ (ov_read, ov_write, ov_recall tools + 6 commands + Widget).
+> F5 🔧 — F5.1 ✅ (issue #68): Pipeline + SearchService + 3 search tools + index.ts wiring. F5.2 ✅ (issue #69): WriteService + ReadService + ov_write + ov_read. Pendente: F5.7+ (ov_recall tool + 6 commands + Widget).
 
 ---
 

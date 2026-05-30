@@ -227,9 +227,13 @@ Active session is instance-level private state. `createAndSet()` creates via por
 Bindings: `pi.on('session_start')` → `createAndSet()`.
 _Avoid_: session manager, session handler
 
-**Write Service**:
-Handles content persistence: save, mkdir, mv. Wraps FsStore port. No write-back — OV `write()` modes (replace|append|create) cover all cases.
-Deferred to F5.2 — OV already handles implicit mkdir on create, extension validation, path normalization. Pure delegation, no orchestration logic.
+**WriteService** *(implemented — `domain/services/write-service.ts`)*:
+Thin service wrapping the `FsStore` port for content mutations. Three methods: `save(uri, content, mode?, signal?)` → `fsStore.write()`, `mkdir(uri, signal?)` → `fsStore.mkdir()`, `mv(from, to, signal?)` → `fsStore.mv()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. 4 tests. Born in F5.2 (issue #69).
+_Avoid_: write handler, persistence service
+
+**ReadService** *(implemented — `domain/services/read-service.ts`)*:
+Thin service wrapping the `FsStore` port for content reads. Single method: `read(uri, level?, offset?, limit?, signal?)` → `fsStore.read()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. 3 tests. Born in F5.2 (issue #69).
+_Avoid_: read handler, content reader
 
 **SearchService** *(implemented — `domain/services/search-service.ts`)*:
 Thin application service delegating to the `KnowledgeBase` port. Three methods: `search(params, signal?)` routes `mode` param (`fast` → `kb.find()`, `deep` → `kb.search()`, `auto` → `RecallConfig.searchMode`); `glob(pattern, uri?, limit?, signal?)` delegates directly; `grep(pattern, opts?, signal?)` delegates directly. Constructor takes `KnowledgeBase`, `RecallConfig`, `Logger`. 7 tests. Registered as singleton in lifecycle.
@@ -247,9 +251,17 @@ Pi tool for URI pattern discovery. Schema: `{ pattern: string, uri?: string, lim
 **ov_grep** *(implemented — `adapters/driver/pi-tools/ov-grep.ts`)*:
 Pi tool for content regex search. Schema: `{ pattern: string, uri?: string, caseInsensitive?: boolean, levelLimit?: number, nodeLimit?: number }`. Handler wraps `searchService.grep()` via pipeline. Returns `GrepResult` as JSON. 2 unit tests + 1 integration test.
 
-**Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines (`Pipeline<SearchResult>`, `Pipeline<GlobResult>`, `Pipeline<GrepResult>`) with `LoggingMiddleware` and passes both service and pipeline to each factory.
 
-**Remaining F5 tasks**: ov_read, ov_write, ov_recall tools; 6 commands; OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68).
+
+**ov_write** *(implemented — `adapters/driver/pi-tools/ov-write.ts`)*:
+Pi tool for content mutations. Single tool with `action` enum to minimize prompt surface area. TypeBox schema: `{ action: "save"|"mkdir"|"mv", uri: string, content?: string, targetUri?: string, mode?: "replace"|"append"|"create" }`. Handler routes action to `WriteService` method via `pipeline.execute()`. Returns JSON result or error. 6 unit tests + 3 integration tests. Born in F5.2 (issue #69).
+
+**ov_read** *(implemented — `adapters/driver/pi-tools/ov-read.ts`)*:
+Pi tool for reading content at three depth levels. TypeBox schema: `{ uri: string, level?: "abstract"|"overview"|"read", offset?: number, limit?: number }`. Handler wraps `ReadService.read()` via pipeline. Returns raw `body` string (not JSON) for direct consumption. 4 unit tests + 1 integration test. Born in F5.2 (issue #69).
+
+**Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
+
+**Remaining F5 tasks**: ov_recall tool; 6 commands; OVWidget; status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69).
 
 ## Flagged ambiguities
 

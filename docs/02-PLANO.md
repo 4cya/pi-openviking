@@ -222,14 +222,14 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 | **F5.2** | `domain/services/search-service.ts` | SearchService: thin wrapper delegating find/search/glob/grep ao KB. Mode routing. 7 tests. | ✅ |
 | **F5.3** | `adapters/driver/pi-tools/ov-{search,glob,grep}.ts` | 3 tools registradas via `pi.registerTool()`, cada uma chama `pipeline.execute()`. TypeBox schemas. 11 tests. | ✅ |
 | **F5.4** | `src/index.ts` + `infrastructure/lifecycle.ts` | Entry point: `session_start` → `init()` → resolve KB → create pipelines/services → register tools. 11 singletons. | ✅ |
-| F5.5 | `adapters/driver/pi-tools/ov-read.ts` | ov_read tool (delegating to FsStore.read). | Pendente |
-| F5.6 | `adapters/driver/pi-tools/ov-write.ts` | ov_write tool + WriteService (delegating to FsStore). | Pendente |
+| **F5.5** | `adapters/driver/pi-tools/ov-read.ts` + `domain/services/read-service.ts` | ReadService + ov_read tool (delegating to FsStore.read). TypeBox schema `{ uri, level?, offset?, limit? }`. 4 unit + 1 integration tests. | ✅ |
+| **F5.6** | `adapters/driver/pi-tools/ov-write.ts` + `domain/services/write-service.ts` | WriteService + ov_write tool (delegating to FsStore.write/mkdir/mv). Single tool with `action` enum. TypeBox schema `{ action, uri, content?, targetUri?, mode? }`. 6 unit + 3 integration tests. | ✅ |
 | F5.7 | `adapters/driver/pi-tools/ov-recall.ts` | ov_recall tool (delegating to RecallService). | Pendente |
 | F5.8 | `adapters/driver/pi-commands/` | 6 commands (/ov-recall, /ov-status, /ov-tree, /ov-commit, /ov-search, /ov-delete). | Pendente |
 | F5.9 | `adapters/driver/pi-tools/widget.ts` | OVWidget — setWidget() com info rica. | Pendente |
 | F5.10 | `adapters/driver/pi-tools/status-bar.ts` | Status bar integration. | Pendente |
 
-**Nota 1 — F5.1–F5.4 concluídos:** `index.ts` chama `init()` e resolve `{ container, config, logger }`, cria pipelines tipados, resolve KB, instancia SearchService, registra tools.
+**Nota 1 — F5.1–F5.6 concluídos:** `index.ts` chama `init()` e resolve `{ container, config, logger }`, cria pipelines tipados, resolve KB + FsStore, instancia SearchService + WriteService + ReadService, registra tools. 5 tools operacionais.
 
 **Nota 2 — PiEventBridge eliminado:** `adapters/driving/pi/pi-event-bridge.ts` não será criado. Per ADR-011 e CONTEXT.md: eventos de infra (session_start, message_end, before_agent_start) são tratados diretamente por `pi.on()` em `index.ts` — não passam pelo EventBus de domínio. O EventBus só transporta eventos de domínio internos (MEMORY_SAVED, RECALL_EXECUTED, etc.) entre bounded contexts.
 
@@ -238,6 +238,8 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 **Nota 4 — Tools em adapters/driver/pi-tools/:** Cada tool é uma factory function `create*Tool(svc, pipeline)` retornando `ToolDefinition`. Index.ts instancia pipelines tipados (`Pipeline<SearchResult>`, etc.) com LoggingMiddleware e passa ambos para cada factory.
 
 **Milestone F5.1 ✅:** Pipeline + LoggingMiddleware + SearchService + 3 tools (ov_search, ov_glob, ov_grep) + index.ts wiring + lifecycle wiring. 25 tests. Issue #68.
+
+**Milestone F5.2 ✅:** WriteService + ReadService + ov_write (save/mkdir/mv) + ov_read (abstract/overview/read). 17 tests (4 WriteService + 3 ReadService + 6 ov_write + 4 ov_read + 4 integration). Issue #69.
 
 **Milestone F5 completo:** Plugin funcional. Tools e commands operacionais.
 
