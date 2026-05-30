@@ -12,12 +12,14 @@ import type { FsStore } from "./domain/ports/fs-store";
 import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
 import { OVWidget } from "./adapters/driver/ov-widget";
+import { HealthCheck } from "./adapters/driven/openviking/health";
 
 let initialized = false;
 let config: PiOVConfig;
 let logger: Logger;
 let container: DIContainer;
 let widget: OVWidget;
+let healthCheck: HealthCheck;
 
 export default async function openVikingExtension(pi: ExtensionAPI): Promise<void> {
   pi.on("session_start", async (_event, ctx) => {
@@ -40,6 +42,9 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const sessionService = container.resolve<SessionService>("sessionService");
       const fsStore = container.resolve<FsStore>("fsStore");
 
+      // Create health check adapter
+      healthCheck = new HealthCheck(config.ov.endpoint);
+
       // Register all 6 tools (once per process)
       registerAllTools(pi, { searchService, writeService, readService, recallService }, logger);
 
@@ -55,18 +60,21 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       });
     }
 
-    // Every session_start: attach widget and try to create OV session
+    // Every session_start: attach widget, create session, then check health
     widget.attach(ctx.ui);
 
     try {
       const sessionService = container.resolve<SessionService>("sessionService");
       await sessionService.createAndSet();
-      widget.update("conn", "connected");
       const active = sessionService.getActive();
       widget.update("session", active?.toString() ?? "-");
       widget.update("scope", config.recall.targetUri ?? "(global)");
     } catch {
-      widget.update("conn", "disconnected");
+      // Session creation failed — widget will show disconnected after health check
     }
+
+    // Health check — probes /ready, does NOT affect CircuitBreaker
+    const health = await healthCheck.check();
+    widget.update("conn", health.ok ? "connected" : "disconnected");
   });
 }

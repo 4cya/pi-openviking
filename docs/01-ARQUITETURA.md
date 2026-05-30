@@ -573,6 +573,9 @@ src/
 │   └── driven/
 │       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
 │       │   ├── circuit-breaker.ts # ✅ Pure state machine: CLOSED→OPEN→HALF_OPEN (8 tests)
+│       │   ├── circuit-breaker.test.ts # ✅ 8 reducer tests + 3 integration tests
+│       │   ├── health.ts          # ✅ HealthCheck adapter: /ready probe (bypasses CB)
+│       │   ├── health.test.ts     # ✅ 4 tests (200, 503, latency, connection error)
 │       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort, CB decorator (3 integration tests)
 │       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read/write/list/tree/stat/mkdir/mv/delete)
 │       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find/search/glob/grep)

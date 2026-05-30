@@ -62,7 +62,7 @@ A decorator wrapper inside `Transport` that protects against OV unavailability. 
 _Avoid_: cb, breaker, fault tolerance
 
 **HealthCheck**:
-An adapter (`adapters/driven/openviking/health.ts`) that probes OV availability via `GET /ready` (no auth required). Method `check(): Promise<HealthStatus>` returns `{ ok: boolean, latency?: number, error?: string }`. Results feed `OVWidget.update("conn", ...)`. Called on `session_start` and on-demand. Does NOT drive the CircuitBreaker — the breaker is driven by real request failures. No polling by default.
+An adapter (`adapters/driven/openviking/health.ts`) that probes OV availability via `GET /ready` (no auth required). Method `check(): Promise<HealthStatus>` returns `{ ok: boolean, latencyMs?: number, error?: string }`. Uses direct `fetch()` — does NOT go through the CircuitBreaker-decorated Transport. Results feed `OVWidget.update("conn", ...)`. Called on `session_start` and on-demand. Does NOT drive the CircuitBreaker — the breaker is driven by real request failures. No polling by default. 4 tests.
 _Avoid_: health probe, ping, liveness
 
 **ErrorMapper**:
