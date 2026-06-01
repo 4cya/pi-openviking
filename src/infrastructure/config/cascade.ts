@@ -34,8 +34,9 @@ export function loadConfig(cwd: string): PiOVConfig {
   const fileSettings = readSettings(cwd, "pi-openviking");
   mergeShallow(config, fileSettings);
 
-  // 4. Overlay profile settings (future — no profile-specific fields yet)
-  // Profiles only carry name+description in Fase 1, nothing to overlay
+  // 4. Overlay profile behavior — happens in init(), not here
+  // ProfileManager.resolve() + mergeBehaviorIntoRecall() called in lifecycle.ts
+  // after loadConfig() returns.
 
   // 5. Validate with Zod
   const parsed = ConfigSchema.parse(config);
@@ -62,4 +63,25 @@ function mergeShallow(target: Record<string, unknown>, source: Record<string, un
   for (const key of Object.keys(source)) {
     target[key] = source[key];
   }
+}
+
+/**
+ * Deep-overrides RecallConfig fields with any defined ProfileBehavior values.
+ * Fields that are undefined in the behavior are left untouched in the base config.
+ * Returns a new object — does not mutate base.
+ */
+export function mergeBehaviorIntoRecall(
+  base: import("./schema").RecallConfig,
+  behavior: import("./profile-schema").ProfileBehavior,
+): import("./schema").RecallConfig {
+  const merged = { ...base };
+
+  if (behavior.targetUri !== undefined) merged.targetUri = behavior.targetUri;
+  if (behavior.topN !== undefined) merged.topN = behavior.topN;
+  if (behavior.scoreThreshold !== undefined) merged.scoreThreshold = behavior.scoreThreshold;
+  if (behavior.searchMode !== undefined) merged.searchMode = behavior.searchMode;
+  if (behavior.expandGraph !== undefined) merged.expandGraph = behavior.expandGraph;
+  if (behavior.autoRecall !== undefined) merged.autoRecall = behavior.autoRecall;
+
+  return merged;
 }

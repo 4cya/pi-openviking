@@ -56,6 +56,7 @@ describe("DEFAULT_CONFIG", () => {
     expect(DEFAULT_CONFIG.recall.scoreThreshold).toBe(0.5);
     expect(DEFAULT_CONFIG.recall.expandGraph).toBe(false);
     expect(DEFAULT_CONFIG.recall.searchMode).toBe("find");
+    expect(DEFAULT_CONFIG.recall.autoRecall).toBe(true);
   });
 
   it("logger defaults match expected values", () => {
@@ -90,6 +91,25 @@ describe("RecallConfigSchema", () => {
     expect(config.recall.targetUri).toBe("viking://docs");
   });
 
+  it("autoRecall defaults to true in RecallConfigSchema", () => {
+    const config = ConfigSchema.parse({});
+    expect(config.recall.autoRecall).toBe(true);
+  });
+
+  it("autoRecall can be overridden to false", () => {
+    const config = ConfigSchema.parse({ recall: { autoRecall: false } });
+    expect(config.recall.autoRecall).toBe(false);
+  });
+
+  it("autoRecall can be explicitly set to true", () => {
+    const config = ConfigSchema.parse({ recall: { autoRecall: true } });
+    expect(config.recall.autoRecall).toBe(true);
+  });
+
+  it("autoRecall rejects non-boolean", () => {
+    expect(() => ConfigSchema.parse({ recall: { autoRecall: "yes" } })).toThrow();
+  });
+
   it("partial recall override keeps other defaults", () => {
     const config = ConfigSchema.parse({ recall: { topN: 10 } });
     expect(config.recall.topN).toBe(10);
@@ -97,6 +117,7 @@ describe("RecallConfigSchema", () => {
     expect(config.recall.expandGraph).toBe(false);
     expect(config.recall.searchMode).toBe("find");
     expect(config.recall.targetUri).toBeUndefined();
+    expect(config.recall.autoRecall).toBe(true);
   });
 });
 

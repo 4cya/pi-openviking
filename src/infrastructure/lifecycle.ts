@@ -1,5 +1,5 @@
 import { DIContainer } from "../infrastructure/di/container";
-import { loadConfig } from "../infrastructure/config/cascade";
+import { loadConfig, mergeBehaviorIntoRecall } from "../infrastructure/config/cascade";
 import { FileLogger } from "../adapters/driven/logger/file-logger";
 import { createOVAdapter } from "../adapters/driven/openviking/adapter";
 import { RecallCurator } from "../domain/recall/recall-curator";
@@ -9,6 +9,7 @@ import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
 import { WriteService } from "../domain/services/write-service";
 import { ReadService } from "../domain/services/read-service";
+import { ProfileManager } from "../domain/profile/service/ProfileManager";
 import type { Logger } from "../domain/ports/logger";
 import type { PiOVConfig } from "../infrastructure/config/schema";
 
@@ -31,6 +32,21 @@ export async function init(cwd: string): Promise<{
   container.register("fsStore", () => adapter.fsStore, true);
   container.register("graphStore", () => adapter.graphStore, true);
   container.register("sessionStore", () => adapter.sessionStore, true);
+
+  // F7a — ProfileManager: create, resolve active profile, merge into recall config
+  const profileManager = new ProfileManager(
+    config.profile.profiles,
+    config.profile.activeProfile,
+  );
+  container.register("profileManager", () => profileManager, true);
+
+  const mergedRecall = mergeBehaviorIntoRecall(
+    config.recall,
+    profileManager.resolve(profileManager.getActive()),
+  );
+  // Mutate config in-place so services receive merged config
+  // (config is a fresh Zod-parsed object from loadConfig())
+  Object.assign(config.recall, mergedRecall);
 
   // F4 — domain services
   const recallCurator = new RecallCurator(config.recall, [relevanceScorer, temporalScorer], logger);

@@ -10,6 +10,7 @@ import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
 import { WriteService } from "../domain/services/write-service";
 import { ReadService } from "../domain/services/read-service";
+import { ProfileManager } from "../domain/profile/service/ProfileManager";
 import type { Logger } from "../domain/ports/logger";
 import type { KnowledgeBase } from "../domain/ports/knowledge-base";
 import type { FsStore } from "../domain/ports/fs-store";
@@ -179,6 +180,52 @@ describe("init", () => {
     const s1 = container.resolve("searchService");
     const s2 = container.resolve("searchService");
     expect(s1).toBe(s2);
+  });
+
+  // ── F7a — ProfileManager ───────────────────────────────────────────────────
+
+  it("container resolves profileManager as ProfileManager instance", async () => {
+    const { container } = await init(tmpDir);
+    const pm = container.resolve<ProfileManager>("profileManager");
+    expect(pm).toBeInstanceOf(ProfileManager);
+    expect(typeof pm.getActive).toBe("function");
+    expect(typeof pm.resolve).toBe("function");
+    expect(typeof pm.apply).toBe("function");
+    expect(typeof pm.list).toBe("function");
+  });
+
+  it("profileManager is singleton", async () => {
+    const { container } = await init(tmpDir);
+    const p1 = container.resolve("profileManager");
+    const p2 = container.resolve("profileManager");
+    expect(p1).toBe(p2);
+  });
+
+  it("profileManager has correct activeProfile from config", async () => {
+    const { container } = await init(tmpDir);
+    const pm = container.resolve<ProfileManager>("profileManager");
+    expect(pm.getActive()).toBe("default");
+  });
+
+  it("profileManager resolves default profile with correct behavior", async () => {
+    const { container } = await init(tmpDir);
+    const pm = container.resolve<ProfileManager>("profileManager");
+    const behavior = pm.resolve("default");
+    expect(behavior.topN).toBe(3);
+    expect(behavior.scoreThreshold).toBe(0.5);
+    expect(behavior.searchMode).toBe("find");
+    expect(behavior.autoRecall).toBe(true);
+  });
+
+  it("merged recall config reflects profile behavior override", async () => {
+    const { container } = await init(tmpDir);
+    const config = container.resolve<import("./schema").PiOVConfig>("config");
+    // Default profile sets topN=3, but RecallConfig default is topN=5
+    // So merged config should have topN=3 from profile
+    expect(config.recall.topN).toBe(3);
+    expect(config.recall.scoreThreshold).toBe(0.5);
+    expect(config.recall.searchMode).toBe("find");
+    expect(config.recall.autoRecall).toBe(true);
   });
 
   it("container resolves writeService as WriteService instance", async () => {

@@ -100,18 +100,34 @@ Pure functions in `adapters/driven/openviking/mappers/relation-mapper.ts`: `toLi
 An implementation of the `GraphStore` port in `adapters/driven/openviking/graph-store.ts`. `link()` calls `POST /api/v1/relations/link` with `from_uri`, `to_uris[]`, optional `reason`. `unlink()` calls `DELETE /api/v1/relations/link` with `from_uri`, `to_uri`. `graph()` calls `GET /api/v1/relations?uri=` and maps via `RelationMapper`.
 
 **Config Cascade**:
-Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile. Each source overrides the previous via shallow merge.
+Config resolution order: compiled defaults → env vars (`OV_*`) → `.pi/settings.json` → active Profile (merged in `init()`, not `loadConfig()`). Each source overrides the previous via shallow merge.
 `.pi/settings.json` is read at the `"pi-openviking"` namespace key — only the sub-tree under that key enters the cascade. Pi-level keys (`extensions`, etc.) are ignored.
+
+F7a: Profile merge happens in `init()` via `ProfileManager.resolve(activeProfile)` → `deepMerge(baseConfig, profileOverride)`. `loadConfig()` stays pure — does not create ProfileManager. Services receive merged config at construction; ProfileManager not injected until F7b.
 _Avoid_: merge, resolution chain
 
 **Profile**:
-A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Carries `name` + `description` + optional `ProfileBehavior` fields (added in F7a).
+A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Carries `name` + `description` + `behavior: ProfileBehavior` (optional, added in F7a). Schema: `ProfileConfigSchema` with `behavior: ProfileBehaviorSchema.default({})`. Built-in profiles carry behavioral overrides (topN, scoreThreshold, etc.) web-dev targetUri placeholder `{workspace}` resolved in F7b via AutoDetect.
 
 **ProfileBehavior**:
-6 optional behavioral fields that override `RecallConfig` when a profile is active: `targetUri` (string?, escopo de busca), `topN` (number?, max results), `scoreThreshold` (number 0-1?, relevância mínima), `searchMode` (`'find'|'search'`?), `expandGraph` (boolean?, F8+), `autoRecall` (boolean?, override do toggle default). Fields are optional — profile só sobrescreve o que define. Lives in `infrastructure/config/profile-schema.ts`.
+6 optional behavioral fields that override `RecallConfig` when a profile is active. Fields are optional — profile só sobrescreve o que define. Defined in `infrastructure/config/profile-schema.ts`:
+- `targetUri` (string?): escopo de busca. undefined = global.
+- `topN` (number?): max results. undefined = usa default RecallConfig.
+- `scoreThreshold` (number 0-1?): relevância mínima.
+- `searchMode` (`'find'|'search'`?): modo de busca OV.
+- `expandGraph` (boolean?): expandir grafo (F8+).
+- `autoRecall` (boolean?): override do toggle default.
 
-**ProfileManager** (stateful, F7a):
-Manages the active profile. Constructor receives `profiles: Record<string, ProfileBehavior>` from resolved config. Methods: `getActive(): string` (returns current name), `resolve(name): Partial<PiOVConfig>` (returns behavioral fields for cascade merge), `apply(name): void` (validates name exists, updates state). Cascade merges ProfileManager.resolve() as the last override layer (after env vars and `.pi/settings.json`). `activeProfile` lido da config file em F7a; comando `/ov-profile` é F7b.
+Resolved at init via `ProfileManager.resolve()` returning `Partial<Pick<PiOVConfig, "recall">>`. `init()` deep-merges into `RecallConfig` before constructing services. Services receive merged config — no ProfileManager reference until F7b.
+
+**ProfileManager** (stateful, `domain/profile/service/ProfileManager.ts`):
+Manages the active profile. Constructor receives `profiles: Record<string, ProfileConfig>` (with behavior sub-objects) and `activeProfile: string`. Methods:
+- `getActive(): string` — returns current profile name.
+- `resolve(name?): Partial<Pick<PiOVConfig, "recall">>` — returns behavioral fields for merge. Only populated fields override.
+- `apply(name): void` — validates name exists, updates state (F7b+).
+- `list()` — returns `{name, description}[]`.
+
+Register as singleton in container at init. In F7a, used only at init time (`init()` calls `pm.resolve()` and merges before service construction). In F7b, injected into services for runtime `apply()` support. `activeProfile` lido da config file em F7a; comando `/ov-profile` é F7b.
 
 **AutoDetect** (F7b):
 Minimatch rules-based profile detection. `detect(cwd, rules): string | null`. Rules from config: `{ "pattern": "**/web*/**", "profile": "web-dev" }`. Built-in rules: `**/web*/**` → web-dev, `**/doc*/**` → docs. Runs in `session_start` when `activeProfile = "auto"`.
@@ -140,7 +156,7 @@ _Avoid_: bootstrap lifecycle, module lifecycle
 A unit of persistent knowledge stored in OpenViking. Can be a memory (extracted text with metadata) or a resource (document, file, reference). Has a Uri, content, and optional relations.
 
 **Recall Toggle**:
-A user-controlled toggle command that enables or disables auto-recall. `/ov recall on` / `/ov recall off`.
+A user-controlled toggle command (`/ov recall on|off`) that enables or disables auto-recall. Initial state from `RecallConfig.autoRecall` (default true). Command overrides runtime state — does not mutate config.
 No intent detection — user decides when recall fires. searchMode comes from RecallConfig, overridable via profile.
 _Avoid_: intent detector, auto-detect recall
 
@@ -230,10 +246,10 @@ Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` 
 
 **Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
-**RecallConfig** (6 fields added to ConfigSchema in F4): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`).
+**RecallConfig** (7 fields in ConfigSchema F4+F7a): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`), `autoRecall` (boolean, default true, added F7a).
 Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported type `RecallConfig` inferred via `z.infer`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
-Profile behavioral fields (autoRecall, autoSaveMode, autoLinkMode) added in F7a via ProfileSchema expansion — these 6 RecallConfig fields are birth in F4, Profile overrides them in F7a.
+ProfileBehavior (6 fields) overrides RecallConfig fields in F7a via merge. Schema in `profile-schema.ts` has `behavior: ProfileBehaviorSchema.default({})`.
 
 **SessionService** *(implemented — `domain/services/session-service.ts`)*:
 Stateful service that manages the OV session lifecycle. Owns the active session — callers get the current session via `getActive()` rather than tracking it externally. Depends on `SessionStore` port + `SessionServiceConfig { commitTimeout, pollInterval? }`.

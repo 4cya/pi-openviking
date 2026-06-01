@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadConfig } from "./cascade";
+import { loadConfig, mergeBehaviorIntoRecall } from "./cascade";
 import { DEFAULT_CONFIG } from "./schema";
 
 function withTempDir(fn: (dir: string) => void) {
@@ -129,5 +129,74 @@ describe("loadConfig", () => {
       expect(result.recall.searchMode).toBe("search");
       expect(result.recall.scoreThreshold).toBe(DEFAULT_CONFIG.recall.scoreThreshold);
     });
+  });
+});
+
+describe("mergeBehaviorIntoRecall", () => {
+  const base = {
+    targetUri: undefined,
+    topN: 5,
+    scoreThreshold: 0.5,
+    maxTokens: 4000,
+    expandGraph: false as const,
+    searchMode: "find" as const,
+    autoRecall: true as const,
+  };
+
+  it("empty behavior returns base unchanged", () => {
+    const merged = mergeBehaviorIntoRecall(base, {});
+    expect(merged).toEqual(base);
+  });
+
+  it("overrides all 6 fields", () => {
+    const behavior = {
+      targetUri: "viking://custom/**",
+      topN: 15,
+      scoreThreshold: 0.6,
+      searchMode: "search" as const,
+      expandGraph: true,
+      autoRecall: false,
+    };
+    const merged = mergeBehaviorIntoRecall(base, behavior);
+    expect(merged.targetUri).toBe("viking://custom/**");
+    expect(merged.topN).toBe(15);
+    expect(merged.scoreThreshold).toBe(0.6);
+    expect(merged.searchMode).toBe("search");
+    expect(merged.expandGraph).toBe(true);
+    expect(merged.autoRecall).toBe(false);
+    expect(merged.maxTokens).toBe(4000); // unchanged
+  });
+
+  it("partial override keeps other fields at base values", () => {
+    const merged = mergeBehaviorIntoRecall(base, { topN: 10, searchMode: "search" });
+    expect(merged.topN).toBe(10);
+    expect(merged.searchMode).toBe("search");
+    expect(merged.scoreThreshold).toBe(0.5); // base value
+    expect(merged.autoRecall).toBe(true);    // base value
+    expect(merged.targetUri).toBeUndefined();
+  });
+
+  it("autoRecall=false overrides base true", () => {
+    const merged = mergeBehaviorIntoRecall(base, { autoRecall: false });
+    expect(merged.autoRecall).toBe(false);
+    expect(merged.topN).toBe(5); // unchanged
+  });
+
+  it("does not mutate the base object", () => {
+    const baseClone = { ...base };
+    mergeBehaviorIntoRecall(base, { topN: 99 });
+    expect(base.topN).toBe(5); // original unchanged
+  });
+
+  it("fields not in behavior keep base values", () => {
+    const merged = mergeBehaviorIntoRecall(base, { expandGraph: true });
+    expect(merged.expandGraph).toBe(true);
+    // All other fields stay at base
+    expect(merged.topN).toBe(5);
+    expect(merged.scoreThreshold).toBe(0.5);
+    expect(merged.searchMode).toBe("find");
+    expect(merged.autoRecall).toBe(true);
+    expect(merged.targetUri).toBeUndefined();
+    expect(merged.maxTokens).toBe(4000);
   });
 });
