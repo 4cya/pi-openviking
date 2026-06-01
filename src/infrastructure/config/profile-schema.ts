@@ -69,6 +69,7 @@ export const BUILTIN_PROFILES: Record<string, ProfileConfig> = {
 export const ProfileSectionSchema = z.object({
   activeProfile: z.string().default("default"),
   profiles: z.record(z.string(), ProfileConfigSchema).default(BUILTIN_PROFILES),
+  autoDetectRules: z.record(z.string(), z.string()).default({}),
 });
 
 export type ProfileSectionConfig = z.infer<typeof ProfileSectionSchema>;

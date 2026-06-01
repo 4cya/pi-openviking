@@ -139,6 +139,9 @@ describe("mergeBehaviorIntoRecall", () => {
     scoreThreshold: 0.5,
     maxTokens: 4000,
     expandGraph: false as const,
+    expandGraphDepth: 1 as const,
+    expandGraphMaxRatio: 0.2,
+    expandGraphMinSeedScore: 0.4,
     searchMode: "find" as const,
     autoRecall: true as const,
   };

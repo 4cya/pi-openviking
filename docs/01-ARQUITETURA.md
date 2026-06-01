@@ -65,7 +65,7 @@ flowchart TB
 
     subgraph App["⚙️ Aplicação"]
         direction TB
-        APP_SVC["Application Services\nsearch, write, session,\nrecall, backup, auto-actions"]
+        APP_SVC["Application Services\nsearch, write, session,\nrecall"]
         APP_MW["Middleware Pipeline\nLogging (cache adiado → F3+)"]
     end
 
@@ -484,31 +484,6 @@ sequenceDiagram
     Svc->>OV: sendMessage(sessionId, parts)
     OV-->>Svc: 200
     Svc->>Bus: publish(MEMORY_SAVED)
-```
-
-### 5.3 Auto-Action (Propositivo) — (futuro, F8)
-
-O gatilho vem de `pi.on("message_end")`, não do EventBus de domínio.
-
-```mermaid
-sequenceDiagram
-    participant Pi as Pi Agent
-    participant Index as index.ts
-    participant Detector as Detector
-    participant Proposer as Proposer
-    participant Executor as Executor
-    participant OV as OpenViking
-
-    Pi->>Index: pi.on("message_end")
-    Index->>Detector: autoActions.detect(ctx)
-    Detector->>Detector: analisa padrões
-    Detector->>Proposer: Signal{decision, 0.85}
-    Proposer->>OV: search(query)
-    OV-->>Proposer: related resources
-    Proposer-->>User: "Salvar decisão?"
-    User->>Executor: Confirmar
-    Executor->>OV: POST /content/write
-    Executor->>OV: POST /relations/link
 ```
 
 ---

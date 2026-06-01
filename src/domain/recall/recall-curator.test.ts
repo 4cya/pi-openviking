@@ -4,6 +4,8 @@ import type { Scorer } from "./curate";
 import type { SearchResult } from "../knowledge/model/search-result";
 import type { RecallConfig } from "../../infrastructure/config/schema";
 import type { Logger } from "../ports/logger";
+import type { GraphExpander } from "./graph-expander";
+import type { CuratedItem } from "./curate";
 
 function makeConfig(overrides?: Partial<RecallConfig>): RecallConfig {
   return {
@@ -12,6 +14,10 @@ function makeConfig(overrides?: Partial<RecallConfig>): RecallConfig {
     maxTokens: 10000,
     expandGraph: false,
     searchMode: "find",
+    expandGraphDepth: 1,
+    expandGraphMaxRatio: 0.2,
+    expandGraphMinSeedScore: 0.4,
+    autoRecall: true,
     ...overrides,
   };
 }
@@ -28,6 +34,12 @@ function makeLogger(): Logger & { messages: string[] } {
   };
 }
 
+function makeGraphExpander(): GraphExpander {
+  return {
+    expand: vi.fn().mockResolvedValue([]),
+  } as unknown as GraphExpander;
+}
+
 const sampleResult: SearchResult = {
   memories: [
     { uri: "viking://a", text: "AAA", abstract: "aaa", score: 0.9 },
@@ -41,75 +53,124 @@ const sampleResult: SearchResult = {
 };
 
 describe("RecallCurator", () => {
-  it("curates results using opts from config", () => {
+  it("curates results using opts from config", async () => {
     const config = makeConfig({ topN: 2, scoreThreshold: 0.6, maxTokens: 5000 });
     const logger = makeLogger();
     const curator = new RecallCurator(config, [], logger);
 
-    const result = curator.curate(sampleResult);
+    const result = await curator.curate(sampleResult);
 
-    // topN=2, threshold=0.6: only a(0.9) and r1(0.8) pass threshold, limited to 2
     expect(result.items).toHaveLength(2);
     expect(result.items[0].uri).toBe("viking://a");
     expect(result.items[1].uri).toBe("viking://r1");
   });
 
-  it("passes scorers from constructor into curate opts", () => {
+  it("passes scorers from constructor into curate opts", async () => {
     const boostScorer: Scorer = (_item, _query) => 10;
     const config = makeConfig();
     const logger = makeLogger();
     const curator = new RecallCurator(config, [boostScorer], logger);
 
-    const result = curator.curate(sampleResult);
+    const result = await curator.curate(sampleResult);
 
-    // boostScorer adds 10 to every item → all well above threshold
     expect(result.items.length).toBeGreaterThan(0);
     expect(result.items[0].score).toBeGreaterThanOrEqual(10);
   });
 
-  it("emits log line with item count and tokens", () => {
+  it("emits log line with item count and tokens", async () => {
     const config = makeConfig();
     const logger = makeLogger();
     const curator = new RecallCurator(config, [], logger);
 
-    const result = curator.curate(sampleResult);
+    const result = await curator.curate(sampleResult);
 
     expect(logger.info).toHaveBeenCalledWith(
       `curated ${sampleResult.total} items → ${result.items.length} items, ${result.tokens} tokens`,
     );
   });
 
-  it("returns empty for empty results", () => {
+  it("returns empty for empty results", async () => {
     const config = makeConfig();
     const logger = makeLogger();
     const curator = new RecallCurator(config, [], logger);
 
     const empty: SearchResult = { memories: [], resources: [], skills: [], total: 0 };
-    const result = curator.curate(empty);
+    const result = await curator.curate(empty);
 
     expect(result.items).toHaveLength(0);
     expect(result.tokens).toBe(0);
     expect(result.dropped).toBe(0);
   });
 
-  it("returns empty when all results below threshold", () => {
+  it("returns empty when all results below threshold", async () => {
     const config = makeConfig({ scoreThreshold: 0.99 });
     const logger = makeLogger();
     const curator = new RecallCurator(config, [], logger);
 
-    const result = curator.curate(sampleResult);
+    const result = await curator.curate(sampleResult);
 
     expect(result.items).toHaveLength(0);
   });
 
-  it("returns empty when maxTokens is zero budget", () => {
+  it("returns empty when maxTokens is zero budget", async () => {
     const config = makeConfig({ maxTokens: 1 });
     const logger = makeLogger();
     const curator = new RecallCurator(config, [], logger);
 
-    const result = curator.curate(sampleResult);
+    const result = await curator.curate(sampleResult);
 
-    // maxTokens=1 is too small for any item (each needs ~130+ overhead)
     expect(result.items).toHaveLength(0);
+  });
+
+  it("skips graph expansion when config.expandGraph is false", async () => {
+    const config = makeConfig({ expandGraph: false });
+    const logger = makeLogger();
+    const graphExpander = makeGraphExpander();
+    const curator = new RecallCurator(config, [], logger, graphExpander);
+
+    const result = await curator.curate(sampleResult);
+
+    expect(graphExpander.expand).not.toHaveBeenCalled();
+    expect(result.items.length).toBeGreaterThan(0);
+  });
+
+  it("skips graph expansion when no graphExpander provided", async () => {
+    const config = makeConfig({ expandGraph: true });
+    const logger = makeLogger();
+    const curator = new RecallCurator(config, [], logger);
+
+    const result = await curator.curate(sampleResult);
+
+    expect(result.items.length).toBeGreaterThan(0);
+  });
+
+  it("appends graph items when expandGraph is enabled and expander returns items", async () => {
+    const config = makeConfig({ expandGraph: true, maxTokens: 10000 });
+    const logger = makeLogger();
+    const graphExpander = makeGraphExpander();
+    const graphItems: CuratedItem[] = [
+      { uri: "viking://graph1", text: "graph content", score: 0.5, source: "graph" },
+    ];
+    vi.mocked(graphExpander.expand).mockResolvedValue(graphItems);
+    const curator = new RecallCurator(config, [], logger, graphExpander);
+
+    const result = await curator.curate(sampleResult);
+
+    expect(graphExpander.expand).toHaveBeenCalledTimes(1);
+    // graph items are merged and sorted
+    const graphUris = result.items.filter(i => i.source === "graph").map(i => i.uri);
+    expect(graphUris).toContain("viking://graph1");
+  });
+
+  it("does not call expander when curated items are empty", async () => {
+    const config = makeConfig({ expandGraph: true });
+    const logger = makeLogger();
+    const graphExpander = makeGraphExpander();
+    const curator = new RecallCurator(config, [], logger, graphExpander);
+
+    const empty: SearchResult = { memories: [], resources: [], skills: [], total: 0 };
+    await curator.curate(empty);
+
+    expect(graphExpander.expand).not.toHaveBeenCalled();
   });
 });

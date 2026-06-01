@@ -43,7 +43,7 @@ export class RecallService {
         ? await this.kb.find({ query: prompt, limit: this.config.topN, targetUri })
         : await this.kb.search({ query: prompt, limit: this.config.topN, sessionId, targetUri });
 
-      const curated: CuratedResult = this.curator.curate(result);
+      const curated: CuratedResult = await this.curator.curate(result);
       return {
         items: curated.items,
         tokens: curated.tokens,

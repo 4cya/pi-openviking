@@ -10,6 +10,8 @@ import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
 import type { OVAdapter } from "./adapters/driven/openviking/adapter";
 import type { FsStore } from "./domain/ports/fs-store";
+import type { KnowledgeBase } from "./domain/ports/knowledge-base";
+import type { ProfileManager } from "./domain/profile/service/ProfileManager";
 import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
 import { OVWidget } from "./adapters/driver/ov-widget";
@@ -23,6 +25,7 @@ let container: DIContainer;
 let widget: OVWidget;
 let healthCheck: HealthCheck;
 let sessionService: SessionService;
+let profileManager: ProfileManager;
 
 export default async function openVikingExtension(pi: ExtensionAPI): Promise<void> {
   pi.on("session_start", async (_event, ctx) => {
@@ -43,6 +46,8 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const readService = container.resolve<ReadService>("readService");
       const recallService = container.resolve<RecallService>("recallService");
       const fsStore = container.resolve<FsStore>("fsStore");
+      const knowledgeBase = container.resolve<KnowledgeBase>("knowledgeBase");
+      profileManager = container.resolve<ProfileManager>("profileManager");
       const adapter = container.resolve<OVAdapter>("adapter");
 
       // Create health check adapter
@@ -60,6 +65,9 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         sessionService,
         searchService,
         fsStore,
+        knowledgeBase,
+        profileManager,
+        autoDetectRules: config.profile.autoDetectRules,
         ovConfig: config.ov,
         recallConfig: config.recall,
         widgetUpdater: (field, value) => widget.update(field, value),
@@ -120,6 +128,16 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
 
         return { message: { customType: "memory_context", content: result.formatted, display: false } };
       });
+    }
+
+    // F7b: Auto-detect profile from workspace path on every session_start
+    if (profileManager && config.profile.autoDetectRules) {
+      const { autoDetectProfile } = await import("./domain/profile/service/auto-detect");
+      const detected = autoDetectProfile(ctx.cwd, config.profile.autoDetectRules);
+      if (detected) {
+        profileManager.apply(detected);
+        logger.info(`auto-detected profile: ${detected}`);
+      }
     }
 
     // Every session_start: attach widget, create session, then check health

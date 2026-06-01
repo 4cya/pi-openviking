@@ -37,6 +37,9 @@ export const RecallConfigSchema = z.object({
   scoreThreshold: z.number().min(0).max(1).default(0.5),
   maxTokens: z.number().int().positive().default(4000),
   expandGraph: z.boolean().default(false),
+  expandGraphDepth: z.literal(1).default(1),
+  expandGraphMaxRatio: z.number().min(0).max(1).default(0.2),
+  expandGraphMinSeedScore: z.number().min(0).max(1).default(0.4),
   searchMode: z.enum(["find", "search"]).default("find"),
   autoRecall: z.boolean().default(true),
 });

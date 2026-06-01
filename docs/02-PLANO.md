@@ -318,25 +318,28 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 **Milestone:** Profile system completo. Auto-detect operacional.
 
-### F8 — Features (19 dias)
+### F8 — Features (10 dias)
 
 **Objetivo:** Funcionalidades avançadas.
 
-> **Design definido em Grill 2026-05-30.**
-> GraphExpander mergeia na mesma custom message do recall (separador `[graph]`).
-> autoSaveMode/autoLinkMode adiados de F7b pra F8.
+> **Design definido em Grill 2026-06-01 (ADR-014 + ADR-015).**
+> F8.1 eliminado — OV padrão: session commit extrai memórias, `ov_write` salva explicitamente.
+> F8.3, F8.5–F8.8 eliminados após revisão contra documentação real do OV.
+> Ver `docs/adr/ADR-014-f8-scope-reduction.md` e `docs/adr/ADR-015-eliminate-auto-actions.md`.
 
-| Tarefa | Artefato | Descrição |
-|--------|----------|-----------|
-| F8.1 | `application/services/auto-actions/` — detector + proposer + executor | Auto-actions: autoSaveMode ("off"|"propose"|"auto"), autoLinkMode. Criam memórias e relations automaticamente. Hook `pi.on("message_end")` expandido pra incluir tool results. |
-| F8.2 | `domain/recall/curator/GraphExpander.ts` | Optional `GraphExpander` injetado no `RecallCurator`. Percorre relações OV de seed items. Resultados mergeiam na mesma custom message `memory_context` com prefixo `[graph] uri — reason`. |
-| F8.3 | Glob + Grep operations | SearchService tem glob/grep desde F5 — expandir com filtros adicionais. |
-| F8.4 | Batch import + delete | Operações em lote no FsStore. |
-| F8.5 | Pack export/import operations | Exportar/importar conjunto de memórias e resources. |
-| F8.6 | Watch operations | Monitorar mudanças no filesystem OV. |
-| F8.7 | `adapters/driven/spi/mcp.ts` | MCP server export — expor OV operations como MCP tools. |
-| F8.8 | `adapters/driven/spi/webhook.ts` | Webhook handler — receber notificações do OV server. |
-| F8.9 | E2E tests + documentation | Testes end-to-end + docs de usuário. |
+| Tarefa | Artefato | Descrição | Deps |
+|--------|----------|-----------|------|
+| F8.2 | `domain/recall/curator/GraphExpander.ts` + `RecallConfig` expansion | Optional no RecallCurator. Percorre `graphStore.graph(uri)` de top-3 seeds, lê abstract de cada relation (`kb.read(uri, "abstract")` paralelo), merge na custom message `memory_context` com prefixo `[graph]`. Score decaído 0.8× seed. Config: expandGraph, expandGraphDepth=1, expandGraphMaxRatio=0.2, expandGraphMinSeedScore=0.4. | F4 (RecallCurator), F6 (custom message) |
+| F8.4 | `adapters/driver/pi-commands/ov-delete-command.ts` (expandir) | `/ov-delete` aceita glob pattern. `KnowledgeBase.glob()` → confirma → `FsStore.delete()` cada match. | F5.4 (command pattern), FS |
+| F8.9 | E2E tests + docs | Testes end-to-end contra OV real + docs de usuário. | F8.2, F8.4 |
+
+**Eliminados:**
+- F8.1 Auto-actions — OV padrão: session commit extrai memórias. `ov_write` cobre save explícito. ADR-015.
+- F8.3 Glob+Grep — já implementado em F5.1
+- F8.5 Pack export/import — OV CLI faz (`ov export`, `ov backup`)
+- F8.6 Watch — OV expõe só via MCP. Documentar uso de OV CLI
+- F8.7 MCP server — OV já serve nativamente em `/mcp`
+- F8.8 Webhook — OV não tem sistema de webhooks
 
 **Milestone:** Plugin completo. Release v1.0.
 

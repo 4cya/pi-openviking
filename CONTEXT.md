@@ -221,6 +221,9 @@ Scorers live in `domain/recall/curate.ts` alongside the pipeline.
 Does NOT expose `wait` in the domain interface. Synchronous wait is an OV transport detail resolved
 by the adapter with a default timeout. Domain operates on the concept of "write and be done".
 
+**FsStore.delete with glob** (F8.4):
+`/ov-delete` command accepts both literal URI and glob pattern (e.g. `viking://resources/temp/*`). Pattern resolution calls `KnowledgeBase.glob()` first, then deletes each match. Confirmation dialog shows matched count before proceeding.
+
 
 
 **Uri** (class — value object):
@@ -296,6 +299,22 @@ Pi tool for reading content at three depth levels. TypeBox schema: `{ uri: strin
 Pi tool for explicit recall trigger. TypeBox schema: `{ prompt: string, limit?: number }`. Handler calls `pipeline.execute(() => recallService.recall(params.prompt), signal)`. Returns `RecallResult.formatted` text (items with URI + content). On empty result, returns informative message. Errors caught and reported. 4 unit tests + 1 integration test. Born in F5.3 (issue #70).
 
 **Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
+
+### GraphExpander (F8.2)
+
+**GraphExpander** (optional class):
+Injected into `RecallCurator`. Expands recall results by traversing OV relations (`GET /api/v1/relations?uri=`). Reads each relation's abstract (`kb.read(uri, "abstract")`). Results marked `source: "graph"`, score = seed.score × 0.8. Merged into custom message `memory_context` under `[graph]` section.
+
+**Config fields** (in `RecallConfigSchema`):
+- `expandGraph` (boolean, default false) — enable expansion
+- `expandGraphDepth` (literal 1, default 1) — only direct neighbors in F8
+- `expandGraphMaxRatio` (number 0-1, default 0.2) — max additional tokens as fraction of original budget
+- `expandGraphMinSeedScore` (number 0-1, default 0.4) — only expand from seeds above this score
+
+**Constraints:**
+- Depth = 1 only (no BFS). Relations read in parallel via `Promise.all`.
+- Relation already present as seed → skip (no duplicate).
+- Budget guard: if insufficient tokens for all relations' abstracts, prioritize those with longer `reason` strings.
 
 ### Commands (F5.4 — slash commands)
 

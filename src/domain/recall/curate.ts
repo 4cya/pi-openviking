@@ -4,7 +4,7 @@ export interface CuratedItem {
   uri: string;
   text: string;
   score: number;
-  source: "memory" | "resource";
+  source: "memory" | "resource" | "graph";
   category?: string;
   modTime?: string;
 }

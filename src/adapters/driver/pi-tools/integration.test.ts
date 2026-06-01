@@ -173,7 +173,7 @@ function wireStack() {
   readPipeline.use(loggingMiddleware("read", logger as any));
 
   // Recall
-  const recallConfig = { topN: 5, scoreThreshold: 0.5, maxTokens: 4000, expandGraph: false, searchMode: "find" as const };
+  const recallConfig = { topN: 5, scoreThreshold: 0.5, maxTokens: 4000, expandGraph: false, expandGraphDepth: 1 as const, expandGraphMaxRatio: 0.2, expandGraphMinSeedScore: 0.4, searchMode: "find" as const, autoRecall: true as const };
   const curator = new RecallCurator(recallConfig, [], logger as any);
   const recallService = new RecallService(kb, curator, recallConfig, logger as any, true);
   const recallPipeline = new Pipeline<RecallResult>();

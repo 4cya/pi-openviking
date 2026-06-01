@@ -15,7 +15,11 @@ function makeConfig(overrides?: Partial<RecallConfig>): RecallConfig {
     scoreThreshold: 0.5,
     maxTokens: 4000,
     expandGraph: false,
+    expandGraphDepth: 1 as const,
+    expandGraphMaxRatio: 0.2,
+    expandGraphMinSeedScore: 0.4,
     searchMode: "find",
+    autoRecall: true,
     ...overrides,
   };
 }
@@ -43,7 +47,7 @@ function makeKB(): KnowledgeBase {
 
 function makeCurator(result?: Partial<import("./curate").CuratedResult>) {
   return {
-    curate: vi.fn().mockReturnValue({
+    curate: vi.fn().mockResolvedValue({
       items: [],
       tokens: 0,
       dropped: 0,

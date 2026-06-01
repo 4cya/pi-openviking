@@ -3,6 +3,7 @@ import { loadConfig, mergeBehaviorIntoRecall } from "../infrastructure/config/ca
 import { FileLogger } from "../adapters/driven/logger/file-logger";
 import { createOVAdapter } from "../adapters/driven/openviking/adapter";
 import { RecallCurator } from "../domain/recall/recall-curator";
+import { GraphExpander } from "../domain/recall/graph-expander";
 import { relevanceScorer, temporalScorer } from "../domain/recall/curate";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
@@ -49,7 +50,20 @@ export async function init(cwd: string): Promise<{
   Object.assign(config.recall, mergedRecall);
 
   // F4 — domain services
-  const recallCurator = new RecallCurator(config.recall, [relevanceScorer, temporalScorer], logger);
+  const graphExpander = config.recall.expandGraph
+    ? new GraphExpander(
+        adapter.graphStore,
+        adapter.fsStore,
+        {
+          expandGraphMaxRatio: config.recall.expandGraphMaxRatio,
+          expandGraphMinSeedScore: config.recall.expandGraphMinSeedScore,
+        },
+        logger,
+      )
+    : undefined;
+  container.register("graphExpander", () => graphExpander, true);
+
+  const recallCurator = new RecallCurator(config.recall, [relevanceScorer, temporalScorer], logger, graphExpander);
   container.register("recallCurator", () => recallCurator, true);
 
   const sessionService = new SessionService(adapter.sessionStore, {
