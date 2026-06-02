@@ -125,6 +125,29 @@ describe("Transport", () => {
     expect(lastRequest.headers["x-api-key"]).toBe("test-key");
     expect(lastRequest.headers["x-openviking-account"]).toBe("test-account");
     expect(lastRequest.headers["x-openviking-user"]).toBe("test-user");
+    expect(lastRequest.headers["x-openviking-agent"]).toBeDefined();
+  });
+
+  it("sends X-OpenViking-Agent header with default agentId", async () => {
+    const t = makeTransport();
+    await t.request("test", "/api/v1/success");
+    expect(lastRequest.headers["x-openviking-agent"]).toBe("pi");
+  });
+
+  it("X-OpenViking-Agent reflects custom agentId from config", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+      agentId: "my-agent",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 2,
+      rateLimitPerSecond: 0,
+    });
+    await t.request("test", "/api/v1/success");
+    expect(lastRequest.headers["x-openviking-agent"]).toBe("my-agent");
   });
 
   it("sends Content-Type: application/json", async () => {

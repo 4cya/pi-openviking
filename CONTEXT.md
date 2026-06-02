@@ -50,11 +50,11 @@ The Zod schema that defines, validates, and provides defaults for all plugin con
 _Avoid_: schema, config definition
 
 **OVAdapterConfig**:
-A sub-schema of Config Schema (field `ov`) that defines server connection parameters: `endpoint`, `apiKey`, `account`, `user`, `timeout`, `commitTimeout`, `maxRetries`. Validated via Zod with sensible defaults (endpoint = `http://localhost:1933`, timeout = 30s, maxRetries = 3).
+A sub-schema of Config Schema (field `ov`) that defines server connection parameters: `endpoint`, `apiKey`, `account`, `user`, `agentId`, `timeout`, `commitTimeout`, `maxRetries`. Validated via Zod with sensible defaults (endpoint = `http://localhost:1933`, agentId = `"pi"`, timeout = 30s, maxRetries = 3).
 _Avoid_: ov config, transport config
 
 **Transport**:
-An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers (`X-API-Key`, `X-OpenViking-Account`, `X-OpenViking-User`), exponential backoff retry (5xx/network), configurable timeout, and AbortSignal passthrough. Single method `request<T>(methodLabel, path, opts?, signal?)`. Lives in `adapters/driven/openviking/transport.ts`.
+An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers (`X-API-Key`, `X-OpenViking-Account`, `X-OpenViking-User`, `X-OpenViking-Agent`), exponential backoff retry (5xx/network), configurable timeout, and AbortSignal passthrough. Single method `request<T>(methodLabel, path, opts?, signal?)`. Lives in `adapters/driven/openviking/transport.ts`.
 _Avoid_: http client, fetcher
 
 **CircuitBreaker**:
@@ -241,7 +241,7 @@ Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` 
 
 **Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
-**RecallConfig** (7 fields in ConfigSchema F4+F7a): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `autoRecall` (boolean, default true, added F7a).
+**RecallConfig** (7 fields in ConfigSchema F4+F7a): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `autoRecall` (boolean, default true, added F7a).
 Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported type `RecallConfig` inferred via `z.infer`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
 ProfileBehavior (6 fields) overrides RecallConfig fields in F7a via merge. Schema in `profile-schema.ts` has `behavior: ProfileBehaviorSchema.default({})`.
@@ -364,12 +364,12 @@ An `initialized` flag ensures `init()` runs once per process.
 4 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
 
 - **`before_agent_start`** → `RecallService.recall(prompt, sessionService.getActive())`. Returns custom message `{ customType: "memory_context", content: recallResult.formatted, display: false }`. GraphExpander results (F8+) merge into the same message with `[graph]` prefix. Circuit breaker OPEN → skip recall silently.
-- **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Only syncs `user` and `assistant` messages (text parts). Tool results adiados para F8.
+- **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Syncs `user` and `assistant` messages: TextParts from text blocks, ToolParts from toolCalls (assistant) + toolResult messages (tool output + status). Tool calls preserved structurally — not flattened to text.
 - **`session_shutdown`** → `SessionService.commit(activeSessionId)`. OV server extracts memories async (memory_diff.json).
 - **`session_start`** → health check via `HealthCheck.check()` + widget update.
 
 **MessageMapper** (`adapters/driver/pi-session-sync/message-mapper.ts`):
-Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `AgentMessage` (role + TextContent) to domain `Part[]` (TextPart[].). Ignores non-text messages (tool calls, bash execution, custom). Role `"user"` or `"assistant"` only. Returns empty array for unmatched roles. 3+ tests.
+Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `AgentMessage` to domain `Part[]`: assistant content blocks → TextPart (text) + ToolPart (toolCall, toolStatus="pending"); toolResult messages → ToolPart (toolOutput, toolStatus="success"|"error"); user text → TextPart. Role `"user"` | `"assistant"` | `"toolResult"` supported.
 
 ## Flagged ambiguities
 

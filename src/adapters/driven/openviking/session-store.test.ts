@@ -53,7 +53,7 @@ describe("SessionStoreAdapter.sendMessage", () => {
 describe("SessionStoreAdapter.sendMessages", () => {
   const sid = new SessionId("sess-1");
 
-  it("calls POST /api/v1/sessions/{id}/messages for each message", async () => {
+  it("calls POST /api/v1/sessions/{id}/messages/batch with all messages", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
 
@@ -64,21 +64,75 @@ describe("SessionStoreAdapter.sendMessages", () => {
     ];
     await ss.sendMessages(sid, msgs);
 
-    expect(transport.request).toHaveBeenCalledTimes(2);
+    expect(transport.request).toHaveBeenCalledTimes(1);
 
-    const [label1, path1, opts1] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(label1).toBe("SessionStore.sendMessages");
-    expect(path1).toBe("/api/v1/sessions/sess-1/messages");
-    expect(opts1.method).toBe("POST");
-    let body = JSON.parse(opts1.body);
-    expect(body.role).toBe("user");
-    expect(body.parts[0].text).toBe("hi");
+    const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("SessionStore.sendMessages");
+    expect(path).toBe("/api/v1/sessions/sess-1/messages/batch");
+    expect(opts.method).toBe("POST");
 
-    const [label2, path2, opts2] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[1];
-    expect(path2).toBe("/api/v1/sessions/sess-1/messages");
-    body = JSON.parse(opts2.body);
-    expect(body.role).toBe("assistant");
-    expect(body.parts[0].text).toBe("hello");
+    const body = JSON.parse(opts.body);
+    expect(body.messages).toHaveLength(2);
+    expect(body.messages[0].role).toBe("user");
+    expect(body.messages[0].parts[0].text).toBe("hi");
+    expect(body.messages[1].role).toBe("assistant");
+    expect(body.messages[1].parts[0].text).toBe("hello");
+  });
+
+  it("serializes part fields correctly in batch payload", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const ss = new SessionStoreAdapter(transport);
+    const parts: Part[] = [
+      { type: "text", text: "result" },
+      {
+        type: "tool",
+        toolId: "call_1",
+        toolName: "ov_search",
+        toolInput: { query: "x" },
+        toolOutput: "ok",
+        toolStatus: "success",
+        toolOutputTruncated: false,
+        toolUri: "",
+        skillUri: "",
+        durationMs: null,
+        promptTokens: null,
+        completionTokens: null,
+        toolOutputRef: "",
+      },
+    ];
+    await ss.sendMessages(sid, [{ role: "assistant", content: parts }]);
+
+    const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(opts.body);
+    const serialized = body.messages[0].parts;
+
+    // TextPart stays flat
+    expect(serialized[0].type).toBe("text");
+    expect(serialized[0].text).toBe("result");
+
+    // ToolPart uses snake_case keys
+    expect(serialized[1].type).toBe("tool");
+    expect(serialized[1].tool_id).toBe("call_1");
+    expect(serialized[1].tool_name).toBe("ov_search");
+    expect(serialized[1].tool_input).toEqual({ query: "x" });
+    expect(serialized[1].tool_output).toBe("ok");
+    expect(serialized[1].tool_status).toBe("success");
+    expect(serialized[1].tool_output_truncated).toBe(false);
+  });
+
+  it("handles empty messages array gracefully", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const ss = new SessionStoreAdapter(transport);
+    await ss.sendMessages(sid, []);
+
+    expect(transport.request).toHaveBeenCalledTimes(1);
+    const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(opts.body);
+    expect(body.messages).toEqual([]);
   });
 });
 

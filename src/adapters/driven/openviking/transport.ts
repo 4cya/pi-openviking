@@ -84,6 +84,7 @@ export class Transport {
     apiKey: string;
     account: string;
     user: string;
+    agentId: string;
     timeout: number;
     maxRetries: number;
   };
@@ -97,6 +98,7 @@ export class Transport {
       apiKey: config.apiKey,
       account: config.account,
       user: config.user,
+      agentId: config.agentId ?? "pi",
       timeout: config.timeout,
       maxRetries: config.maxRetries,
     };
@@ -123,6 +125,7 @@ export class Transport {
       "X-API-Key": this.defaults.apiKey,
       "X-OpenViking-Account": this.defaults.account,
       "X-OpenViking-User": this.defaults.user,
+      "X-OpenViking-Agent": this.defaults.agentId,
       ...opts?.headers,
     };
 

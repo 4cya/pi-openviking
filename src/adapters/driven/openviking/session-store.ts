@@ -43,19 +43,18 @@ export class SessionStoreAdapter implements SessionStore {
     messages: { role: string; content: Part[] }[],
     signal?: AbortSignal,
   ): Promise<void> {
-    // No batch endpoint — send individually
-    for (const msg of messages) {
-      const body = JSON.stringify({
+    const body = JSON.stringify({
+      messages: messages.map((msg) => ({
         role: msg.role,
         parts: serializeParts(msg.content),
-      });
-      await this.transport.request<unknown>(
-        "SessionStore.sendMessages",
-        `/api/v1/sessions/${sessionId.value}/messages`,
-        { method: "POST", body },
-        signal,
-      );
-    }
+      })),
+    });
+    await this.transport.request<unknown>(
+      "SessionStore.sendMessages",
+      `/api/v1/sessions/${sessionId.value}/messages/batch`,
+      { method: "POST", body },
+      signal,
+    );
   }
 
   async commit(sessionId: SessionId, options?: CommitOptions, signal?: AbortSignal): Promise<CommitResult> {

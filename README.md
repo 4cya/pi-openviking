@@ -17,7 +17,7 @@ Pi coding agent is stateless between sessions. pi-openviking gives it persistent
 |---------|---------|
 | **Developers using Pi** | Persistent context between coding sessions. No re-explaining project structure, preferences, or past decisions. |
 | **AI Agents (Pi)** | Access to imported skills, project documentation, and user preferences stored in OpenViking. |
-| **Extension developers** | Reusable operation layer (`src/operations/`) — add new surfaces (MCP, HTTP) without duplicating business logic. |
+| **Extension developers** | Reference adapter pattern — see `src/adapters/` for port implementations and `src/domain/ports/` for extension points. |
 
 ## Features
 
@@ -80,7 +80,7 @@ All settings cascade: **`.pi/settings.json` → environment variables → defaul
   "openVikingAutoRecallLimit": 10,
   "openVikingAutoRecallTimeout": 5000,
   "openVikingAutoRecallTopN": 5,
-  "openVikingAutoRecallTokenBudget": 700
+  "openVikingAutoRecallTokenBudget": 4000
   // ...see full settings reference below
 }
 ```
@@ -94,13 +94,12 @@ All settings cascade: **`.pi/settings.json` → environment variables → defaul
 | `openVikingAccount` | `OPENVIKING_ACCOUNT` | `default` | Account namespace |
 | `openVikingUser` | `OPENVIKING_USER` | `default` | User namespace |
 | `openVikingTimeout` | `OPENVIKING_TIMEOUT` | `30000` | HTTP timeout (ms) for general requests |
-| `openVikingCommitTimeout` | `OPENVIKING_COMMIT_TIMEOUT` | `60000` | HTTP timeout (ms) for commit operations |
-| `openVikingHealthPath` | `OPENVIKING_HEALTH_PATH` | `/health` | Server health check endpoint |
+| `openVikingCommitTimeout` | `OPENVIKING_COMMIT_TIMEOUT` | `120000` | HTTP timeout (ms) for commit operations |
 | `openVikingAutoRecall` | `OPENVIKING_AUTO_RECALL` | `true` | Enable/disable auto-recall |
 | `openVikingAutoRecallLimit` | `OPENVIKING_AUTO_RECALL_LIMIT` | `10` | Max search results from OV |
 | `openVikingAutoRecallTimeout` | `OPENVIKING_AUTO_RECALL_TIMEOUT` | `5000` | Auto-recall timeout (ms) |
 | `openVikingAutoRecallTopN` | `OPENVIKING_AUTO_RECALL_TOPN` | `5` | Max memories injected into prompt |
-| `openVikingAutoRecallTokenBudget` | `OPENVIKING_AUTO_RECALL_TOKEN_BUDGET` | `700` | Token budget for auto-recall block |
+| `openVikingAutoRecallTokenBudget` | `OPENVIKING_AUTO_RECALL_TOKEN_BUDGET` | `4000` | Token budget for auto-recall block |
 | `openVikingAutoRecallScoreThreshold` | `OPENVIKING_AUTO_RECALL_SCORE_THRESHOLD` | `0.15` | Minimum relevance score |
 | `openVikingAutoRecallMaxContentChars` | `OPENVIKING_AUTO_RECALL_MAX_CONTENT_CHARS` | `500` | Max chars per recalled item |
 | `openVikingAutoRecallPreferAbstract` | `OPENVIKING_AUTO_RECALL_PREFER_ABSTRACT` | `true` | Prefer L0 abstract over full content |
@@ -113,13 +112,15 @@ All settings cascade: **`.pi/settings.json` → environment variables → defaul
 
 Pi maintains its own session history. OpenViking does **not** reassemble it. There is no `assemble()` or `compact()` — Pi is the source of truth for conversation history. OpenViking is the source of truth for **extracted memories**.
 
-### Commit is explicit
+### Commit on session shutdown
 
-Sessions are committed only when the user (or agent) explicitly calls `/ov-commit` or `memcommit`. No auto-commit on shutdown — `onShutdown()` does zero I/O (only resets in-memory state) to avoid blocking Pi exit.
+When a Pi session ends (`session_shutdown`), the plugin auto-commits to OV to trigger memory extraction. Errors are logged but don't block Pi exit.
+
+Users can also commit explicitly via `/ov-commit`.
 
 ### Health check with graceful degradation
 
-On startup, the plugin probes `GET /health`. If OpenViking is unreachable, all tools and commands still register, but auto-recall is disabled. Recovery is on-demand — the next tool call or auto-recall attempt retries the health check.
+On startup, the plugin probes `GET /ready`. If OpenViking is unreachable, all tools and commands still register, but auto-recall is disabled. Recovery is on-demand — the next tool call or auto-recall attempt retries the health check.
 
 ### Circuit breaker
 
@@ -129,10 +130,6 @@ The Transport layer has a configurable circuit breaker that protects against OV 
 
 `memcommit` and `memimport` return immediately with a `task_id`. Memory extraction and import happen server-side. Use `memcommit` with `wait: true` to poll until extraction completes (timeout 15s).
 
-### Operations layer
-
-Business logic lives in `src/operations/` — written once, called by both tools (JSON for agent) and commands (human-readable text). This is the seam for adding new surfaces without duplication.
-
 ## Differences from OpenClaw Plugin
 
 OpenViking ships an official OpenClaw (Claude) plugin. Key differences:
@@ -140,9 +137,9 @@ OpenViking ships an official OpenClaw (Claude) plugin. Key differences:
 | Feature | OpenClaw | pi-openviking |
 |---------|----------|---------------|
 | Session history | OpenClaw reassembles from OV (`assemble`/`compact`) | Pi is source of truth. No reassembly. |
-| Auto-commit | Threshold-based auto-commit when session grows | Manual-only via `/ov-commit` or `memcommit` |
+| Auto-commit | Threshold-based auto-commit when session grows | On session shutdown via `session_shutdown` hook |
 | Archive expansion | Reconstructs messages from compressed archives | Not needed — Pi keeps full history |
-| Multi-agent header | Sends `X-OpenViking-Agent` for routing | Not applicable — single agent |
+| Multi-agent header | Sends `X-OpenViking-Agent` for routing | Sends `X-OpenViking-Agent: pi` header |
 | Multi-namespace search | Parallel search across user + agent memories | Single global search (OV ranks across namespaces) |
 | Tool call sync | Preserves tool calls in session sync | Structured `Part[]` sync (ADR-003) |
 | Reranking | Server-side reranking via API | Trusts OV's internal pipeline + local curator |
@@ -183,7 +180,7 @@ OpenViking starts on `http://localhost:1933`.
 ### Verify
 
 ```bash
-curl http://localhost:1933/health
+curl http://localhost:1933/ready
 # → 200 OK
 
 curl -X POST http://localhost:1933/api/v1/sessions
@@ -218,7 +215,7 @@ host
 ### Check server health
 
 ```bash
-curl http://localhost:1933/health
+curl http://localhost:1933/ready
 ```
 
 If unreachable, the plugin disables auto-recall and retries on next tool call.
@@ -244,7 +241,7 @@ export OV_DEBUG=true
 ### Auto-recall not working
 
 1. Check `openVikingAutoRecall` is not set to `false` in `.pi/settings.json`.
-2. Verify server is healthy (`/health` returns 200).
+2. Verify server is healthy (`/ready` returns 200).
 3. Check logs for `"auto-recall failed"` messages.
 4. Use `/ov-recall` to toggle or check state.
 
@@ -252,7 +249,7 @@ export OV_DEBUG=true
 
 If the circuit breaker is OPEN (3 consecutive failures by default), requests are rejected instantly with `ConnectionError`. Check:
 
-1. Server connectivity (`/health`).
+1. Server connectivity (`/ready`).
 2. Logs for `"circuit breaker OPEN"` messages.
 3. Recovery happens automatically after `resetTimeoutMs` (30s default) — next request acts as probe.
 4. Each probe failure doubles the reset timeout.
