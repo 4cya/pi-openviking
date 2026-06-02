@@ -11,7 +11,7 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
 
   async find(query: FindQuery, signal?: AbortSignal): Promise<SearchResult> {
     const body: Record<string, unknown> = { query: query.query };
-    if (query.limit !== undefined) body.limit = query.limit;
+    if (query.limit !== undefined) body.node_limit = query.limit;
     if (query.targetUri) body.target_uri = query.targetUri.value;
 
     const raw = await this.transport.request<Record<string, unknown>>(
@@ -26,7 +26,7 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
 
   async search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResult> {
     const body: Record<string, unknown> = { query: request.query };
-    if (request.limit !== undefined) body.limit = request.limit;
+    if (request.limit !== undefined) body.node_limit = request.limit;
     if (request.sessionId) body.session_id = request.sessionId.value;
     if (request.targetUri) body.target_uri = request.targetUri.value;
 

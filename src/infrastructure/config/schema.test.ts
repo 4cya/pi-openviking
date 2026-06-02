@@ -54,8 +54,8 @@ describe("DEFAULT_CONFIG", () => {
     expect(DEFAULT_CONFIG.recall.targetUri).toBeUndefined();
     expect(DEFAULT_CONFIG.recall.topN).toBe(5);
     expect(DEFAULT_CONFIG.recall.scoreThreshold).toBe(0.5);
-    expect(DEFAULT_CONFIG.recall.expandGraph).toBe(false);
-    expect(DEFAULT_CONFIG.recall.searchMode).toBe("find");
+    expect(DEFAULT_CONFIG.recall.expandGraph).toBe(true);
+    expect(DEFAULT_CONFIG.recall.searchMode).toBe("search");
     expect(DEFAULT_CONFIG.recall.autoRecall).toBe(true);
   });
 
@@ -114,8 +114,8 @@ describe("RecallConfigSchema", () => {
     const config = ConfigSchema.parse({ recall: { topN: 10 } });
     expect(config.recall.topN).toBe(10);
     expect(config.recall.scoreThreshold).toBe(0.5);
-    expect(config.recall.expandGraph).toBe(false);
-    expect(config.recall.searchMode).toBe("find");
+    expect(config.recall.expandGraph).toBe(true);
+    expect(config.recall.searchMode).toBe("search");
     expect(config.recall.targetUri).toBeUndefined();
     expect(config.recall.autoRecall).toBe(true);
   });

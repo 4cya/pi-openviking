@@ -44,7 +44,7 @@ describe("KnowledgeBaseAdapter.find", () => {
 
     const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(opts.body);
-    expect(body.limit).toBe(5);
+    expect(body.node_limit).toBe(5);
   });
 
   it("includes target_uri when targetUri provided", async () => {
@@ -125,7 +125,7 @@ describe("KnowledgeBaseAdapter.search", () => {
 
     const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(opts.body);
-    expect(body.limit).toBe(10);
+    expect(body.node_limit).toBe(10);
     expect(body.target_uri).toBe("viking://docs/");
   });
 

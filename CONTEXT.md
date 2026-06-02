@@ -168,9 +168,6 @@ Thin wrapper class over the pure `curate()` function. Constructor takes `RecallC
 Optionally traverses OV relations from seed KnowledgeItems to inject related resources into context.
 Injected into RecallService as optional (`GraphExpander?`). Absent until F8 — no-op when undefined.
 
-**EventBus**:
-An in-memory publish/subscribe mechanism that decouples reactions to domain events (SESSION_STARTED, MEMORY_SAVED, INTENT_DETECTED, etc.). Domain events are what cross bounded contexts; infra events stay local.
-
 **Middleware Pipeline** *(implemented — `domain/pipeline/pipeline.ts`)*:
 Generic `Pipeline<T>` class that wraps async handlers with a middleware chain. Middlewares compose in last-registered = outermost-wraps order. Supports optional `AbortSignal` passthrough. 5 tests.
 
@@ -203,11 +200,6 @@ A string literal union: `"replace" | "append" | "create"`. Controls overwrite be
 Lives in `domain/common/write-mode.ts`.
 
 
-
-**EventBus** (synchronous):
-An in-memory publish/subscribe mechanism for domain events (ADR-011). Dispatch is synchronous — handlers
-run in the same tick. Errors are logged but never propagated (one handler failure does not break others).
-Event log accumulated for debugging. Lives in `domain/ports/event-bus.ts` and `infrastructure/event-bus/in-memory.ts`.
 
 **Curate Pipeline**:
 A pure function: `(SearchResult, CurateOpts) => CuratedResult`. No side effects, no TokenBudget mutation.
@@ -249,7 +241,7 @@ Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` 
 
 **Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
-**RecallConfig** (7 fields in ConfigSchema F4+F7a): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default false), `searchMode` (literal `'find'` | `'search'`, default `'find'`), `autoRecall` (boolean, default true, added F7a).
+**RecallConfig** (7 fields in ConfigSchema F4+F7a): `targetUri` (optional string, undefined=global), `topN` (number, default 5), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `autoRecall` (boolean, default true, added F7a).
 Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported type `RecallConfig` inferred via `z.infer`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
 ProfileBehavior (6 fields) overrides RecallConfig fields in F7a via merge. Schema in `profile-schema.ts` has `behavior: ProfileBehaviorSchema.default({})`.
@@ -306,7 +298,7 @@ Pi tool for explicit recall trigger. TypeBox schema: `{ prompt: string, limit?: 
 Injected into `RecallCurator`. Expands recall results by traversing OV relations (`GET /api/v1/relations?uri=`). Reads each relation's abstract (`kb.read(uri, "abstract")`). Results marked `source: "graph"`, score = seed.score × 0.8. Merged into custom message `memory_context` under `[graph]` section.
 
 **Config fields** (in `RecallConfigSchema`):
-- `expandGraph` (boolean, default false) — enable expansion
+- `expandGraph` (boolean, default true) — enable expansion
 - `expandGraphDepth` (literal 1, default 1) — only direct neighbors in F8
 - `expandGraphMaxRatio` (number 0-1, default 0.2) — max additional tokens as fraction of original budget
 - `expandGraphMinSeedScore` (number 0-1, default 0.4) — only expand from seeds above this score

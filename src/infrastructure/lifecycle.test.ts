@@ -213,7 +213,7 @@ describe("init", () => {
     const behavior = pm.resolve("default");
     expect(behavior.topN).toBe(3);
     expect(behavior.scoreThreshold).toBe(0.5);
-    expect(behavior.searchMode).toBe("find");
+    expect(behavior.searchMode).toBe("search");
     expect(behavior.autoRecall).toBe(true);
   });
 
@@ -224,7 +224,7 @@ describe("init", () => {
     // So merged config should have topN=3 from profile
     expect(config.recall.topN).toBe(3);
     expect(config.recall.scoreThreshold).toBe(0.5);
-    expect(config.recall.searchMode).toBe("find");
+    expect(config.recall.searchMode).toBe("search");
     expect(config.recall.autoRecall).toBe(true);
   });
 

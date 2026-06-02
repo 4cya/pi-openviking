@@ -119,9 +119,9 @@ describe("ProfileConfigSchema with behavior", () => {
 describe("BUILTIN_PROFILES with behaviors", () => {
   it("each builtin has behavior with correct fields per spec", () => {
     const expected = {
-      default: { topN: 3, scoreThreshold: 0.5, searchMode: "find", autoRecall: true },
+      default: { topN: 3, scoreThreshold: 0.5, searchMode: "search", autoRecall: true },
       "web-dev": { topN: 3, scoreThreshold: 0.5, searchMode: "search", autoRecall: true },
-      docs: { topN: 5, scoreThreshold: 0.3, searchMode: "find", autoRecall: true },
+      docs: { topN: 5, scoreThreshold: 0.3, searchMode: "search", autoRecall: true },
       learning: { topN: 8, scoreThreshold: 0.2, searchMode: "search", autoRecall: true },
     };
 

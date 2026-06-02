@@ -26,6 +26,7 @@ let widget: OVWidget;
 let healthCheck: HealthCheck;
 let sessionService: SessionService;
 let profileManager: ProfileManager;
+let recallService: RecallService;
 
 export default async function openVikingExtension(pi: ExtensionAPI): Promise<void> {
   pi.on("session_start", async (_event, ctx) => {
@@ -44,7 +45,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const searchService = container.resolve<SearchService>("searchService");
       const writeService = container.resolve<WriteService>("writeService");
       const readService = container.resolve<ReadService>("readService");
-      const recallService = container.resolve<RecallService>("recallService");
+      recallService = container.resolve<RecallService>("recallService");
       const fsStore = container.resolve<FsStore>("fsStore");
       const knowledgeBase = container.resolve<KnowledgeBase>("knowledgeBase");
       profileManager = container.resolve<ProfileManager>("profileManager");
@@ -114,10 +115,16 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
           return { message: { customType: "memory_context", content: "CB OPEN", display: false } };
         }
 
-        // Guard 3: no active session
-        const sessionId = sessionService.getActive();
+        // Guard 3: no active session — auto-create as fallback
+        let sessionId = sessionService.getActive();
         if (!sessionId) {
-          return { message: { customType: "memory_context", content: "no session context", display: false } };
+          try {
+            sessionId = await sessionService.createAndSet();
+            widget.update("session", sessionId.toString());
+            logger?.info("before_agent_start: auto-created OV session", { sessionId: sessionId.toString() });
+          } catch {
+            return { message: { customType: "memory_context", content: "no session context", display: false } };
+          }
         }
 
         // Recall
@@ -148,6 +155,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const active = sessionService.getActive();
       widget.update("session", active?.toString() ?? "-");
       widget.update("scope", config.recall.targetUri ?? "(global)");
+      widget.update("recall", recallService.isEnabled() ? "on" : "off");
     } catch {
       // Session creation failed — widget will show disconnected after health check
     }

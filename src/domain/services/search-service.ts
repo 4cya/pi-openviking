@@ -4,7 +4,7 @@ import type { RecallConfig } from "../../infrastructure/config/schema";
 import type { Logger } from "../ports/logger";
 import { Uri } from "../common/uri";
 
-export interface SearchParams {
+interface SearchParams {
   query: string;
   mode: "auto" | "fast" | "deep";
   limit?: number;

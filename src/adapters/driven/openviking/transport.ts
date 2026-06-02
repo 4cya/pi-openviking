@@ -182,7 +182,13 @@ export class Transport {
           if (!response.ok) {
             let responseBody: unknown;
             try {
-              responseBody = await response.json();
+              const parsed = await response.json() as Record<string, unknown>;
+              // Unwrap OV envelope: extract error field for better messages
+              if (parsed && typeof parsed === "object" && "status" in parsed && "result" in parsed) {
+                responseBody = parsed.error ?? parsed;
+              } else {
+                responseBody = parsed;
+              }
             } catch {
               responseBody = { message: await response.text().catch(() => "") };
             }
@@ -213,7 +219,26 @@ export class Transport {
 
           const text = await response.text();
           if (!text) return undefined as T;
-          return JSON.parse(text) as T;
+          const parsed = JSON.parse(text) as Record<string, unknown>;
+
+          // Unwrap OV envelope: { status, result, error, telemetry }
+          // Detection: envelope has both status ("ok"|"error") and result keys
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            "status" in parsed &&
+            "result" in parsed
+          ) {
+            if (parsed.status === "error") {
+              const errBody = parsed.error ?? {};
+              throw toDomainError(response.status, errBody, methodLabel);
+            }
+            // status === "ok" — return result (or null/undefined if absent)
+            return parsed.result as T;
+          }
+
+          // Bare response (no envelope) — return as-is
+          return parsed as T;
         } catch (err: unknown) {
           if (err instanceof DOMException || (err instanceof Error && err.name === "AbortError")) {
             if (err.name === "TimeoutError" || (err as Error).message === "Timeout") {

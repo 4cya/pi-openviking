@@ -3,7 +3,8 @@
     "../src/index.ts"
   ],
   "pi-openviking": {
-    "openVikingTimeout": 120000,
-    "openVikingCommitTimeout": 120000
+    "ov": {
+      "apiKey": "dev"
+    }
   }
 }

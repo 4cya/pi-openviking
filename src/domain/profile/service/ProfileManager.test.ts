@@ -7,7 +7,7 @@ function makeProfiles(): Record<string, ProfileConfig> {
     default: {
       name: "default",
       description: "Default",
-      behavior: { topN: 3, scoreThreshold: 0.5, searchMode: "find", autoRecall: true },
+      behavior: { topN: 3, scoreThreshold: 0.5, searchMode: "search", autoRecall: true },
     },
     "web-dev": {
       name: "web-dev",
@@ -17,7 +17,7 @@ function makeProfiles(): Record<string, ProfileConfig> {
     docs: {
       name: "docs",
       description: "Docs",
-      behavior: { topN: 5, scoreThreshold: 0.3, searchMode: "find", autoRecall: true },
+      behavior: { topN: 5, scoreThreshold: 0.3, searchMode: "search", autoRecall: true },
     },
     learning: {
       name: "learning",
@@ -42,7 +42,7 @@ describe("ProfileManager", () => {
     const behavior = pm.resolve("docs");
     expect(behavior.topN).toBe(5);
     expect(behavior.scoreThreshold).toBe(0.3);
-    expect(behavior.searchMode).toBe("find");
+    expect(behavior.searchMode).toBe("search");
     expect(behavior.targetUri).toBeUndefined();
     expect(behavior.expandGraph).toBeUndefined();
   });

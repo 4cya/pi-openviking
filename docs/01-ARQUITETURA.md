@@ -324,16 +324,6 @@ type Part = TextPart | ToolPart | ContextPart;
 > `FindQuery`/`SearchRequest` e `Part` vivem em `domain/common/` por serem consumidos por múltiplas ports
 > e adaptadores. Não são private de port nenhuma.
 
-### CacheStore — cache de operações repetidas
-
-```typescript
-interface CacheStore {
-  get(key: string, signal?: AbortSignal): Promise<unknown | undefined>;
-  set(key: string, value: unknown, ttl?: number, signal?: AbortSignal): Promise<void>;
-  invalidate(pattern: string, signal?: AbortSignal): Promise<void>;
-}
-```
-
 ### Logger — logging estruturado
 
 ```typescript
@@ -580,9 +570,8 @@ src/
 │   │   ├── loader.ts          # ✅ Leitor .pi/settings.json
 │   │   └── profile-schema.ts  # ✅ ProfileSchema (só name+description em F1)
 │   ├── di/
-│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 10 singletons)
-│   ├── event-bus/             # ✅ InMemoryEventBus (publish/subscribe, error isolation, event log)
-│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F4 (10 singletons)
+│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 15 singletons)
+│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F7b (15 singletons)
 │   ├── lifecycle.test.ts      # ✅ 16 smoke tests (F1–F3 adapters + F4 services)
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
@@ -606,9 +595,8 @@ src/
 
 1. **Domain pure** — Núcleo não importa Pi, OV, HTTP, nada externo
 2. **Ports > Implementations** — Interfaces primeiro, implements depois
-3. **Event-driven** — Reações desacopladas via EventBus
-4. **Autonomia progressiva** — off → propose → auto
-5. **Silent by default** — Nunca pergunte o que pode ser inferido
-6. **Graceful degradation** — OV offline não quebra o Pi
-7. **Pipeline de middlewares** — Cross-cutting concerns empilháveis
-8. **Cascading config** — Default → env → file → profile → inline
+3. **Autonomia progressiva** — off → propose → auto
+4. **Silent by default** — Nunca pergunte o que pode ser inferido
+5. **Graceful degradation** — OV offline não quebra o Pi
+6. **Pipeline de middlewares** — Cross-cutting concerns empilháveis
+7. **Cascading config** — Default → env → file → profile → inline

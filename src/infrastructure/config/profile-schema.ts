@@ -30,7 +30,7 @@ export const BUILTIN_PROFILES: Record<string, ProfileConfig> = {
     behavior: {
       topN: 3,
       scoreThreshold: 0.5,
-      searchMode: "find",
+      searchMode: "search",
       autoRecall: true,
     },
   },
@@ -50,7 +50,7 @@ export const BUILTIN_PROFILES: Record<string, ProfileConfig> = {
     behavior: {
       topN: 5,
       scoreThreshold: 0.3,
-      searchMode: "find",
+      searchMode: "search",
       autoRecall: true,
     },
   },
@@ -72,4 +72,4 @@ export const ProfileSectionSchema = z.object({
   autoDetectRules: z.record(z.string(), z.string()).default({}),
 });
 
-export type ProfileSectionConfig = z.infer<typeof ProfileSectionSchema>;
+type ProfileSectionConfig = z.infer<typeof ProfileSectionSchema>;

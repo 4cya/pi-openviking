@@ -142,7 +142,7 @@ describe("mergeBehaviorIntoRecall", () => {
     expandGraphDepth: 1 as const,
     expandGraphMaxRatio: 0.2,
     expandGraphMinSeedScore: 0.4,
-    searchMode: "find" as const,
+    searchMode: "search" as const,
     autoRecall: true as const,
   };
 
@@ -197,7 +197,7 @@ describe("mergeBehaviorIntoRecall", () => {
     // All other fields stay at base
     expect(merged.topN).toBe(5);
     expect(merged.scoreThreshold).toBe(0.5);
-    expect(merged.searchMode).toBe("find");
+    expect(merged.searchMode).toBe("search");
     expect(merged.autoRecall).toBe(true);
     expect(merged.targetUri).toBeUndefined();
     expect(merged.maxTokens).toBe(4000);

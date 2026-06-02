@@ -44,30 +44,41 @@ describe("SessionStoreAdapter.sendMessage", () => {
     expect(opts.method).toBe("POST");
     const body = JSON.parse(opts.body);
     expect(body.role).toBe("user");
-    expect(body.content).toHaveLength(1);
-    expect(body.content[0].type).toBe("text");
-    expect(body.content[0].text).toBe("hello");
+    expect(body.parts).toHaveLength(1);
+    expect(body.parts[0].type).toBe("text");
+    expect(body.parts[0].text).toBe("hello");
   });
 });
 
 describe("SessionStoreAdapter.sendMessages", () => {
   const sid = new SessionId("sess-1");
 
-  it("calls POST /api/v1/sessions/{id}/messages/batch", async () => {
+  it("calls POST /api/v1/sessions/{id}/messages for each message", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
 
     const ss = new SessionStoreAdapter(transport);
-    const msgs = [{ role: "user", content: [{ type: "text" as const, text: "hi" }] }];
+    const msgs = [
+      { role: "user", content: [{ type: "text" as const, text: "hi" }] },
+      { role: "assistant", content: [{ type: "text" as const, text: "hello" }] },
+    ];
     await ss.sendMessages(sid, msgs);
 
-    const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(label).toBe("SessionStore.sendMessages");
-    expect(path).toBe("/api/v1/sessions/sess-1/messages/batch");
-    expect(opts.method).toBe("POST");
-    const body = JSON.parse(opts.body);
-    expect(body).toHaveLength(1);
-    expect(body[0].role).toBe("user");
+    expect(transport.request).toHaveBeenCalledTimes(2);
+
+    const [label1, path1, opts1] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label1).toBe("SessionStore.sendMessages");
+    expect(path1).toBe("/api/v1/sessions/sess-1/messages");
+    expect(opts1.method).toBe("POST");
+    let body = JSON.parse(opts1.body);
+    expect(body.role).toBe("user");
+    expect(body.parts[0].text).toBe("hi");
+
+    const [label2, path2, opts2] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(path2).toBe("/api/v1/sessions/sess-1/messages");
+    body = JSON.parse(opts2.body);
+    expect(body.role).toBe("assistant");
+    expect(body.parts[0].text).toBe("hello");
   });
 });
 

@@ -3,7 +3,7 @@ import { ProfileSectionSchema } from "./profile-schema";
 import { z } from "zod";
 
 export type { LoggerConfig } from "./logger-schema";
-export type { ProfileConfig, ProfileSectionConfig } from "./profile-schema";
+export type { ProfileConfig } from "./profile-schema";
 export { BUILTIN_PROFILES } from "./profile-schema";
 
 // ── Root config ──────────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ const CircuitBreakerConfigSchema = z.object({
 export const OVAdapterConfigSchema = z.object({
   endpoint: z.string().url().default("http://localhost:1933"),
   apiKey: z.string().default(""),
-  account: z.string().default("pi"),
+  account: z.string().default("default"),
   user: z.string().default("default"),
   timeout: z.number().positive().default(30_000),
   commitTimeout: z.number().positive().default(120_000),
@@ -36,11 +36,11 @@ export const RecallConfigSchema = z.object({
   topN: z.number().int().positive().default(5),
   scoreThreshold: z.number().min(0).max(1).default(0.5),
   maxTokens: z.number().int().positive().default(4000),
-  expandGraph: z.boolean().default(false),
+  expandGraph: z.boolean().default(true),
   expandGraphDepth: z.literal(1).default(1),
   expandGraphMaxRatio: z.number().min(0).max(1).default(0.2),
   expandGraphMinSeedScore: z.number().min(0).max(1).default(0.4),
-  searchMode: z.enum(["find", "search"]).default("find"),
+  searchMode: z.enum(["find", "search"]).default("search"),
   autoRecall: z.boolean().default(true),
 });
 

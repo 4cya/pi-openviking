@@ -91,11 +91,11 @@ Profiles registrados. Tudo testado sem OV.
 | 4 | F2.2 | `domain/ports/knowledge-base.ts` | ✅ KnowledgeBase + GlobResult, GrepOptions, GrepResult |
 | 5 | F2.3 | `domain/ports/session-store.ts` | ✅ SessionStore + CommitResult, TaskStatus |
 | 6 | F2.4 | `domain/ports/fs-store.ts` | ✅ FsStore (read + write + list + tree + stat + mkdir + mv + delete; **sem wait na port**) + Content, WriteResult, FsEntry |
-| 7 | F2.5 | `domain/ports/event-bus.ts` | ✅ EventBus + DomainEvent types (ADR-011) + EventHandler |
-| 8 | F2.6 | `domain/ports/cache-store.ts` | ✅ CacheStore |
+| 7 | ~~F2.5~~ | ~~`domain/ports/event-bus.ts`~~ | ~~EventBus + DomainEvent types — removido~~ (dead code, sem subscribers, sem publisher, OV não expõe event API) |
+| 8 | F2.6 | ~~`domain/ports/cache-store.ts`~~ | ~~CacheStore~~ — **removido** (dead code, sem adapter, sem DI, OV não oferece cache API) |
 | 9 | F2.7 | `domain/ports/logger.ts` | ✅ Logger (já existia) |
 | 10 | F2.8 | `domain/ports/graph-store.ts` | ✅ GraphStore + LinkResult |
-| 11 | F2.9 | `infrastructure/event-bus/in-memory.ts` | ✅ InMemoryEventBus (publish/subscribe/unsubscribe, error isolation, event log) |
+| 11 | ~~F2.9~~ | ~~`infrastructure/event-bus/in-memory.ts`~~ | ~~InMemoryEventBus — removido~~ (junto com EventBus port, sem uso) |
 | 12 | F2.10 | `domain/recall/curate.ts` | ✅ Curation function: merge → dedup → score-sort → threshold → topN → budget trim |
 | — | — | Testes | Cobertura ≥90% |
 
@@ -172,10 +172,10 @@ Wrappers finos sem lógica (SearchService, WriteService) ficam para F5.
 | 2 | F4.1b | `src/domain/recall/curate.ts` (expandir) | ✅ `CurateOpts` ganhou `scorers?: Scorer[]` + `query?: string`. `CuratedItem` ganhou `modTime?`. `curate()` aplica scorers após base sort, soma scores, re-ordena. Backward-compatible. |
 | 3 | F4.2 | ~~`domain/recall/intent/`~~ **Eliminado** | Intent Detection removido. Recall é toggle command. searchMode vem do RecallConfig. |
 | 4 | F4.3 | ✅ `domain/recall/recall-curator.ts` | `RecallCurator` wrapper sobre `curate()`. Lê `topN`, `scoreThreshold`, `maxTokens` do config, chama `curate()` com scorers, emite log. GraphExpander = optional. 6 tests. |
-| 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | ✅ `RecallConfigSchema` adicionado: `targetUri` (string?), `topN` (5), `scoreThreshold` (0.5), `maxTokens` (4000), `expandGraph` (false), `searchMode` ('find'|'search'). Env vars: OV_TOP_N, OV_SCORE_THRESHOLD, OV_TARGET_URI, OV_EXPAND_GRAPH, OV_SEARCH_MODE. 36 tests config/. |
+| 5 | F4.4 | `infrastructure/config/schema.ts` (expandir) | ✅ `RecallConfigSchema` adicionado: `targetUri` (string?), `topN` (5), `scoreThreshold` (0.5), `maxTokens` (4000), `expandGraph` (true, padrão alterado 2026-06-02), `searchMode` ('find'|'search', default 'search'), `autoRecall` (true). Env vars: OV_TOP_N, OV_SCORE_THRESHOLD, OV_TARGET_URI, OV_EXPAND_GRAPH, OV_SEARCH_MODE. 36 tests config/. |
 | 6 | F4.5 | ✅ `domain/recall/recall-service.ts` | RecallService: orquestra toggle check → `kb.find()`/`kb.search()` (by searchMode) → `curator.curate()` → `RecallResult { items, tokens, formatted, total }`. Constructor: `(kb, curator, config, logger, enabled)`. ConnectionError → empty + warn. 5 tests. |
 | 7 | F4.6 | `domain/services/session-service.ts` ✅ | Dono da sessão ativa: `getActive()`, `createAndSet()`. `commit(id)` retorna `{ taskId }` imediato. `waitForCommit(taskId, timeout?)` opcional. |
-| 8 | F4.7 | ✅ `infrastructure/lifecycle.ts` + `lifecycle.test.ts` | Lifecycle wiring: `init()` cria e registra RecallCurator (sem scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true). 3 singletons F4 → total 10 no container. Smoke test: resolve + invoke cada serviço. 16 lifecycle tests. |
+| 8 | F4.7 | ✅ `infrastructure/lifecycle.ts` + `lifecycle.test.ts` | Lifecycle wiring: `init()` cria e registra RecallCurator (com scorers + GraphExpander opcional), SessionService, RecallService, SearchService, WriteService, ReadService, ProfileManager, OVWidget, 6 commands. 3 singletons F4 → total 15 no container (F1–F7b). Smoke test: resolve + invoke cada serviço. 22 lifecycle tests. |
 | — | Testes | Unit com port mocks (vitest). Cobertura ≥90%. |
 
 **Decisões de design (grill 2026-05-28, ver CONTEXT.md):**
@@ -190,7 +190,7 @@ Domain logic primeiro (scorers → curate() → RecallCurator), depois services 
 `{ items, tokens, formatted }`. Caller (F6) faz inject no prompt. RecallService não sabe de Pi.
 
 **Recall toggle:**
-Recall é controlado por toggle command (`/ov recall on|off`). searchMode vem do `RecallConfig` (default `'find'`), overridable via profile. Sem intent detection.
+Recall é controlado por toggle command (`/ov recall on|off`). searchMode vem do `RecallConfig` (default `'search'` — intent analysis incluída), overridable via profile. Sem intent detection separado.
 
 **Graceful degradation:**
 RecallService catcha ConnectionError → log warn + retorno vazio. Demais services propagam ConnectionError.
@@ -231,7 +231,7 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 **Nota 1 — F5.1–F5.6 concluídos:** `index.ts` chama `init()` e resolve `{ container, config, logger }`, cria pipelines tipados, resolve KB + FsStore, instancia SearchService + WriteService + ReadService, registra tools. 5 tools operacionais.
 
-**Nota 2 — PiEventBridge eliminado:** `adapters/driving/pi/pi-event-bridge.ts` não será criado. Per ADR-011 e CONTEXT.md: eventos de infra (session_start, message_end, before_agent_start) são tratados diretamente por `pi.on()` em `index.ts` — não passam pelo EventBus de domínio. O EventBus só transporta eventos de domínio internos (MEMORY_SAVED, RECALL_EXECUTED, etc.) entre bounded contexts.
+**Nota 2 — PiEventBridge eliminado + EventBus removido:** `adapters/driving/pi/pi-event-bridge.ts` não será criado. EventBus de domínio foi removido (dead code, sem uso). Eventos de infra (session_start, message_end, before_agent_start) são tratados diretamente por `pi.on()` em `index.ts`.
 
 **Nota 3 — SearchService no domínio:** SearchService vive em `domain/services/` junto com SessionService — ambos são serviços finos sobre ports. A camada `application/` ficou vazia.
 
@@ -329,7 +329,7 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 
 | Tarefa | Artefato | Descrição | Deps |
 |--------|----------|-----------|------|
-| F8.2 | `domain/recall/curator/GraphExpander.ts` + `RecallConfig` expansion | Optional no RecallCurator. Percorre `graphStore.graph(uri)` de top-3 seeds, lê abstract de cada relation (`kb.read(uri, "abstract")` paralelo), merge na custom message `memory_context` com prefixo `[graph]`. Score decaído 0.8× seed. Config: expandGraph, expandGraphDepth=1, expandGraphMaxRatio=0.2, expandGraphMinSeedScore=0.4. | F4 (RecallCurator), F6 (custom message) |
+| F8.2 | ✅ `domain/recall/graph-expander.ts` + `RecallConfig` expansion | ✅ **Implementado (adiantado, default true).** `GraphExpander` percorre `graphStore.graph(uri)` de top-3 seeds, lê abstract de cada relation (`fsStore.read(uri, "abstract")` paralelo), merge nos itens curados. Score decaído 0.8× seed. Config: expandGraph (true), expandGraphDepth=1, expandGraphMaxRatio=0.2, expandGraphMinSeedScore=0.4. | F4 (RecallCurator) |
 | F8.4 | `adapters/driver/pi-commands/ov-delete-command.ts` (expandir) | `/ov-delete` aceita glob pattern. `KnowledgeBase.glob()` → confirma → `FsStore.delete()` cada match. | F5.4 (command pattern), FS |
 | F8.9 | E2E tests + docs | Testes end-to-end contra OV real + docs de usuário. | F8.2, F8.4 |
 

@@ -2,7 +2,7 @@ import type { SessionId } from "../common/session-id";
 import type { SessionStore, CommitResult, CommitOptions, TaskStatus } from "../ports/session-store";
 import type { Part } from "../common/part";
 
-export interface SessionServiceConfig {
+interface SessionServiceConfig {
   commitTimeout: number;
   pollInterval?: number;
 }
