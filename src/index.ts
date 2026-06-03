@@ -6,6 +6,7 @@ import type { Logger } from "./domain/ports/logger";
 import type { SearchService } from "./domain/services/search-service";
 import type { WriteService } from "./domain/services/write-service";
 import type { ReadService } from "./domain/services/read-service";
+import type { FsService } from "./domain/services/fs-service";
 import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
 import type { OVAdapter } from "./adapters/driven/openviking/adapter";
@@ -45,6 +46,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const searchService = container.resolve<SearchService>("searchService");
       const writeService = container.resolve<WriteService>("writeService");
       const readService = container.resolve<ReadService>("readService");
+      const fsService = container.resolve<FsService>("fsService");
       recallService = container.resolve<RecallService>("recallService");
       const fsStore = container.resolve<FsStore>("fsStore");
       const knowledgeBase = container.resolve<KnowledgeBase>("knowledgeBase");
@@ -57,8 +59,8 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       // Session service — module-level for hooks
       sessionService = container.resolve<SessionService>("sessionService");
 
-      // Register all 6 tools (once per process)
-      registerAllTools(pi, { searchService, writeService, readService, recallService }, logger);
+      // Register all 10 tools (once per process)
+      registerAllTools(pi, { searchService, writeService, readService, recallService, fsService }, logger);
 
       // Register all 6 commands (once per process)
       registerAllCommands(pi, {

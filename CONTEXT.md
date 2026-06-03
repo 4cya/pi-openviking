@@ -263,6 +263,10 @@ _Avoid_: write handler, persistence service
 Thin service wrapping the `FsStore` port for content reads. Single method: `read(uri, level?, offset?, limit?, signal?)` → `fsStore.read()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. 3 tests. Born in F5.2 (issue #69).
 _Avoid_: read handler, content reader
 
+**FsService** *(planned — `domain/services/fs-service.ts`)*:
+Thin service wrapping the `FsStore` port for filesystem navigation and management. 4 methods: `list(uri, recursive?, signal?)` → `fsStore.list()`; `tree(uri, signal?)` → `fsStore.tree()`; `stat(uri, signal?)` → `fsStore.stat()`; `delete(uri, recursive?, signal?)` → `fsStore.delete()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. Following the same thin-service pattern as `ReadService`/`WriteService`.
+_Avoid_: fs handler, fs service
+
 **SearchService** *(implemented — `domain/services/search-service.ts`)*:
 Thin application service delegating to the `KnowledgeBase` port. Three methods: `search(params, signal?)` routes `mode` param (`fast` → `kb.find()`, `deep` → `kb.search()`, `auto` → `RecallConfig.searchMode`); `glob(pattern, uri?, limit?, signal?)` delegates directly; `grep(pattern, opts?, signal?)` delegates directly. Constructor takes `KnowledgeBase`, `RecallConfig`, `Logger`. 7 tests. Registered as singleton in lifecycle.
 
@@ -289,6 +293,19 @@ Pi tool for reading content at three depth levels. TypeBox schema: `{ uri: strin
 
 **ov_recall** *(implemented — `adapters/driver/pi-tools/ov-recall.ts`)*:
 Pi tool for explicit recall trigger. TypeBox schema: `{ prompt: string, limit?: number }`. Handler calls `pipeline.execute(() => recallService.recall(params.prompt), signal)`. Returns `RecallResult.formatted` text (items with URI + content). On empty result, returns informative message. Errors caught and reported. 4 unit tests + 1 integration test. Born in F5.3 (issue #70).
+
+**ov_list** *(planned — `adapters/driver/pi-tools/ov-list.ts`)*:
+Pi tool for flat directory listing. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsService.list()` via pipeline. Returns JSON array of `FsEntry` (uri, type, size?, modTime?). No formatting — raw data for agent programmatic use.
+
+**ov_tree** *(planned — `adapters/driver/pi-tools/ov-tree.ts`)*:
+Pi tool for recursive tree listing. TypeBox schema: `{ uri: string }`. Handler wraps `FsService.tree()` via pipeline. Returns JSON array of `FsEntry` (uri, type). Raw data, no indentation — agent parses paths to infer hierarchy.
+
+**ov_stat** *(planned — `adapters/driver/pi-tools/ov-stat.ts`)*:
+Pi tool for URI metadata. TypeBox schema: `{ uri: string }`. Handler wraps `FsService.stat()` via pipeline. Returns single `FsEntry` as JSON object (uri, type, size?, modTime?).
+
+**ov_delete** *(planned — `adapters/driver/pi-tools/ov-delete.ts`)*:
+Pi tool for resource deletion. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsService.delete()` via pipeline. No confirmation — agent owns its tool calls. Returns success/error message. No glob support — agent composes with `ov_glob` for batch delete. Contrasts with `/ov-delete` command which shows `ctx.ui.confirm()`.
+_Avoid_: ov_delete with glob, delete with confirmation
 
 **Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
 

@@ -6,7 +6,7 @@
 
 ## O problema
 
-O Pi é estateless entre sessões. Cada conversa começa do zero.
+O Pi é stateless entre sessões. Cada conversa começa do zero.
 Decisões tomadas, preferências expressas, descobertas feitas —
 tudo se perde quando a sessão termina.
 
@@ -15,12 +15,21 @@ tudo se perde quando a sessão termina.
 O OpenViking (OV) é um servidor de memória persistente. O
 pi-openviking conecta o Pi a ele, permitindo:
 
-1. **Salvar conhecimento**: decisões de arquitetura, preferências,
-   notas técnicas, documentação relevante
-2. **Recuperar automaticamente**: antes de cada resposta, o Pi
-   busca memórias relevantes e as injeta no contexto
-3. **Navegar o conhecimento**: sistema de arquivos virtual
-   (`viking://`), busca semântica, grafo de relações
+1. **Auto-recall**: antes de cada resposta do agente, o plugin
+   busca memórias relevantes no OV e as injeta no contexto automaticamente.
+2. **Session sync**: mensagens da conversa são sincronizadas com
+   uma sessão OV em tempo real. Ao final da sessão, o commit
+   dispara a extração de memórias no servidor.
+3. **Busca semântica**: encontre memórias, recursos e skills
+   pelo significado, não só por palavras-chave.
+4. **Sistema de arquivos virtual**: acesse e armazene conhecimento
+   em uma hierarquia `viking://` com leitura em múltiplos níveis
+   (L0 abstrato, L1 overview, L2 completo).
+5. **Grafo de relações**: conecte recursos relacionados e
+   expanda o recall navegando relações.
+6. **Perfis comportamentais**: troque entre presets (`default`,
+   `web-dev`, `docs`, `learning`) que ajustam topN, threshold,
+   escopo, modo de busca e expansão de grafo.
 
 ## O que NÃO é
 
@@ -28,39 +37,36 @@ pi-openviking conecta o Pi a ele, permitindo:
   _conhecimento sobre_ o código.
 - **Não substitui o Pi.** Pi mantém o histórico da conversa.
   OV só guarda o que foi extraído como memória.
-- **Não é automático mágico.** O usuário (ou agente) decide
-  o que salvar. Auto-recall ajuda, mas não decide sozinho.
+- **Não tem auto-save heurístico.** O plugin segue o padrão
+  OpenClaw: commit da sessão dispara extração no servidor;
+  o agente usa `ov_write` explicitamente quando precisa salvar.
 
-## Conceitos fundamentais
+## Como o conhecimento flui
 
-```yaml
-# Como o plugin se conecta ao OV
-Pi Agent → pi-openviking (plugin) → HTTP API → OpenViking Server
-
-# Como o conhecimento flui
-Conversa → memsave() → viking:// filesystem → indexação → busca semântica
-Sessão   → memcommit() → extração → memórias → auto-recall
-
-# Autonomia progressiva
-Nível 1 (off)    → Só faz o que você mandar
-Nível 2 (propose)  → Detecta oportunidade, SUGERE, você confirma  [DEFAULT]
-Nível 3 (auto)     → Detecta e EXECUTA automaticamente
+```
+Sessão Pi → message_end hook → sendMessage() → OV session
+         → session_shutdown → commit() → OV extrai memórias
+         → before_agent_start → recall() → memórias no contexto
+         
+Agente → ov_write → viking:// filesystem → indexação → busca semântica
+       → ov_read  → L0/L1/L2 content
+       → ov_search/ov_glob/ov_grep → resultados tipados
 ```
 
 ## Perfis de uso
 
-| Perfil | Para quem | Escopo | Automação |
-|--------|-----------|--------|-----------|
-| `default` | Uso geral | Global | Propositiva |
-| `web-dev` | Desenvolvimento de projeto | Escopado | Propositiva |
-| `docs` | Documentação | Global | Off |
-| `learning` | Aprendizado máximo | Global | Automática |
+| Perfil | Para quem | Comportamento |
+|--------|-----------|---------------|
+| `default` | Uso geral | topN=3, threshold=0.5, search mode |
+| `web-dev` | Desenvolvimento de projeto | topN=3, threshold=0.5, search mode |
+| `docs` | Documentação | topN=5, threshold=0.3, busca ampla |
+| `learning` | Aprendizado máximo | topN=8, threshold=0.2, captura tudo |
 
 ## Stack
 
 - **Runtime:** Node.js / Bun
 - **Framework:** Pi Agent SDK (`@earendil-works/pi-*`)
 - **Servidor:** OpenViking (Docker, v0.3+)
-- **Config:** Zod schema + cascading (env → file → profile)
+- **Config:** Zod schema + cascading (defaults → env → file → profile)
 - **Testes:** Vitest
 - **Arquitetura:** Hexagonal (Ports & Adapters)

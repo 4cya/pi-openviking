@@ -45,9 +45,7 @@ flowchart TB
         PORT_FS["FsStore\nread / write / list / tree / stat\nmkdir / mv / delete"]
         PORT_GRAPH["GraphStore\nlink / unlink / graph"]
         PORT_SESSION["SessionStore\ncreate / send / commit / ..."]
-        PORT_CACHE["CacheStore\nget / set / invalidate"]
         PORT_LOGGER["Logger\ndebug / info / warn / error"]
-        PORT_EVENTS["EventBus\npublish / subscribe"]
     end
 
     subgraph Domain["🧠 Domínio (3 Bounded Contexts)"]
@@ -155,11 +153,10 @@ A ordem de criação dos artefatos de domínio segue dependências entre eles:
 | 1 | `domain/common/` — Uri (class), SessionId (class), ContentLevel, WriteMode, FindQuery + SearchRequest (interfaces), Part (discriminated union) | — |
 | 2 | `domain/errors/` — DomainError class + subtipos (NotFoundError, ConnectionError, etc.) | — |
 | 3 | `domain/{knowledge,recall,profile}/model/` — value objects + aggregates | common, errors |
-| 4 | `domain/ports/` — KnowledgeBase, FsStore, GraphStore, SessionStore, CacheStore, EventBus | models (tipos de retorno) |
-| 5 | `infrastructure/event-bus/in-memory.ts` — InMemoryEventBus | ports/event-bus.ts |
+| 4 | `domain/ports/` — KnowledgeBase, FsStore, GraphStore, SessionStore, Logger | models (tipos de retorno) |
+| 5 | `domain/recall/curate.ts` — curate pipeline (pure function) | domain models |
 
-ProfileManager (esqueleto) deferido para F7a. Em F2, Profile é apenas um value object
-(`name` + `description`), já definido em `infrastructure/config/profile-schema.ts`.
+ProfileManager implementado em F7a. ProfileBehavior (6 campos) + AutoDetect em F7b.
 
 ---
 
@@ -414,23 +411,11 @@ Request → LoggingMiddleware → Handler → Response
 
 **Arquivo:** `domain/pipeline/pipeline.ts` + `domain/pipeline/logging-middleware.ts`
 
-### 4.4 Event Bus — Domínio puro
+### 4.4 Event Bus — REMOVIDO
 
-Domain events carregam mudanças de estado com significado de negócio entre bounded contexts.
-Eventos de infra (SESSION_STARTED, MESSAGE_PROCESSED) ficam fora — entram via `pi.on()` direto.
-
-```
-# Eventos de domínio cruzam contexts via EventBus
-RecallService.publish(RECALL_EXECUTED) → ProfileAutoDetect (ajusta auto-detect)
-                                        → Logger (métrica)
-
-# Eventos de infra: pi.on() → Application Service direto (sem EventBus)
-pi.on("session_start",   (e, ctx) => sessionService.createAndSet())
-pi.on("message_end",     (e, ctx) => sessionService.sendMessage(...))
-pi.on("before_agent_start", (e, ctx) => recallService.recall(ctx)  // (F6)
-
-# Não existe PiEventBridge separado — o index.ts registra os handlers.
-```
+EventBus de domínio foi removido em F5 Review — dead code sem subscribers, sem publisher,
+e sem API de eventos no OV. Eventos de infra (session_start, message_end, etc.)
+são tratados diretamente por `pi.on()` em `index.ts`. Não existe PiEventBridge separado.
 
 ---
 
@@ -505,9 +490,7 @@ src/
 │   │   ├── knowledge-base.ts  # ✅ KnowledgeBase + GlobResult, GrepOptions, GrepResult
 │   │   ├── fs-store.ts        # ✅ FsStore + Content, WriteResult, FsEntry
 │   │   ├── graph-store.ts     # ✅ GraphStore + LinkResult
-│   │   ├── session-store.ts   # ✅ SessionStore + CommitResult, TaskStatus
-│   │   ├── cache-store.ts     # ✅ CacheStore
-│   │   └── event-bus.ts       # ✅ EventBus + DomainEvent, EventHandler
+│   │   └── session-store.ts   # ✅ SessionStore + CommitResult, TaskStatus
 │   └── errors/                # ✅ DomainError, NotFoundError, ConnectionError, ValidationError
 │
 ├── application/               # (não utilizado — SearchService em domain/services/, Pipeline em domain/pipeline/)

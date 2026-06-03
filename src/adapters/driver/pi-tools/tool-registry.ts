@@ -7,10 +7,15 @@ import { createOvGrepTool } from "./ov-grep";
 import { createOvWriteTool } from "./ov-write";
 import { createOvReadTool } from "./ov-read";
 import { createOvRecallTool } from "./ov-recall";
+import { createOvListTool } from "./ov-list";
+import { createOvTreeTool } from "./ov-tree";
+import { createOvStatTool } from "./ov-stat";
+import { createOvDeleteTool } from "./ov-delete";
 import type { SearchService } from "../../../domain/services/search-service";
 import type { WriteService } from "../../../domain/services/write-service";
 import type { ReadService } from "../../../domain/services/read-service";
 import type { RecallService } from "../../../domain/recall/recall-service";
+import type { FsService } from "../../../domain/services/fs-service";
 import type { Logger } from "../../../domain/ports/logger";
 
 export interface ToolServices {
@@ -18,6 +23,7 @@ export interface ToolServices {
   writeService: WriteService;
   readService: ReadService;
   recallService: RecallService;
+  fsService: FsService;
 }
 
 export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: Logger): void {
@@ -44,4 +50,20 @@ export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: L
   const recallPipeline = new Pipeline();
   recallPipeline.use(loggingMiddleware("recall", logger));
   pi.registerTool(createOvRecallTool(svcs.recallService, recallPipeline as any));
+
+  const listPipeline = new Pipeline();
+  listPipeline.use(loggingMiddleware("list", logger));
+  pi.registerTool(createOvListTool(svcs.fsService, listPipeline as any));
+
+  const treePipeline = new Pipeline();
+  treePipeline.use(loggingMiddleware("tree", logger));
+  pi.registerTool(createOvTreeTool(svcs.fsService, treePipeline as any));
+
+  const statPipeline = new Pipeline();
+  statPipeline.use(loggingMiddleware("stat", logger));
+  pi.registerTool(createOvStatTool(svcs.fsService, statPipeline as any));
+
+  const deletePipeline = new Pipeline();
+  deletePipeline.use(loggingMiddleware("delete", logger));
+  pi.registerTool(createOvDeleteTool(svcs.fsService, deletePipeline as any));
 }

@@ -10,6 +10,7 @@ import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
 import { WriteService } from "../domain/services/write-service";
 import { ReadService } from "../domain/services/read-service";
+import { FsService } from "../domain/services/fs-service";
 import { ProfileManager } from "../domain/profile/service/ProfileManager";
 import type { Logger } from "../domain/ports/logger";
 import type { PiOVConfig } from "../infrastructure/config/schema";
@@ -89,6 +90,9 @@ export async function init(cwd: string): Promise<{
 
   const readService = new ReadService(adapter.fsStore);
   container.register("readService", () => readService, true);
+
+  const fsService = new FsService(adapter.fsStore);
+  container.register("fsService", () => fsService, true);
 
   return { config, logger, container };
 }
