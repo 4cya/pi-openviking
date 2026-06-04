@@ -52,7 +52,7 @@ describe("DEFAULT_CONFIG", () => {
 
   it("recall defaults match expected values", () => {
     expect(DEFAULT_CONFIG.recall.targetUri).toBeUndefined();
-    expect(DEFAULT_CONFIG.recall.topN).toBe(5);
+    expect(DEFAULT_CONFIG.recall.topN).toBe(8);
     expect(DEFAULT_CONFIG.recall.scoreThreshold).toBe(0.5);
     expect(DEFAULT_CONFIG.recall.expandGraph).toBe(true);
     expect(DEFAULT_CONFIG.recall.searchMode).toBe("search");

@@ -34,7 +34,7 @@ export type OVAdapterConfig = z.infer<typeof OVAdapterConfigSchema>;
 
 export const RecallConfigSchema = z.object({
   targetUri: z.string().optional(),
-  topN: z.number().int().positive().default(5),
+  topN: z.number().int().positive().default(8),
   scoreThreshold: z.number().min(0).max(1).default(0.5),
   maxTokens: z.number().int().positive().default(4000),
   expandGraph: z.boolean().default(true),

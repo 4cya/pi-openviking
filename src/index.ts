@@ -7,6 +7,7 @@ import type { SearchService } from "./domain/services/search-service";
 import type { WriteService } from "./domain/services/write-service";
 import type { ReadService } from "./domain/services/read-service";
 import type { FsService } from "./domain/services/fs-service";
+import type { ResourceService } from "./domain/services/resource-service";
 import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
 import type { OVAdapter } from "./adapters/driven/openviking/adapter";
@@ -59,8 +60,10 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       // Session service — module-level for hooks
       sessionService = container.resolve<SessionService>("sessionService");
 
-      // Register all 10 tools (once per process)
-      registerAllTools(pi, { searchService, writeService, readService, recallService, fsService }, logger);
+      const resourceService = container.resolve<ResourceService>("resourceService");
+
+      // Register all 13 tools (once per process)
+      registerAllTools(pi, { searchService, writeService, readService, recallService, fsService, resourceService }, logger);
 
       // Register all 6 commands (once per process)
       registerAllCommands(pi, {
@@ -149,21 +152,19 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       }
     }
 
-    // Every session_start: attach widget, create session, then check health
+    // Health check FIRST — widget is attached with correct state from the start
+    const health = await healthCheck.check();
+
     widget.attach(ctx.ui);
+    widget.update("conn", health.ok ? "connected" : "disconnected");
 
     try {
       await sessionService.createAndSet();
       const active = sessionService.getActive();
       widget.update("session", active?.toString() ?? "-");
-      widget.update("scope", config.recall.targetUri ?? "(global)");
       widget.update("recall", recallService.isEnabled() ? "on" : "off");
     } catch {
-      // Session creation failed — widget will show disconnected after health check
+      // Session creation failed — no session to show
     }
-
-    // Health check — probes /ready, does NOT affect CircuitBreaker
-    const health = await healthCheck.check();
-    widget.update("conn", health.ok ? "connected" : "disconnected");
   });
 }

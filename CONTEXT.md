@@ -316,6 +316,19 @@ Pi tool for saving resources. Validates URI prefix `viking://resources/`, delega
 **ov_skill** *(implemented — `adapters/driver/pi-tools/ov-skill.ts`)*:
 Pi tool for saving skills. Validates URI prefix `viking://skills/`, delegates to `WriteService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 4 unit tests.
 
+**ResourceStore** *(port — `domain/ports/resource-store.ts`)*:
+Port interface for importing external resources into OpenViking. Single method `importUrl(url, options?, signal?)` → `Promise<ResourceImportResult>`. Options: `targetUri` (custom `viking://` path), `reason` (import motivation), `wait` (block until server processing completes). Return type `ResourceImportResult` carries `status`, `rootUri`, `sourcePath`, optional `errors[]`.
+
+**ResourceStoreAdapter** *(driven adapter — `adapters/driven/openviking/resource-store.ts`)*:
+Implements `ResourceStore` port. `importUrl()` calls `POST /api/v1/resources` with `{ path, to?, reason?, wait? }`. Response parsed via `toResourceImportResult()` in `mappers/resource-mapper.ts`. 11 unit tests.
+
+**ResourceService** *(implemented — `domain/services/resource-service.ts`)*:
+Thin domain service wrapping `ResourceStore` port. Single method `importUrl(url, options?, signal?)` delegates to store. 4 tests. Registered as singleton in DI.
+
+**ov_import** *(implemented — `adapters/driver/pi-tools/ov-import.ts`)*:
+Pi tool for importing external URLs as OV resources. TypeBox schema: `{ url: string, targetUri?: string, reason?: string, wait?: boolean }`. Handler calls `ResourceService.importUrl()` via pipeline. Returns JSON with `status`, `rootUri`, `sourcePath`. OV server-side parses Markdown, PDF, HTML, Word, images, and more. 6 unit tests.
+_Avoid_: add_resource, import tool
+
 **Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
 
 ### GraphExpander (F8.2)

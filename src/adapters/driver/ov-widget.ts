@@ -5,7 +5,6 @@ export class OVWidget {
     conn: "disconnected",
     recall: "off",
     session: "-",
-    scope: "(global)",
   };
 
   private ui: ExtensionUIContext | null = null;
@@ -27,12 +26,11 @@ export class OVWidget {
   }
 
   render(): string[] {
-    const { conn, recall, session, scope } = this.data;
-    const connIcon = conn === "connected" ? "🟢" : "🔴";
-    const recallIcon = recall === "on" ? "🔵" : "⚪";
+    const { conn, recall, session } = this.data;
+    const connIcon = conn === "connected" ? "⚡" : "💤";
+    const recallIcon = recall === "on" ? "🧠" : "💤";
     return [
-      `${connIcon} OV ${conn}  ${recallIcon} recall:${recall}  scope:${scope}`,
-      `💬 ${session}`,
+      `${connIcon} OV | ${recallIcon} recall | 💬 ${session}`,
     ];
   }
 }

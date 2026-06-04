@@ -85,7 +85,7 @@ Config cascade: `Defaults → Env vars (OV_*) → .pi/settings.json → Active P
       "commitTimeout": 120000
     },
     "recall": {
-      "topN": 5,
+      "topN": 8,
       "scoreThreshold": 0.5,
       "maxTokens": 4000,
       "expandGraph": true,
@@ -104,7 +104,7 @@ Config cascade: `Defaults → Env vars (OV_*) → .pi/settings.json → Active P
 | Env | Config path | Default | Description |
 |-----|-------------|---------|-------------|
 | `OV_API_KEY` | `ov.apiKey` | `""` | API key |
-| `OV_TOP_N` | `recall.topN` | `5` | Max recall items |
+| `OV_TOP_N` | `recall.topN` | `8` | Max recall items |
 | `OV_SCORE_THRESHOLD` | `recall.scoreThreshold` | `0.5` | Min relevance score |
 | `OV_TARGET_URI` | `recall.targetUri` | — | Scope recall to a URI subtree |
 | `OV_EXPAND_GRAPH` | `recall.expandGraph` | `true` | Enable GraphExpander |

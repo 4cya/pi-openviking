@@ -13,11 +13,13 @@ import { createOvStatTool } from "./ov-stat";
 import { createOvDeleteTool } from "./ov-delete";
 import { createOvResourceTool } from "./ov-resource";
 import { createOvSkillTool } from "./ov-skill";
+import { createOvImportTool } from "./ov-import";
 import type { SearchService } from "../../../domain/services/search-service";
 import type { WriteService } from "../../../domain/services/write-service";
 import type { ReadService } from "../../../domain/services/read-service";
 import type { RecallService } from "../../../domain/recall/recall-service";
 import type { FsService } from "../../../domain/services/fs-service";
+import type { ResourceService } from "../../../domain/services/resource-service";
 import type { Logger } from "../../../domain/ports/logger";
 
 export interface ToolServices {
@@ -26,6 +28,7 @@ export interface ToolServices {
   readService: ReadService;
   recallService: RecallService;
   fsService: FsService;
+  resourceService: ResourceService;
 }
 
 export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: Logger): void {
@@ -76,4 +79,8 @@ export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: L
   const skillPipeline = new Pipeline();
   skillPipeline.use(loggingMiddleware("skill", logger));
   pi.registerTool(createOvSkillTool(svcs.writeService, skillPipeline as any));
+
+  const importPipeline = new Pipeline();
+  importPipeline.use(loggingMiddleware("import", logger));
+  pi.registerTool(createOvImportTool(svcs.resourceService, importPipeline as any));
 }

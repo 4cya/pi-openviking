@@ -257,6 +257,20 @@ describe("init", () => {
     const s2 = container.resolve("readService");
     expect(s1).toBe(s2);
   });
+
+  it("container resolves resourceService with importUrl method", async () => {
+    const { container } = await init(tmpDir);
+    const svc = container.resolve("resourceService");
+    expect(svc).toBeDefined();
+    expect(typeof svc.importUrl).toBe("function");
+  });
+
+  it("resourceService is singleton", async () => {
+    const { container } = await init(tmpDir);
+    const s1 = container.resolve("resourceService");
+    const s2 = container.resolve("resourceService");
+    expect(s1).toBe(s2);
+  });
 });
 
 describe("shutdown", () => {

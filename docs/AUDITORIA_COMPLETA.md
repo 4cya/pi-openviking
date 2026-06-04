@@ -404,7 +404,7 @@ Health check só roda no startup. Se OV cai durante sessão, plugin só descobre
 9. Adicionar tool `memory_store` para persistência explícita
 10. Adicionar `systemStore` endpoint status/wait/consistency
 11. Health check periódico (30s interval)
-12. Ajustar defaults recall: `topN: 8`, `scoreThreshold: 0.3`
+12. Ajustar defaults recall: `topN: 8` (✅ feito 2026-06-04), `scoreThreshold: 0.3` (❌ mantido 0.5 por decisão da grill)
 
 ---
 
@@ -459,9 +459,10 @@ Sessão de grill com skill `grill-with-docs`. Decisões tomadas após entrevista
 | 6 | `memory_store` tool | Não implementar. Session commit + `ov_write` cobrem. | Documentado na auditoria |
 | 7 | `ov_archive_expand` / `_search` | Não implementar. Pi não reassembla histórico do OV. | ADR-016 |
 | 8 | Health check periódico | Como está — sem polling. Circuit breaker resolve. | — |
-| 9 | Recall defaults | Só `topN`: 5 → 8. `scoreThreshold`: 0.5 mantém. | — |
+| 9 | Recall defaults | Só `topN`: 5 → 8. `scoreThreshold`: 0.5 mantém. | ✅ `topN` alterado para 8 em `schema.ts` (2026-06-04) |
+| 10 | URL import (`ov_import`) | Implementar `ResourceStore` port + adapter + tool. OV server-side parseia URL. | ✅ `ov_import` tool em `ov-import.ts`. 23 testes. (2026-06-04) |
 
-### Sprint 1 (implementar agora)
+### Sprint 1 (implementar agora) ✅ Concluído
 
 1. **Fix `agentMessageToParts`** — extrair ToolPart de assistant.toolCall[] e toolResult messages
 2. **Adicionar `agentId` ao `OVAdapterConfigSchema`** + `X-OpenViking-Agent` no Transport
@@ -474,7 +475,7 @@ Sessão de grill com skill `grill-with-docs`. Decisões tomadas após entrevista
 - Archive endpoints (ADR-016)
 - Extract-only endpoint (ADR-016)
 - `memory_store` tool
-- `add_resource` tool
+- ~~`add_resource` tool~~ ✅ Implementado como `ov_import` (2026-06-04)
 - `ov_archive_expand` / `ov_archive_search`
 - Health check polling
 - `scoreThreshold` ajuste
