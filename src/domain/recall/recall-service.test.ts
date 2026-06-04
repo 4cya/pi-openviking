@@ -20,6 +20,7 @@ function makeConfig(overrides?: Partial<RecallConfig>): RecallConfig {
     expandGraphMinSeedScore: 0.4,
     searchMode: "find",
     autoRecall: true,
+    recallSearchTimeout: 5000,
     ...overrides,
   };
 }
@@ -78,6 +79,7 @@ describe("RecallService", () => {
       tokens: 0,
       formatted: "",
       total: 0,
+      timedOut: false,
     });
     expect(kb.find).not.toHaveBeenCalled();
     expect(kb.search).not.toHaveBeenCalled();
@@ -102,7 +104,8 @@ describe("RecallService", () => {
     expect(arg.query).toBe("test query");
     expect(arg.limit).toBe(3);
     expect(arg.targetUri.value).toBe("viking://proj");
-    expect(signal).toBeUndefined();
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal!.aborted).toBe(false);
     expect(kb.search).not.toHaveBeenCalled();
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
@@ -170,6 +173,38 @@ describe("RecallService", () => {
     expect(kb.search).not.toHaveBeenCalled();
   });
 
+  it("returns timedOut=true and aborts signal when KB does not respond in time", async () => {
+    const config = makeConfig({ recallSearchTimeout: 100 });
+    const signals: AbortSignal[] = [];
+    const kb = makeKB();
+    (kb.find as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_query: unknown, signal?: AbortSignal) => {
+        signals.push(signal!);
+        await new Promise<void>((_resolve, reject) => {
+          if (signal?.aborted) {
+            reject(new ConnectionError("aborted before start"));
+            return;
+          }
+          const onAbort = () => reject(new ConnectionError("aborted"));
+          signal?.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    );
+    const curator = makeCurator();
+    const logger = makeLogger();
+
+    const service = new RecallService(kb, curator, config, logger, true);
+    const result = await service.recall("timeout test");
+
+    expect(result.items).toHaveLength(0);
+    expect(result.timedOut).toBe(true);
+    // Verify signal was passed and actually aborted
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(signals[0].aborted).toBe(true);
+    expect(logger.warns).toContain("OV search timed out after 100ms, skipping recall");
+  });
+
   it("returns empty result and logs warn on ConnectionError", async () => {
     const config = makeConfig();
     const kb = makeKB();
@@ -180,7 +215,7 @@ describe("RecallService", () => {
     const service = new RecallService(kb, curator, config, logger, true);
     const result = await service.recall("any prompt");
 
-    expect(result).toEqual({ items: [], tokens: 0, formatted: "", total: 0 });
+    expect(result).toEqual({ items: [], tokens: 0, formatted: "", total: 0, timedOut: false });
     expect(logger.warns).toContain("OV unavailable, skipping recall");
   });
 

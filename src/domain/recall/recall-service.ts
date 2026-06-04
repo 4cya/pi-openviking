@@ -6,12 +6,15 @@ import type { Logger } from "../ports/logger";
 import { ConnectionError } from "../errors/connection-error";
 import { Uri } from "../common/uri";
 import type { SessionId } from "../common/session-id";
+import { setTimeout, clearTimeout } from "node:timers";
 
 export interface RecallResult {
   items: CuratedItem[];
   tokens: number;
   formatted: string;
   total: number;
+  /** true when OV search timed out — recall will retry on next turn */
+  timedOut?: boolean;
 }
 
 export class RecallService {
@@ -34,14 +37,21 @@ export class RecallService {
 
   async recall(prompt: string, sessionId?: SessionId): Promise<RecallResult> {
     if (!this.enabled) {
-      return { items: [], tokens: 0, formatted: "", total: 0 };
+      return { items: [], tokens: 0, formatted: "", total: 0, timedOut: false };
     }
 
+    const timeoutMs = this.config.recallSearchTimeout ?? 5000;
+    const targetUri = this.config.targetUri ? new Uri(this.config.targetUri) : undefined;
+
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort(new DOMException("Timeout", "TimeoutError"));
+    }, timeoutMs);
+
     try {
-      const targetUri = this.config.targetUri ? new Uri(this.config.targetUri) : undefined;
       const result = this.config.searchMode === "find"
-        ? await this.kb.find({ query: prompt, limit: this.config.topN, targetUri })
-        : await this.kb.search({ query: prompt, limit: this.config.topN, sessionId, targetUri });
+        ? await this.kb.find({ query: prompt, limit: this.config.topN, targetUri }, abortController.signal)
+        : await this.kb.search({ query: prompt, limit: this.config.topN, sessionId, targetUri }, abortController.signal);
 
       const curated: CuratedResult = await this.curator.curate(result);
       return {
@@ -52,10 +62,17 @@ export class RecallService {
       };
     } catch (err) {
       if (err instanceof ConnectionError) {
-        this.logger.warn(`OV unavailable, skipping recall`);
-        return { items: [], tokens: 0, formatted: "", total: 0 };
+        const isTimeout = abortController.signal.aborted;
+        this.logger.warn(
+          isTimeout
+            ? `OV search timed out after ${timeoutMs}ms, skipping recall`
+            : `OV unavailable, skipping recall`,
+        );
+        return { items: [], tokens: 0, formatted: '', total: 0, timedOut: isTimeout };
       }
       throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

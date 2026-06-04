@@ -152,7 +152,7 @@ describe("init", () => {
     const svc = container.resolve<RecallService>("recallService");
     // enabled=true but OV not running → ConnectionError caught → empty result
     const result = await svc.recall("test query");
-    expect(result).toEqual({ items: [], tokens: 0, formatted: "", total: 0 });
+    expect(result).toEqual({ items: [], tokens: 0, formatted: "", total: 0, timedOut: false });
   });
 
   it("sessionService is wired to sessionStore", async () => {

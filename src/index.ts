@@ -134,6 +134,9 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
 
         // Recall
         const result = await recallService.recall(event.prompt ?? "", sessionId);
+        if (result.timedOut) {
+          return { message: { customType: "memory_context", content: "⚠️ OpenViking search timed out — auto-recall skipped. The knowledge base may be busy indexing. Will retry on next turn. Try `ov_search` to query directly.", display: false } };
+        }
         if (!result.formatted) {
           return { message: { customType: "memory_context", content: "No relevant memories found by auto-recall. Try `ov_search` to explore the knowledge base or `ov_recall` with a different query.", display: false } };
         }
