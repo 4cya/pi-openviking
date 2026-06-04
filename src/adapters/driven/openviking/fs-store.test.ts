@@ -147,7 +147,7 @@ describe("FsStoreAdapter.write", () => {
     expect(body.uri).toBe("viking://docs/new.md");
     expect(body.content).toBe("# New content");
     expect(body.mode).toBe("replace");
-    expect(body.wait).toBe(true);
+    expect(body.wait).toBe(false);
 
     expect(result.uri).toEqual(uri);
     expect(result.success).toBe(true);
@@ -376,5 +376,50 @@ describe("FsStoreAdapter.delete", () => {
     const fs = new FsStoreAdapter(transport);
     await expect(fs.delete(uri, true)).rejects.toThrow();
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FsStoreAdapter.reindex", () => {
+  const uri = new Uri("viking://resources/test.md");
+
+  it("calls POST /api/v1/content/reindex with vectors_only by default", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.reindex(uri);
+
+    expect(transport.request).toHaveBeenCalledTimes(1);
+    const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("FsStore.reindex");
+    expect(path).toBe("/api/v1/content/reindex");
+    expect(opts.method).toBe("POST");
+    const body = JSON.parse(opts.body as string);
+    expect(body.uri).toBe("viking://resources/test.md");
+    expect(body.mode).toBe("vectors_only");
+  });
+
+  it("passes mode=full when specified", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.reindex(uri, "full");
+
+    const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(opts.body as string);
+    expect(body.mode).toBe("full");
+  });
+
+  it("passes AbortSignal", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const ac = new AbortController();
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.reindex(uri, "vectors_only", ac.signal);
+
+    const [, , opts, signal] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(signal).toBe(ac.signal);
   });
 });

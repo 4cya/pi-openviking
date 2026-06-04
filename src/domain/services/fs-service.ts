@@ -1,4 +1,4 @@
-import type { FsStore, FsEntry } from "../ports/fs-store";
+import type { FsStore, FsEntry, ReindexMode } from "../ports/fs-store";
 import { Uri } from "../common/uri";
 
 export class FsService {
@@ -18,5 +18,9 @@ export class FsService {
 
   async delete(uri: string, recursive?: boolean, signal?: AbortSignal): Promise<void> {
     return this.fsStore.delete(new Uri(uri), recursive, signal);
+  }
+
+  async reindex(uri: string, mode?: ReindexMode, signal?: AbortSignal): Promise<void> {
+    return this.fsStore.reindex(new Uri(uri), mode, signal);
   }
 }

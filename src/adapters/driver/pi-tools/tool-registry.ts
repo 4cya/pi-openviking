@@ -11,6 +11,8 @@ import { createOvListTool } from "./ov-list";
 import { createOvTreeTool } from "./ov-tree";
 import { createOvStatTool } from "./ov-stat";
 import { createOvDeleteTool } from "./ov-delete";
+import { createOvResourceTool } from "./ov-resource";
+import { createOvSkillTool } from "./ov-skill";
 import type { SearchService } from "../../../domain/services/search-service";
 import type { WriteService } from "../../../domain/services/write-service";
 import type { ReadService } from "../../../domain/services/read-service";
@@ -66,4 +68,12 @@ export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: L
   const deletePipeline = new Pipeline();
   deletePipeline.use(loggingMiddleware("delete", logger));
   pi.registerTool(createOvDeleteTool(svcs.fsService, deletePipeline as any));
+
+  const resourcePipeline = new Pipeline();
+  resourcePipeline.use(loggingMiddleware("resource", logger));
+  pi.registerTool(createOvResourceTool(svcs.writeService, resourcePipeline as any));
+
+  const skillPipeline = new Pipeline();
+  skillPipeline.use(loggingMiddleware("skill", logger));
+  pi.registerTool(createOvSkillTool(svcs.writeService, skillPipeline as any));
 }

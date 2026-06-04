@@ -13,6 +13,7 @@ function makeFsStore(overrides?: Partial<FsStore>): FsStore {
     mkdir: vi.fn().mockResolvedValue(undefined),
     mv: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
+    reindex: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -106,6 +107,48 @@ describe("FsService", () => {
       const result = await svc.stat("viking://docs/a.md");
 
       expect(result).toBe(expected);
+    });
+  });
+
+  describe("reindex", () => {
+    it("delegates to fsStore.reindex with parsed uri", async () => {
+      const store = makeFsStore();
+      const svc = new FsService(store);
+
+      await svc.reindex("viking://resources/test.md");
+
+      expect(store.reindex).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "viking://resources/test.md" }),
+        undefined,
+        undefined,
+      );
+    });
+
+    it("passes reindex mode", async () => {
+      const store = makeFsStore();
+      const svc = new FsService(store);
+
+      await svc.reindex("viking://resources/test.md", "full");
+
+      expect(store.reindex).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "viking://resources/test.md" }),
+        "full",
+        undefined,
+      );
+    });
+
+    it("passes AbortSignal", async () => {
+      const store = makeFsStore();
+      const svc = new FsService(store);
+      const ac = new AbortController();
+
+      await svc.reindex("viking://resources/test.md", "vectors_only", ac.signal);
+
+      expect(store.reindex).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "viking://resources/test.md" }),
+        "vectors_only",
+        ac.signal,
+      );
     });
   });
 

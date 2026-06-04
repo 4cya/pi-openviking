@@ -42,7 +42,7 @@ flowchart TB
     subgraph Ports["🚪 Portas (Interfaces)"]
         direction TB
         PORT_KB["KnowledgeBase\nfind / search / glob / grep"]
-        PORT_FS["FsStore\nread / write / list / tree / stat\nmkdir / mv / delete"]
+        PORT_FS["FsStore\nread / write / list / tree / stat\nmkdir / mv / delete / reindex"]
         PORT_GRAPH["GraphStore\nlink / unlink / graph"]
         PORT_SESSION["SessionStore\ncreate / send / commit / ..."]
         PORT_LOGGER["Logger\ndebug / info / warn / error"]
@@ -252,8 +252,11 @@ interface FsStore {
   mkdir(uri: Uri, signal?: AbortSignal): Promise<void>;
   mv(from: Uri, to: Uri, signal?: AbortSignal): Promise<void>;
   delete(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<void>;
+  reindex(uri: Uri, mode?: "vectors_only" | "full", signal?: AbortSignal): Promise<void>;
 }
 ```
+
+> **ReindexMode**: `"vectors_only" | "full"`. Default `"vectors_only"` rebuilds vector embeddings; `"full"` rebuilds both scalar and vector indexes. Maps to OV `POST /api/v1/content/reindex {uri, mode}`.
 
 > `read()` aceita `level` que mapeia para as camadas L0/L1/L2 do OV:
 > - `"abstract"` → L0 (~100 tokens, vetor de busca). OV: `GET /api/v1/content/abstract?uri=`
@@ -496,7 +499,7 @@ src/
 ├── application/               # (não utilizado — SearchService em domain/services/, Pipeline em domain/pipeline/)
 │
 ├── adapters/
-│   ├── driver/pi-tools/       # ✅ F5.1–F5.6: 5 tools registradas
+│   ├── driver/pi-tools/       # ✅ F5.1–F5.6: 12 tools registradas
 │   │   ├── ov-search.ts       # ✅ ov_search tool + TypeBox schema
 │   │   ├── ov-search.test.ts  # ✅ 3 unit tests
 │   │   ├── ov-glob.ts         # ✅ ov_glob tool
@@ -507,19 +510,25 @@ src/
 │   │   ├── ov-write.test.ts   # ✅ 6 unit tests
 │   │   ├── ov-read.ts         # ✅ ov_read tool (level: abstract|overview|read)
 │   │   ├── ov-read.test.ts    # ✅ 4 unit tests
+│   │   ├── ov-resource.ts     # ✅ ov_resource tool (validates viking://resources/)
+│   │   ├── ov-resource.test.ts # ✅ 6 unit tests
+│   │   ├── ov-skill.ts        # ✅ ov_skill tool (validates viking://skills/)
+│   │   ├── ov-skill.test.ts   # ✅ 4 unit tests
 │   │   └── integration.test.ts # ✅ 8 integration tests (mock HTTP server)
-│   ├── driver/pi-commands/    # ✅ F5.4: 6 slash commands
-│   ├── driver/pi-session-sync/ # ✅ F6: MessageMapper
-│   │   ├── message-mapper.ts   # ✅ agentMessageToParts() — 9 tests
-│   │   └── message-mapper.test.ts # ✅ 9 tests (user/assistant/tool/empty/null/ImageContent)
-│   ├── driver/pi-commands/    # ✅ F5.4: 6 slash commands
+│   ├── driver/pi-commands/    # ✅ F5.4: 9 slash commands
 │   │   ├── ov-recall-command.ts  # ✅ /ov-recall on|off
 │   │   ├── ov-status-command.ts  # ✅ /ov-status
 │   │   ├── ov-tree-command.ts    # ✅ /ov-tree [uri]
 │   │   ├── ov-commit-command.ts  # ✅ /ov-commit [--wait]
 │   │   ├── ov-search-command.ts  # ✅ /ov-search <query>
 │   │   ├── ov-delete-command.ts  # ✅ /ov-delete <uri>
+│   │   ├── ov-profile-command.ts # ✅ /ov-profile {apply,list,show,detect}
+│   │   ├── ov-start-command.ts   # ✅ /ov-start
+│   │   ├── ov-reindex-command.ts # ✅ /ov-reindex <uri> [--mode]
 │   │   └── command-registry.ts   # ✅ registerAllCommands() barrel
+│   ├── driver/pi-session-sync/ # ✅ F6: MessageMapper
+│   │   ├── message-mapper.ts   # ✅ agentMessageToParts() — 9 tests
+│   │   └── message-mapper.test.ts # ✅ 9 tests (user/assistant/tool/empty/null/ImageContent)
 │   ├── driver/pi-tools/         # ✅ F5.1–F5.5: 6 tools + barrel
 │   │   ├── tool-registry.ts     # ✅ registerAllTools() barrel
 │   └── driven/
@@ -529,7 +538,7 @@ src/
 │       │   ├── health.ts          # ✅ HealthCheck adapter: /ready probe (bypasses CB)
 │       │   ├── health.test.ts     # ✅ 4 tests (200, 503, latency, connection error)
 │       │   ├── transport.ts       # ✅ HTTP client c/ auth, retry, timeout, abort, CB decorator (3 integration tests)
-│       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read/write/list/tree/stat/mkdir/mv/delete)
+│       │   ├── fs-store.ts        # ✅ FsStoreAdapter (read/write/list/tree/stat/mkdir/mv/delete/reindex)
 │       │   ├── knowledge-base.ts  # ✅ KnowledgeBaseAdapter (find/search/glob/grep)
 │       │   ├── session-store.ts   # ✅ SessionStoreAdapter (create/send/commit/tasks/lifecycle)
 │       │   ├── graph-store.ts     # ✅ GraphStoreAdapter (link/unlink/graph)

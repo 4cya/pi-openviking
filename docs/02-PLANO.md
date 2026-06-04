@@ -18,7 +18,7 @@
 | **F6** Auto-Recall + Session | ✅ Completo | |
 | **F7a** Profiles Essential | ✅ Completo | |
 | **F7b** Profiles Expansion | ✅ Completo | |
-| **F8** Features | ⚡ Parcial | GraphExpander ✅; glob-delete, E2E docs pendentes |
+| **F8** Features | ⚡ Parcial | GraphExpander ✅; ov_resource + ov_skill tools ✅; ov-reindex command ✅; FsStore.reindex() ✅; glob-delete, E2E docs pendentes |
 
 ### Timeline (como foi executado)
 
@@ -113,8 +113,7 @@ Profiles registrados. Tudo testado sem OV.
 
 **Decisões de design:**
 - `ContentStore` foi fundida em `FsStore` — OV trata content e fs como o mesmo sistema.
-  FsStore tem `write()`, `delete()`, `read()` + navegação. **Sem `reindex()` na port** — write() sempre refresca semântica/vectors automaticamente.
-  OV tem `POST /api/v1/content/reindex` (admin, mode: vectors_only | full) para manutenção, mas não faz parte da FsStore — uso normal não precisa chamar reindex.
+  FsStore tem `write()`, `delete()`, `read()` + navegação. `reindex()` adicionada posteriormente na port (POST /api/v1/content/reindex {uri, mode}) para rebuild manual de vectors após delete.  OV tem `POST /api/v1/content/reindex` (admin, mode: vectors_only | full) — write() sempre refresca semântica/vectors automaticamente, mas delete não limpa vectors órfãos, então reindex manual é útil pós-delete.
 - `Uri` e `SessionId` são **classes** (value objects com validação), não type aliases.
 - `FindQuery` e `SearchRequest` são interfaces, não classes — objetos de dados simples.
 - `Part` é união discriminada de interfaces `TextPart | ToolPart | ContextPart`.
@@ -344,6 +343,9 @@ Unit tests com port mocks. Sem integration tests upfront. F5 adiciona integratio
 | F8.2 | ✅ `domain/recall/graph-expander.ts` + `RecallConfig` expansion | ✅ **Implementado (adiantado, default true).** `GraphExpander` percorre `graphStore.graph(uri)` de top-3 seeds, lê abstract de cada relation (`fsStore.read(uri, "abstract")` paralelo), merge nos itens curados. Score decaído 0.8× seed. Config: expandGraph (true), expandGraphDepth=1, expandGraphMaxRatio=0.2, expandGraphMinSeedScore=0.4. | F4 (RecallCurator) |
 | F8.4 | `adapters/driver/pi-commands/ov-delete-command.ts` (expandir) | `/ov-delete` aceita glob pattern. `KnowledgeBase.glob()` → confirma → `FsStore.delete()` cada match. | F5.4 (command pattern), FS |
 | F8.9 | E2E tests + docs | Testes end-to-end contra OV real + docs de usuário. | F8.2, F8.4 |
+| F8.10 | `adapters/driver/pi-tools/ov-resource.ts` | ✅ `ov_resource` tool — valida prefixo `viking://resources/`, delega `WriteService.save()`. 6 tests. | F5 (WriteService) |
+| F8.11 | `adapters/driver/pi-tools/ov-skill.ts` | ✅ `ov_skill` tool — valida prefixo `viking://skills/`, delega `WriteService.save()`. 4 tests. | F5 (WriteService) |
+| F8.12 | `adapters/driver/pi-commands/ov-reindex-command.ts` + `FsStore.reindex()` | ✅ `ov-reindex <uri> [--mode]` command + `POST /api/v1/content/reindex` na FsStore port. 12 tests. | F3 (FsStoreAdapter)
 
 **Eliminados:**
 - F8.1 Auto-actions — OV padrão: session commit extrai memórias. `ov_write` cobre save explícito. ADR-015.

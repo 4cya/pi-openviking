@@ -24,12 +24,19 @@ Pi is stateless between sessions. pi-openviking gives it persistent memory:
 | `ov_read` | Read content at a `viking://` URI. Levels: L0 abstract, L1 overview, L2 full. |
 | `ov_write` | Save, mkdir, or mv resources in the `viking://` filesystem. |
 | `ov_recall` | Explicit recall — inject curated memories into the prompt on demand. |
+| `ov_list` | Flat directory listing of `viking://` URIs. |
+| `ov_tree` | Recursive tree listing of `viking://` URIs. |
+| `ov_stat` | Get metadata (type, size, modTime) for a `viking://` URI. |
+| `ov_delete` | Delete a resource at a `viking://` URI (no confirmation). |
+| `ov_resource` | Save a resource document (`viking://resources/...`). |
+| `ov_skill` | Save a skill definition (`viking://skills/...`). |
 
 ## Commands (user-facing)
 
 | Command | Action |
 |---------|--------|
 | `/ov-start` | Create a new OV session. |
+| `/ov-reindex <uri> [--mode vectors_only\|full]` | Rebuild vector embeddings for a URI (e.g. after delete). |
 | `/ov-commit [--wait]` | Commit session to OV (triggers memory extraction). `--wait` polls until done. |
 | `/ov-search <query>` | Semantic search, human-readable. |
 | `/ov-tree [uri]` | Browse `viking://` filesystem as a tree. |

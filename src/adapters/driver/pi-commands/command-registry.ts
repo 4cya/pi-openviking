@@ -14,6 +14,7 @@ import { createOvSearchCommand } from "./ov-search-command";
 import { createOvDeleteCommand } from "./ov-delete-command";
 import { createOvProfileCommand } from "./ov-profile-command";
 import { createOvStartCommand } from "./ov-start-command";
+import { createOvReindexCommand } from "./ov-reindex-command";
 
 export interface CommandServices {
   recallService: RecallService;
@@ -41,4 +42,5 @@ export function registerAllCommands(pi: ExtensionAPI, svcs: CommandServices): vo
     svcs.autoDetectRules,
   ));
   pi.registerCommand("ov-start", createOvStartCommand(svcs.sessionService, svcs.widgetUpdater));
+  pi.registerCommand("ov-reindex", createOvReindexCommand(svcs.fsStore));
 }

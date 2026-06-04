@@ -74,7 +74,7 @@ A pure function `toContent(raw, uri, level?)` that converts OV content endpoint 
 _Avoid_: content parser, response mapper
 
 **FsStoreAdapter**:
-A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` maps level to endpoint segment (`/api/v1/content/{read|abstract|overview}`) with `uri`, `offset`, `limit` query params. `write()` calls `POST /api/v1/content/write` with `wait: true`. Navigation methods (`list`, `tree`, `stat`) call `GET /api/v1/fs/{ls|tree|stat}`. Management methods (`mkdir`, `mv`) use POST with URI payload. `delete()` calls `DELETE /api/v1/fs?uri=` and auto-retries with `recursive=true` on recursive-required errors.
+A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` maps level to endpoint segment (`/api/v1/content/{read|abstract|overview}`) with `uri`, `offset`, `limit` query params. `write()` calls `POST /api/v1/content/write` with `wait: false` (async — OV processes embedding in background). Navigation methods (`list`, `tree`, `stat`) call `GET /api/v1/fs/{ls|tree|stat}`. Management methods (`mkdir`, `mv`) use POST with URI payload. `delete()` calls `DELETE /api/v1/fs?uri=` and auto-retries with `recursive=true` on recursive-required errors. `reindex()` calls `POST /api/v1/content/reindex {uri, mode}` with `mode` defaulting to `"vectors_only"`.
 
 **FsMapper**:
 Pure functions in `adapters/driven/openviking/mappers/fs-mapper.ts`: `toFsEntry(raw)` validates type (`file|directory`) and returns domain `FsEntry`; `toFsEntries(raw)` maps arrays; `toWriteResult(raw, expectedUri)` infers success from `success` flag or `status` field.
@@ -199,6 +199,9 @@ Lives in `domain/common/content-level.ts`.
 A string literal union: `"replace" | "append" | "create"`. Controls overwrite behavior for `FsStore.write()`.
 Lives in `domain/common/write-mode.ts`.
 
+**ReindexMode**:
+A string literal union: `"vectors_only" | "full"`. Controls reindex scope for `FsStore.reindex()`. Default `"vectors_only"` rebuilds vector embeddings only; `"full"` rebuilds both scalar and vector indexes. Lives in `domain/ports/fs-store.ts` as an exported type alias.
+
 
 
 **Curate Pipeline**:
@@ -263,8 +266,8 @@ _Avoid_: write handler, persistence service
 Thin service wrapping the `FsStore` port for content reads. Single method: `read(uri, level?, offset?, limit?, signal?)` → `fsStore.read()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. 3 tests. Born in F5.2 (issue #69).
 _Avoid_: read handler, content reader
 
-**FsService** *(planned — `domain/services/fs-service.ts`)*:
-Thin service wrapping the `FsStore` port for filesystem navigation and management. 4 methods: `list(uri, recursive?, signal?)` → `fsStore.list()`; `tree(uri, signal?)` → `fsStore.tree()`; `stat(uri, signal?)` → `fsStore.stat()`; `delete(uri, recursive?, signal?)` → `fsStore.delete()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. Following the same thin-service pattern as `ReadService`/`WriteService`.
+**FsService** *(implemented — `domain/services/fs-service.ts`)*:
+Thin service wrapping the `FsStore` port for filesystem navigation and management. 5 methods: `list(uri, recursive?, signal?)` → `fsStore.list()`; `tree(uri, signal?)` → `fsStore.tree()`; `stat(uri, signal?)` → `fsStore.stat()`; `delete(uri, recursive?, signal?)` → `fsStore.delete()`; `reindex(uri, mode?, signal?)` → `fsStore.reindex()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. Following the same thin-service pattern as `ReadService`/`WriteService`. 12 tests.
 _Avoid_: fs handler, fs service
 
 **SearchService** *(implemented — `domain/services/search-service.ts`)*:
@@ -294,18 +297,24 @@ Pi tool for reading content at three depth levels. TypeBox schema: `{ uri: strin
 **ov_recall** *(implemented — `adapters/driver/pi-tools/ov-recall.ts`)*:
 Pi tool for explicit recall trigger. TypeBox schema: `{ prompt: string, limit?: number }`. Handler calls `pipeline.execute(() => recallService.recall(params.prompt), signal)`. Returns `RecallResult.formatted` text (items with URI + content). On empty result, returns informative message. Errors caught and reported. 4 unit tests + 1 integration test. Born in F5.3 (issue #70).
 
-**ov_list** *(planned — `adapters/driver/pi-tools/ov-list.ts`)*:
+**ov_list** *(implemented — `adapters/driver/pi-tools/ov-list.ts`)*:
 Pi tool for flat directory listing. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsService.list()` via pipeline. Returns JSON array of `FsEntry` (uri, type, size?, modTime?). No formatting — raw data for agent programmatic use.
 
-**ov_tree** *(planned — `adapters/driver/pi-tools/ov-tree.ts`)*:
+**ov_tree** *(implemented — `adapters/driver/pi-tools/ov-tree.ts`)*:
 Pi tool for recursive tree listing. TypeBox schema: `{ uri: string }`. Handler wraps `FsService.tree()` via pipeline. Returns JSON array of `FsEntry` (uri, type). Raw data, no indentation — agent parses paths to infer hierarchy.
 
-**ov_stat** *(planned — `adapters/driver/pi-tools/ov-stat.ts`)*:
+**ov_stat** *(implemented — `adapters/driver/pi-tools/ov-stat.ts`)*:
 Pi tool for URI metadata. TypeBox schema: `{ uri: string }`. Handler wraps `FsService.stat()` via pipeline. Returns single `FsEntry` as JSON object (uri, type, size?, modTime?).
 
-**ov_delete** *(planned — `adapters/driver/pi-tools/ov-delete.ts`)*:
+**ov_delete** *(implemented — `adapters/driver/pi-tools/ov-delete.ts`)*:
 Pi tool for resource deletion. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsService.delete()` via pipeline. No confirmation — agent owns its tool calls. Returns success/error message. No glob support — agent composes with `ov_glob` for batch delete. Contrasts with `/ov-delete` command which shows `ctx.ui.confirm()`.
 _Avoid_: ov_delete with glob, delete with confirmation
+
+**ov_resource** *(implemented — `adapters/driver/pi-tools/ov-resource.ts`)*:
+Pi tool for saving resources. Validates URI prefix `viking://resources/`, delegates to `WriteService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 6 unit tests.
+
+**ov_skill** *(implemented — `adapters/driver/pi-tools/ov-skill.ts`)*:
+Pi tool for saving skills. Validates URI prefix `viking://skills/`, delegates to `WriteService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 4 unit tests.
 
 **Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
 
@@ -327,7 +336,7 @@ Injected into `RecallCurator`. Expands recall results by traversing OV relations
 
 ### Commands (F5.4 — slash commands)
 
-**Command factory pattern**: Each command is a `create*Command(svc, ...)` function returning an options object compatible with `pi.registerCommand()`. The barrel export `command-registry.ts` provides `registerAllCommands(pi, services)` that registers all 6 commands in one call. Commands bypass the middleware pipeline and call services directly. All commands live in `adapters/driver/pi-commands/`. 29 unit tests total.
+**Command factory pattern**: Each command is a `create*Command(svc, ...)` function returning an options object compatible with `pi.registerCommand()`. The barrel export `command-registry.ts` provides `registerAllCommands(pi, services)` that registers all 9 commands in one call. Commands bypass the middleware pipeline and call services directly. All commands live in `adapters/driver/pi-commands/`. 34 unit tests total.
 
 **`/ov-recall on|off`** *(implemented — `adapters/driver/pi-commands/ov-recall-command.ts`)*:
 Toggles `RecallService.setEnabled()`. Validates arg is `on` or `off`, shows usage on invalid input. Provides argument completions (`on`, `off`). Notifies user of new state. 6 tests.
@@ -346,6 +355,9 @@ Calls `searchService.search({ query, mode: "fast" })`. Formats results as readab
 
 **`/ov-delete <uri>`** *(implemented — `adapters/driver/pi-commands/ov-delete-command.ts`)*:
 Shows `ctx.ui.confirm()` confirmation dialog before calling `fsStore.delete(parsedUri)`. Validates URI. Cancels gracefully on user rejection. Shows error on failure. 5 tests.
+
+**`/ov-reindex <uri> [--mode vectors_only|full]`** *(implemented — `adapters/driver/pi-commands/ov-reindex-command.ts`)*:
+Calls `fsStore.reindex(parsedUri, mode)`. Rebuilds vector embeddings for a URI (default `vectors_only`). Validates URI, shows error on failure. 5 tests.
 
 ### OVWidget (F5.5)
 
@@ -371,9 +383,9 @@ An `initialized` flag ensures `init()` runs once per process.
 - OV session created via `SessionService.createAndSet()`
 - If OV is unavailable, widget shows `🔴 disconnected`, operation continues gracefully
 
-**Tool barrel** (`adapters/driver/pi-tools/tool-registry.ts`): `registerAllTools(pi, services, logger)` creates typed Pipelines with LoggingMiddleware for each tool and registers all 6 in one call.
+**Tool barrel** (`adapters/driver/pi-tools/tool-registry.ts`): `registerAllTools(pi, services, logger)` creates typed Pipelines with LoggingMiddleware for each tool and registers all 12 in one call.
 
-**Remaining F5 tasks**: status bar. SearchService + Pipeline + 3 search tools = first vertical slice (F5.1, issue #68). WriteService + ReadService + ov_write + ov_read = second slice (F5.2, issue #69). ov_recall = third slice (F5.3, issue #70). 6 slash commands = fourth slice (F5.4, issue #71). Wiring + OVWidget = fifth slice (F5.5, issue #72).
+**F5 complete**: 12 tools (ov_search, ov_glob, ov_grep, ov_write, ov_read, ov_recall, ov_list, ov_tree, ov_stat, ov_delete, ov_resource, ov_skill) + 9 commands (ov-recall, ov-status, ov-tree, ov-commit, ov-search, ov-delete, ov-profile, ov-start, ov-reindex) + OVWidget. Status bar pending.
 
 ### F6 — Auto-Recall + Session Sync
 

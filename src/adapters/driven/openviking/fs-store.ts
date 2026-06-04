@@ -4,7 +4,7 @@ import { toWriteResult, toFsEntries, toFsEntry } from "./mappers/fs-mapper";
 import type { Uri } from "../../../domain/common/uri";
 import type { ContentLevel } from "../../../domain/common/content-level";
 import type { WriteMode } from "../../../domain/common/write-mode";
-import type { Content, FsStore, FsEntry, WriteResult } from "../../../domain/ports/fs-store";
+import type { Content, FsStore, FsEntry, WriteResult, ReindexMode } from "../../../domain/ports/fs-store";
 import { ValidationError } from "../../../domain/errors/validation-error";
 
 function levelPath(level?: ContentLevel): string {
@@ -56,7 +56,7 @@ export class FsStoreAdapter implements FsStore {
       uri: uri.value,
       content,
       mode,
-      wait: true,
+      wait: false,
     });
 
     const raw = await this.transport.request<Record<string, unknown>>(
@@ -115,6 +115,16 @@ export class FsStoreAdapter implements FsStore {
     await this.transport.request<unknown>(
       "FsStore.mv",
       "/api/v1/fs/mv",
+      { method: "POST", body },
+      signal,
+    );
+  }
+
+  async reindex(uri: Uri, mode: ReindexMode = "vectors_only", signal?: AbortSignal): Promise<void> {
+    const body = JSON.stringify({ uri: uri.value, mode });
+    await this.transport.request<unknown>(
+      "FsStore.reindex",
+      "/api/v1/content/reindex",
       { method: "POST", body },
       signal,
     );

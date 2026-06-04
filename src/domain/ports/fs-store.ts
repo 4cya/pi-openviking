@@ -8,6 +8,8 @@ export interface Content {
   level?: ContentLevel;
 }
 
+export type ReindexMode = "vectors_only" | "full";
+
 export interface WriteResult {
   uri: Uri;
   success: boolean;
@@ -29,4 +31,5 @@ export interface FsStore {
   mkdir(uri: Uri, signal?: AbortSignal): Promise<void>;
   mv(from: Uri, to: Uri, signal?: AbortSignal): Promise<void>;
   delete(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<void>;
+  reindex(uri: Uri, mode?: ReindexMode, signal?: AbortSignal): Promise<void>;
 }
