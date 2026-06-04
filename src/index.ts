@@ -109,12 +109,12 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       pi.on("before_agent_start", async (event) => {
         // Guard 1: recall toggle
         if (!recallService.isEnabled()) {
-          return { message: { customType: "memory_context", content: "recall OFF", display: false } };
+          return { message: { customType: "memory_context", content: "Auto-recall is OFF. Use `ov_recall` explicitly or toggle with `/ov-recall on`.\n---\nOpenViking knowledge base available via `ov_search`.", display: false } };
         }
 
         // Guard 2: circuit breaker OPEN
         if (adapter.circuitBreakerOpen) {
-          return { message: { customType: "memory_context", content: "CB OPEN", display: false } };
+          return { message: { customType: "memory_context", content: "OpenViking is temporarily unavailable (circuit breaker open). Will retry automatically. Knowledge base tools (`ov_search`, etc.) remain available once connection restores.", display: false } };
         }
 
         // Guard 3: no active session — auto-create as fallback
@@ -125,14 +125,14 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
             widget.update("session", sessionId.toString());
             logger?.info("before_agent_start: auto-created OV session", { sessionId: sessionId.toString() });
           } catch {
-            return { message: { customType: "memory_context", content: "no session context", display: false } };
+            return { message: { customType: "memory_context", content: "Failed to create OV session. Use `ov_search` to query the knowledge base directly without a session.", display: false } };
           }
         }
 
         // Recall
         const result = await recallService.recall(event.prompt ?? "", sessionId);
         if (!result.formatted) {
-          return { message: { customType: "memory_context", content: "no memories found", display: false } };
+          return { message: { customType: "memory_context", content: "No relevant memories found by auto-recall. Try `ov_search` to explore the knowledge base or `ov_recall` with a different query.", display: false } };
         }
 
         return { message: { customType: "memory_context", content: result.formatted, display: false } };

@@ -15,7 +15,7 @@ export function createOvRecallTool(
   return defineTool({
     name: "ov_recall",
     label: "Recall Memories",
-    description: "Explicitly trigger recall of curated memories relevant to the current context.",
+    description: "Explicitly trigger recall of curated memories from OpenViking. Use when auto-recall didn't surface enough context or you need focused retrieval on a specific topic.",
     promptSnippet: "ov_recall(prompt, limit?) — recall relevant memories",
     parameters: RecallSchema,
     async execute(_toolCallId, params, signal) {

@@ -23,7 +23,7 @@ export function createOvSearchTool(
   return defineTool({
     name: "ov_search",
     label: "Search Knowledge",
-    description: "Search the OpenViking knowledge base. Supports fast (semantic find) and deep (intent-aware search) modes.",
+    description: "Primary knowledge base for project memories, decisions, and patterns. ALWAYS check here first before using generic search tools. Supports fast (semantic find) and deep (intent-aware search) modes.",
     promptSnippet: "ov_search(query, mode?, limit?, targetUri?) — search knowledge base",
     parameters: SearchSchema,
     async execute(_toolCallId, params, signal) {

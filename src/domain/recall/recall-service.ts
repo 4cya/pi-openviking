@@ -60,6 +60,9 @@ export class RecallService {
   }
 
   private formatItems(items: CuratedItem[]): string {
-    return items.map(i => `[${i.source}] ${i.uri}\n${i.text}`).join("\n\n");
+    if (items.length === 0) return "";
+    const header = "📋 OpenViking found relevant memories. Use `ov_search` to explore deeper or `ov_recall` for targeted search on a specific topic.";
+    const body = items.map(i => `[${i.source}] ${i.uri}\n${i.text}`).join("\n\n");
+    return `${header}\n---\n${body}`;
   }
 }
