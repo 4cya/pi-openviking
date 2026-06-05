@@ -1,4 +1,4 @@
-import type { ProfileConfig, ProfileBehavior } from "../../../infrastructure/config/profile-schema";
+import type { ProfileConfig, ProfileBehavior } from "../../common/profile-config";
 
 /**
  * Stateful manager for behavioral profiles.

@@ -1,7 +1,7 @@
 import type { KnowledgeBase } from "../ports/knowledge-base";
 import type { RecallCurator } from "./recall-curator";
 import type { CuratedItem, CuratedResult } from "./curate";
-import type { RecallConfig } from "../../infrastructure/config/schema";
+import type { RecallConfig } from "../common/recall-config";
 import type { Logger } from "../ports/logger";
 import { ConnectionError } from "../errors/connection-error";
 import { Uri } from "../common/uri";

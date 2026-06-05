@@ -72,9 +72,9 @@ function mergeShallow(target: Record<string, unknown>, source: Record<string, un
  * Returns a new object — does not mutate base.
  */
 export function mergeBehaviorIntoRecall(
-  base: import("./schema").RecallConfig,
-  behavior: import("./profile-schema").ProfileBehavior,
-): import("./schema").RecallConfig {
+  base: import("./schema").RecallConfigSchemaType,
+  behavior: import("./profile-schema").ProfileBehaviorSchemaType,
+): import("./schema").RecallConfigSchemaType {
   const merged = { ...base };
 
   if (behavior.targetUri !== undefined) merged.targetUri = behavior.targetUri;

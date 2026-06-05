@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { RecallCurator } from "./recall-curator";
 import type { Scorer } from "./curate";
 import type { SearchResult } from "../knowledge/model/search-result";
-import type { RecallConfig } from "../../infrastructure/config/schema";
+import type { RecallConfig } from "../common/recall-config";
 import type { Logger } from "../ports/logger";
 import type { GraphExpander } from "./graph-expander";
 import type { CuratedItem } from "./curate";

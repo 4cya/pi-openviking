@@ -1,6 +1,6 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { ProfileManager } from "../../../domain/profile/service/ProfileManager";
-import type { ProfileBehavior } from "../../../infrastructure/config/profile-schema";
+import type { ProfileBehavior } from "../../../domain/common/profile-config";
 
 export function createOvProfileCommand(
   profileManager: ProfileManager,

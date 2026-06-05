@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { SearchService } from "./search-service";
 import type { KnowledgeBase, GlobResult, GrepResult } from "../ports/knowledge-base";
 import type { SearchResult } from "../knowledge/model/search-result";
-import type { RecallConfig } from "../../infrastructure/config/schema";
+import type { RecallConfig } from "../common/recall-config";
 import type { Logger } from "../ports/logger";
 import { Uri } from "../common/uri";
 

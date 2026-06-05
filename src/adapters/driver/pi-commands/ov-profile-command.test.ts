@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createOvProfileCommand } from "./ov-profile-command";
 import type { ProfileManager } from "../../../domain/profile/service/ProfileManager";
-import type { ProfileBehavior } from "../../../infrastructure/config/profile-schema";
+import type { ProfileBehavior } from "../../../domain/common/profile-config";
 
 function mockCtx(overrides?: Partial<ExtensionCommandContext>): ExtensionCommandContext {
   return {

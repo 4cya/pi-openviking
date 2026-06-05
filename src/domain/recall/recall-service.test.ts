@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { RecallService } from "./recall-service";
 import type { KnowledgeBase } from "../ports/knowledge-base";
 import type { RecallCurator } from "./recall-curator";
-import type { RecallConfig } from "../../infrastructure/config/schema";
+import type { RecallConfig } from "../common/recall-config";
 import type { Logger } from "../ports/logger";
 import type { SearchResult } from "../knowledge/model/search-result";
 import { Uri } from "../common/uri";

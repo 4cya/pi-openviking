@@ -46,7 +46,7 @@ _Avoid_: framework, wiring layer
 ### Foundation (Config & DI)
 
 **Config Schema**:
-The Zod schema that defines, validates, and provides defaults for all plugin configuration. Single source of truth. Exports `PiOVConfig` type inferred via `z.infer`.
+The Zod schema that defines, validates, and provides defaults for all plugin configuration. Single source of truth. Exports `PiOVConfig` type inferred via `z.infer`. Domain-facing config interfaces live in `domain/common/` as plain TypeScript interfaces (`RecallConfig`, `ProfileConfig`, `ProfileBehavior`). Infra Zod schemas export inferred types under distinct names (`RecallConfigSchemaType`, `ProfileConfigSchemaType`).
 _Avoid_: schema, config definition
 
 **OVAdapterConfig**:
@@ -114,7 +114,7 @@ _Avoid_: merge, resolution chain
 A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Carries `name` + `description` + `behavior: ProfileBehavior` (optional, added in F7a). Schema: `ProfileConfigSchema` with `behavior: ProfileBehaviorSchema.default({})`. Built-in profiles carry behavioral overrides (topN, scoreThreshold, etc.) web-dev targetUri placeholder `{workspace}` resolved in F7b via AutoDetect.
 
 **ProfileBehavior**:
-6 optional behavioral fields that override `RecallConfig` when a profile is active. Fields are optional — profile só sobrescreve o que define. Defined in `infrastructure/config/profile-schema.ts`:
+6 optional behavioral fields that override `RecallConfig` when a profile is active. Fields are optional — profile só sobrescreve o que define. Canonical type in `domain/common/profile-config.ts` as `Partial<Pick<RecallConfig, 6 overridable fields>>`. Zod schema in `infrastructure/config/profile-schema.ts`:
 - `targetUri` (string?): escopo de busca. undefined = global.
 - `topN` (number?): max results. undefined = usa default RecallConfig.
 - `scoreThreshold` (number 0-1?): relevância mínima.
@@ -125,7 +125,7 @@ A named config preset. One is always active. Four built-in: `default`, `web-dev`
 Resolved at init via `ProfileManager.resolve()` returning `Partial<Pick<PiOVConfig, "recall">>`. `init()` deep-merges into `RecallConfig` before constructing services. Services receive merged config — no ProfileManager reference until F7b.
 
 **ProfileManager** (stateful, `domain/profile/service/ProfileManager.ts`):
-Manages the active profile. Constructor receives `profiles: Record<string, ProfileConfig>` (with behavior sub-objects) and `activeProfile: string`. Methods:
+Manages the active profile. Constructor receives `profiles: Record<string, ProfileConfig>` (`ProfileConfig` interface from `domain/common/profile-config.ts`) and `activeProfile: string`. Methods:
 - `getActive(): string` — returns current profile name.
 - `resolve(name?): Partial<Pick<PiOVConfig, "recall">>` — returns behavioral fields for merge. Only populated fields override.
 - `apply(name): void` — validates name exists, updates state (F7b+).
@@ -248,10 +248,10 @@ Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` 
 
 **Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
-**RecallConfig** (7 fields in ConfigSchema F4+F7a): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `autoRecall` (boolean, default true, added F7a).
-Lives in `infrastructure/config/schema.ts` as `RecallConfigSchema`. Exported type `RecallConfig` inferred via `z.infer`.
+**RecallConfig** (11 fields): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `expandGraphDepth` (literal 1), `expandGraphMaxRatio` (number 0-1, default 0.2), `expandGraphMinSeedScore` (number 0-1, default 0.4), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `recallSearchTimeout` (number, default 5000), `autoRecall` (boolean, default true).
+Canonical interface in `domain/common/recall-config.ts`. Zod schema in `infrastructure/config/schema.ts` as `RecallConfigSchema` — inferred type exported as `RecallConfigSchemaType`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
-ProfileBehavior (6 fields) overrides RecallConfig fields in F7a via merge. Schema in `profile-schema.ts` has `behavior: ProfileBehaviorSchema.default({})`.
+ProfileBehavior (6 fields) overrides RecallConfig via merge. Defined in `domain/common/profile-config.ts` as `Partial<Pick<RecallConfig, 6 overridable fields>>`.
 
 **SessionService** *(implemented — `domain/services/session-service.ts`)*:
 Stateful service that manages the OV session lifecycle. Owns the active session — callers get the current session via `getActive()` rather than tracking it externally. Depends on `SessionStore` port + `SessionServiceConfig { commitTimeout, pollInterval? }`.
@@ -277,7 +277,7 @@ _Avoid_: fs handler, fs service
 **SearchService** *(implemented — `domain/services/search-service.ts`)*:
 Thin application service delegating to the `KnowledgeBase` port. Three methods: `search(params, signal?)` routes `mode` param (`fast` → `kb.find()`, `deep` → `kb.search()`, `auto` → `RecallConfig.searchMode`); `glob(pattern, uri?, limit?, signal?)` delegates directly; `grep(pattern, opts?, signal?)` delegates directly. Constructor takes `KnowledgeBase`, `RecallConfig`, `Logger`. 7 tests. Registered as singleton in lifecycle.
 
-**F4 scope (revised)**: Domain logic only (scorers, ~~IntentDetector~~, RecallCurator) + RecallService + SessionService + RecallConfig in schema + lifecycle wiring. IntentDetector eliminated — recall is a toggle command. Lifecycle wiring in `init()` creates and registers RecallCurator (with scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true), SearchService (wired to KB + config). WriteService born in F5.2 when ov_write tool needs it.
+**F4 scope (revised)**: Domain logic only (scorers, ~~IntentDetector~~, RecallCurator) + RecallService + SessionService + RecallConfig interface in domain/common/ + lifecycle wiring. IntentDetector eliminated — recall is a toggle command. Lifecycle wiring in `init()` creates and registers RecallCurator (with scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true), SearchService (wired to KB + config). WriteService born in F5.2 when ov_write tool needs it.
 
 ### Tools (F5.1 — first vertical slice)
 

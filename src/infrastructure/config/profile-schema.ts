@@ -11,7 +11,7 @@ export const ProfileBehaviorSchema = z.object({
   autoRecall: z.boolean().optional(),
 });
 
-export type ProfileBehavior = z.infer<typeof ProfileBehaviorSchema>;
+export type ProfileBehaviorSchemaType = z.infer<typeof ProfileBehaviorSchema>;
 
 // ── ProfileConfig ─────────────────────────────────────────────────────────────
 
@@ -21,9 +21,9 @@ export const ProfileConfigSchema = z.object({
   behavior: ProfileBehaviorSchema.default({}),
 });
 
-export type ProfileConfig = z.infer<typeof ProfileConfigSchema>;
+export type ProfileConfigSchemaType = z.infer<typeof ProfileConfigSchema>;
 
-export const BUILTIN_PROFILES: Record<string, ProfileConfig> = {
+export const BUILTIN_PROFILES: Record<string, ProfileConfigSchemaType> = {
   default: {
     name: "default",
     description: "Perfil padrão — equilibrado",

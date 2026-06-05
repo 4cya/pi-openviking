@@ -1,7 +1,8 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { SessionService } from "../../../domain/services/session-service";
 import type { RecallService } from "../../../domain/recall/recall-service";
-import type { OVAdapterConfig, RecallConfig } from "../../../infrastructure/config/schema";
+import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
+import type { RecallConfig } from "../../../domain/common/recall-config";
 
 export function createOvStatusCommand(
   ovConfig: OVAdapterConfig,

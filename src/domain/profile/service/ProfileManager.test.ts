@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ProfileManager } from "./ProfileManager";
-import type { ProfileConfig } from "../../../infrastructure/config/profile-schema";
+import type { ProfileConfig } from "../../common/profile-config";
 
 function makeProfiles(): Record<string, ProfileConfig> {
   return {

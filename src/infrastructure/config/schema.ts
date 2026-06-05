@@ -3,7 +3,6 @@ import { ProfileSectionSchema } from "./profile-schema";
 import { z } from "zod";
 
 export type { LoggerConfig } from "./logger-schema";
-export type { ProfileConfig } from "./profile-schema";
 export { BUILTIN_PROFILES } from "./profile-schema";
 
 // ── Root config ──────────────────────────────────────────────────────────────
@@ -46,7 +45,7 @@ export const RecallConfigSchema = z.object({
   autoRecall: z.boolean().default(true),
 });
 
-export type RecallConfig = z.infer<typeof RecallConfigSchema>;
+export type RecallConfigSchemaType = z.infer<typeof RecallConfigSchema>;
 
 export const ConfigSchema = z.object({
   logger: LoggerConfigSchema.default(() => LoggerConfigSchema.parse({})),
