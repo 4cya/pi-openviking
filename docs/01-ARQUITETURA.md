@@ -525,8 +525,9 @@ src/
 │   │   ├── ov-start-command.ts   # ✅ /ov-start
 │   │   ├── ov-reindex-command.ts # ✅ /ov-reindex <uri> [--mode]
 │   │   └── command-registry.ts   # ✅ registerAllCommands() barrel
-│   ├── driver/pi-session-sync/ # ✅ F6: MessageMapper
-│   │   ├── message-mapper.ts   # ✅ agentMessageToParts() — 9 tests
+│   ├── driver/pi-lifecycle/     # ✅ F6: Lifecycle hooks + MessageMapper
+│   │   ├── register-lifecycle-hooks.ts # ✅ registerLifecycleHooks() + handleSessionStart()
+│   │   ├── message-mapper.ts     # ✅ agentMessageToParts() — 9 tests
 │   │   └── message-mapper.test.ts # ✅ 9 tests (user/assistant/tool/empty/null/ImageContent)
 │   ├── driver/pi-tools/         # ✅ F5.1–F5.5: 6 tools + barrel
 │   │   ├── tool-registry.ts     # ✅ registerAllTools() barrel

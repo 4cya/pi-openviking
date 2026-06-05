@@ -223,7 +223,11 @@ by the adapter with a default timeout. Domain operates on the concept of "write 
 **FsStore.delete with glob** (F8.4):
 `/ov-delete` command accepts both literal URI and glob pattern (e.g. `viking://resources/temp/*`). Pattern resolution calls `KnowledgeBase.glob()` first, then deletes each match. Confirmation dialog shows matched count before proceeding.
 
-
+**Lifecycle Hook Module**:
+The extracted lifecycle hook registration and per-session handler in `adapters/driver/pi-lifecycle/register-lifecycle-hooks.ts`. Two exports:
+- `registerLifecycleHooks(pi, svcs)` — registers `message_end`, `session_shutdown`, `before_agent_start` hooks. Called once per process.
+- `handleSessionStart(ctx, svcs)` — runs on every `session_start`: auto-detect profile, health check, widget attach/update, session creation.
+Dependencies passed explicitly via `LifecycleServices` interface — no module-level `let` closure.
 
 **Uri** (class — value object):
 A `viking://` URI identifying a resource or location in the OpenViking filesystem. Used across all bounded contexts. Implemented as class with validation in constructor — not a type alias.
@@ -414,7 +418,7 @@ An `initialized` flag ensures `init()` runs once per process.
 - **`session_shutdown`** → `SessionService.commit(activeSessionId)`. OV server extracts memories async (memory_diff.json).
 - **`session_start`** → health check via `HealthCheck.check()` + widget update.
 
-**MessageMapper** (`adapters/driver/pi-session-sync/message-mapper.ts`):
+**MessageMapper** (`adapters/driver/pi-lifecycle/message-mapper.ts`):
 Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `AgentMessage` to domain `Part[]`: assistant content blocks → TextPart (text) + ToolPart (toolCall, toolStatus="pending"); toolResult messages → ToolPart (toolOutput, toolStatus="success"|"error"); user text → TextPart. Role `"user"` | `"assistant"` | `"toolResult"` supported.
 
 ## Flagged ambiguities

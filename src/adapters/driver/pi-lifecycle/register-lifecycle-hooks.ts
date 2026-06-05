@@ -1,0 +1,127 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { Logger } from "../../../domain/ports/logger";
+import type { RecallService } from "../../../domain/recall/recall-service";
+import type { SessionService } from "../../../domain/services/session-service";
+import type { OVAdapter } from "../../driven/openviking/adapter";
+import type { ProfileManager } from "../../../domain/profile/service/ProfileManager";
+import { OVWidget } from "../ov-widget";
+import { HealthCheck } from "../../driven/openviking/health";
+import { agentMessageToParts } from "./message-mapper";
+
+// ── Shared bag of services consumed by lifecycle hooks and per-session handler ──
+
+export interface LifecycleServices {
+  logger: Logger;
+  sessionService: SessionService;
+  recallService: RecallService;
+  adapter: OVAdapter;
+  widget: OVWidget;
+  healthCheck: HealthCheck;
+  profileManager: ProfileManager;
+  autoDetectRules?: Record<string, string>;
+}
+
+// ── Init-time: register Pi lifecycle hooks (runs once per process) ──
+
+export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices): void {
+  const { logger, sessionService, recallService, adapter, widget } = svcs;
+
+  // message_end: sync user/assistant messages to OV session
+  pi.on("message_end", (event) => {
+    const parts = agentMessageToParts(event.message);
+    if (parts.length === 0) return;
+
+    const active = sessionService.getActive();
+    if (!active) {
+      logger?.debug("message_end: no active session, skipping sync");
+      return;
+    }
+
+    sessionService.sendMessage(active, event.message.role, parts).catch((err) => {
+      logger?.warn("message_end: failed to send message", { error: (err as Error).message });
+    });
+  });
+
+  // session_shutdown: commit active session to OV
+  pi.on("session_shutdown", () => {
+    const active = sessionService.getActive();
+    if (!active) {
+      logger?.debug("session_shutdown: no active session, skipping commit");
+      return;
+    }
+
+    sessionService.commit(active).catch((err) => {
+      logger?.warn("session_shutdown: failed to commit session", { error: (err as Error).message });
+    });
+  });
+
+  // before_agent_start: auto-recall with guard chain
+  pi.on("before_agent_start", async (event) => {
+    // Guard 1: recall toggle
+    if (!recallService.isEnabled()) {
+      return { message: { customType: "memory_context", content: "Auto-recall is OFF. Use `ov_recall` explicitly or toggle with `/ov-recall on`.\n---\nOpenViking knowledge base available via `ov_search`.", display: false } };
+    }
+
+    // Guard 2: circuit breaker OPEN
+    if (adapter.circuitBreakerOpen) {
+      return { message: { customType: "memory_context", content: "OpenViking is temporarily unavailable (circuit breaker open). Will retry automatically. Knowledge base tools (`ov_search`, etc.) remain available once connection restores.", display: false } };
+    }
+
+    // Guard 3: no active session — auto-create as fallback
+    let sessionId = sessionService.getActive();
+    if (!sessionId) {
+      try {
+        sessionId = await sessionService.createAndSet();
+        widget.update("session", sessionId.toString());
+        logger?.info("before_agent_start: auto-created OV session", { sessionId: sessionId.toString() });
+      } catch {
+        return { message: { customType: "memory_context", content: "Failed to create OV session. Use `ov_search` to query the knowledge base directly without a session.", display: false } };
+      }
+    }
+
+    // Recall
+    const result = await recallService.recall(event.prompt ?? "", sessionId);
+    if (result.timedOut) {
+      return { message: { customType: "memory_context", content: "⚠️ OpenViking search timed out — auto-recall skipped. The knowledge base may be busy indexing. Will retry on next turn. Try `ov_search` to query directly.", display: false } };
+    }
+    if (!result.formatted) {
+      return { message: { customType: "memory_context", content: "No relevant memories found by auto-recall. Try `ov_search` to explore the knowledge base or `ov_recall` with a different query.", display: false } };
+    }
+
+    return { message: { customType: "memory_context", content: result.formatted, display: false } };
+  });
+}
+
+// ── Per-session: run on every session_start (including fork/resume/reload) ──
+
+export async function handleSessionStart(
+  ctx: { cwd: string; ui: any },
+  svcs: LifecycleServices,
+): Promise<void> {
+  const { healthCheck, widget, sessionService, recallService, logger, profileManager, autoDetectRules } = svcs;
+
+  // F7b: Auto-detect profile from workspace path
+  if (profileManager && autoDetectRules) {
+    const { autoDetectProfile } = await import("../../../domain/profile/service/auto-detect");
+    const detected = autoDetectProfile(ctx.cwd, autoDetectRules);
+    if (detected) {
+      profileManager.apply(detected);
+      logger.info(`auto-detected profile: ${detected}`);
+    }
+  }
+
+  // Health check FIRST — widget is attached with correct state from the start
+  const health = await healthCheck.check();
+
+  widget.attach(ctx.ui);
+  widget.update("conn", health.ok ? "connected" : "disconnected");
+
+  try {
+    await sessionService.createAndSet();
+    const active = sessionService.getActive();
+    widget.update("session", active?.toString() ?? "-");
+    widget.update("recall", recallService.isEnabled() ? "on" : "off");
+  } catch {
+    widget.update("session", "none");
+  }
+}
