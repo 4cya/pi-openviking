@@ -96,6 +96,10 @@ An implementation of the `SessionStore` port in `adapters/driven/openviking/sess
 **RelationMapper**:
 Pure functions in `adapters/driven/openviking/mappers/relation-mapper.ts`: `toLinkResult(raw, source, targets, reason?)` constructs a `LinkResult` from domain params; `toRelations(raw)` maps OV graph response (array or `{ relations: [...] }` shape) into domain `Relation[]`.
 
+**MapperUtils**:
+Shared guard functions in `adapters/driven/openviking/mappers/mapper-utils.ts` for safely extracting fields from untrusted OV JSON. Provides `getRecord(raw)` (null-safe cast to `Record`), `safeString(v)` (`""` on non-string), `safeOptionalString(v)` (`undefined` on non-string), `safeNumber(v)` (`undefined` on non-number), `toArray(raw)` (`[]` on non-array). Imported by all 7 mappers — eliminates inline `typeof` + cast boilerplate.
+_Avoid_: safe-utils, guard functions
+
 **GraphStoreAdapter**:
 An implementation of the `GraphStore` port in `adapters/driven/openviking/graph-store.ts`. `link()` calls `POST /api/v1/relations/link` with `from_uri`, `to_uris[]`, optional `reason`. `unlink()` calls `DELETE /api/v1/relations/link` with `from_uri`, `to_uri`. `graph()` calls `GET /api/v1/relations?uri=` and maps via `RelationMapper`.
 

@@ -2,14 +2,13 @@ import { ConnectionError } from "../../../../domain/errors/connection-error";
 import { NotFoundError } from "../../../../domain/errors/not-found-error";
 import { ValidationError } from "../../../../domain/errors/validation-error";
 import { DomainError } from "../../../../domain/errors/domain-error";
+import { getRecord } from "./mapper-utils";
 
 function extractMessage(body: unknown): string {
-  if (body && typeof body === "object") {
-    const b = body as Record<string, unknown>;
-    if (typeof b.message === "string") return b.message;
-    if (typeof b.error === "string") return b.error;
-    if (typeof b.detail === "string") return b.detail;
-  }
+  const b = getRecord(body);
+  if (typeof b.message === "string") return b.message;
+  if (typeof b.error === "string") return b.error;
+  if (typeof b.detail === "string") return b.detail;
   return "";
 }
 

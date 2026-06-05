@@ -1,11 +1,12 @@
 import { SessionId } from "../../../../domain/common/session-id";
 import type { CommitResult, TaskStatus } from "../../../../domain/ports/session-store";
 import type { Part, TextPart, ToolPart, ContextPart } from "../../../../domain/common/part";
+import { getRecord, safeOptionalString, safeString } from "./mapper-utils";
 
 // ── Session Mappers ───────────────────────────────────────────────────────────
 
 export function toSessionId(raw: unknown): SessionId {
-  const r = (raw ?? {}) as Record<string, unknown>;
+  const r = getRecord(raw);
   const id = r.session_id ?? r.id;
   if (typeof id !== "string" || !id) {
     throw new Error("Invalid session create response: missing session_id");
@@ -14,17 +15,17 @@ export function toSessionId(raw: unknown): SessionId {
 }
 
 export function toCommitResult(raw: unknown): CommitResult {
-  const r = (raw ?? {}) as Record<string, unknown>;
+  const r = getRecord(raw);
   const sessionId = toSessionId(raw);
   return {
     sessionId,
-    taskId: typeof r.task_id === "string" ? r.task_id : undefined,
+    taskId: safeOptionalString(r.task_id),
   };
 }
 
 export function toTaskStatus(raw: unknown): TaskStatus {
-  const r = (raw ?? {}) as Record<string, unknown>;
-  const taskId = typeof r.task_id === "string" ? r.task_id : "";
+  const r = getRecord(raw);
+  const taskId = safeString(r.task_id);
   return {
     taskId,
     status: (typeof r.status === "string" ? r.status : "unknown") as TaskStatus["status"],

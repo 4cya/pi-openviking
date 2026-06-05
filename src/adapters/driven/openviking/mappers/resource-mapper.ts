@@ -1,11 +1,12 @@
 import type { ResourceImportResult } from "../../../../domain/ports/resource-store";
+import { getRecord, safeString } from "./mapper-utils";
 
 export function toResourceImportResult(raw: unknown): ResourceImportResult {
-  const r = (raw ?? {}) as Record<string, unknown>;
+  const r = getRecord(raw);
 
   const status = typeof r.status === "string" ? r.status : "unknown";
-  const rootUri = typeof r.root_uri === "string" ? r.root_uri : "";
-  const sourcePath = typeof r.source_path === "string" ? r.source_path : "";
+  const rootUri = safeString(r.root_uri);
+  const sourcePath = safeString(r.source_path);
   const errorsRaw = r.errors;
   const errors = Array.isArray(errorsRaw)
     ? errorsRaw.filter((e): e is string => typeof e === "string")

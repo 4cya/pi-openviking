@@ -1,8 +1,9 @@
 import { Uri } from "../../../../domain/common/uri";
 import type { FsEntry, WriteResult } from "../../../../domain/ports/fs-store";
+import { getRecord, safeOptionalString, safeNumber } from "./mapper-utils";
 
 export function toWriteResult(raw: unknown, expectedUri: string): WriteResult {
-  const r = (raw ?? {}) as Record<string, unknown>;
+  const r = getRecord(raw);
   // Trust explicit `success` field if present.
   // Fall back to `status === "ok"` if status field present (envelope unwrapped).
   // Default true — HTTP 2xx already confirms the write succeeded.
@@ -26,7 +27,7 @@ function assertValidType(t: unknown): asserts t is "file" | "directory" {
 }
 
 export function toFsEntry(raw: unknown): FsEntry {
-  const r = (raw ?? {}) as Record<string, unknown>;
+  const r = getRecord(raw);
 
   if (typeof r.uri !== "string" || !r.uri) {
     throw new Error("FsEntry missing required field: uri");
@@ -40,8 +41,8 @@ export function toFsEntry(raw: unknown): FsEntry {
   return {
     uri: new Uri(r.uri),
     type: r.type,
-    size: typeof r.size === "number" ? r.size : undefined,
-    modTime: typeof r.modTime === "string" ? r.modTime : undefined,
+    size: safeNumber(r.size),
+    modTime: safeOptionalString(r.modTime),
   };
 }
 
