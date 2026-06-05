@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { agentMessageToParts } from "./message-mapper";
-import type { Part, ToolPart } from "../../../domain/common/part";
+import type { Part, ToolPart, TextPart } from "../../../domain/common/part";
 
 describe("agentMessageToParts", () => {
   it("extracts text from user message with string content", () => {
@@ -67,13 +67,13 @@ describe("agentMessageToParts", () => {
       role: "user",
       content: [
         { type: "text", text: "See this image:" },
-        { type: "image", data: "base64...", mimeType: "image/png" },
+        { type: "image", data: "base64...", mimeType: "image/png" } as any,
         { type: "text", text: "end of message" },
       ],
     });
     expect(parts).toHaveLength(2);
-    expect(parts[0].text).toBe("See this image:");
-    expect(parts[1].text).toBe("end of message");
+    expect((parts[0] as TextPart).text).toBe("See this image:");
+    expect((parts[1] as TextPart).text).toBe("end of message");
   });
 
   it("returns empty array for null content", () => {

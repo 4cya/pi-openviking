@@ -1,18 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createOvReadTool } from "./ov-read";
-import type { ReadService } from "../../../domain/services/read-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { Content } from "../../../domain/ports/fs-store";
 import type { Uri } from "../../../domain/common/uri";
 import { Pipeline } from "../../../domain/pipeline/pipeline";
 
 const sampleContent: Content = { uri: { value: "viking://docs/a.md" } as Uri, body: "file content", level: "read" };
 
-function makeReadService(overrides?: Partial<ReadService>): ReadService {
+function makeFsStoreService(overrides?: Partial<FsStoreService>): FsStoreService {
   return {
     read: vi.fn().mockResolvedValue(sampleContent),
     ...overrides,
-  } as unknown as ReadService;
+  } as unknown as FsStoreService;
 }
 
 function makePipeline() {
@@ -44,14 +44,14 @@ function getText(result: any): string {
 
 describe("ov_read tool", () => {
   it("has correct name and schema", () => {
-    const tool = createOvReadTool(makeReadService(), makePipeline());
+    const tool = createOvReadTool(makeFsStoreService(), makePipeline());
     expect(tool.name).toBe("ov_read");
     expect(tool.parameters).toBeDefined();
   });
 
   it("delegates to service.read with defaults", async () => {
     const calls: unknown[] = [];
-    const svc = makeReadService({
+    const svc = makeFsStoreService({
       read: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return sampleContent;
@@ -68,7 +68,7 @@ describe("ov_read tool", () => {
 
   it("passes level, offset, limit to service.read", async () => {
     const calls: unknown[] = [];
-    const svc = makeReadService({
+    const svc = makeFsStoreService({
       read: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return sampleContent;
@@ -83,7 +83,7 @@ describe("ov_read tool", () => {
   });
 
   it("returns error text on failure", async () => {
-    const svc = makeReadService({
+    const svc = makeFsStoreService({
       read: vi.fn().mockRejectedValue(new Error("not found")),
     });
     const tool = createOvReadTool(svc, makePipeline());

@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
-import type { FsService } from "../../../domain/services/fs-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { FsEntry } from "../../../domain/ports/fs-store";
 
 const StatSchema = Type.Object({
@@ -9,7 +9,7 @@ const StatSchema = Type.Object({
 });
 
 export function createOvStatTool(
-  svc: FsService,
+  svc: FsStoreService,
   pipeline: Pipeline<FsEntry>,
 ): ToolDefinition<typeof StatSchema> {
   return defineTool({

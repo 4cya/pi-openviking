@@ -65,6 +65,7 @@ beforeAll(async () => {
     apiKey: "smoke-key",
     account: "smoke",
     user: "test",
+    agentId: "pi",
     timeout: 5000,
     commitTimeout: 120_000,
     maxRetries: 0,

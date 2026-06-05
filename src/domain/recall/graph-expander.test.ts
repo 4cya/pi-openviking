@@ -43,6 +43,7 @@ function makeFsStore(): FsStore {
     mkdir: vi.fn(),
     mv: vi.fn(),
     delete: vi.fn(),
+    reindex: vi.fn(),
   };
 }
 

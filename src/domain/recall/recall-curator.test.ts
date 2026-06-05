@@ -17,6 +17,7 @@ function makeConfig(overrides?: Partial<RecallConfig>): RecallConfig {
     expandGraphDepth: 1,
     expandGraphMaxRatio: 0.2,
     expandGraphMinSeedScore: 0.4,
+    recallSearchTimeout: 5000,
     autoRecall: true,
     ...overrides,
   };

@@ -8,8 +8,8 @@ import { RecallCurator } from "../domain/recall/recall-curator";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
-import { WriteService } from "../domain/services/write-service";
-import { ReadService } from "../domain/services/read-service";
+import { FsStoreService } from "../domain/services/fs-store-service";
+import { ResourceService } from "../domain/services/resource-service";
 import { ProfileManager } from "../domain/profile/service/ProfileManager";
 import type { Logger } from "../domain/ports/logger";
 import type { KnowledgeBase } from "../domain/ports/knowledge-base";
@@ -228,39 +228,28 @@ describe("init", () => {
     expect(config.recall.autoRecall).toBe(true);
   });
 
-  it("container resolves writeService as WriteService instance", async () => {
+  it("container resolves fsStoreService as FsStoreService instance", async () => {
     const { container } = await init(tmpDir);
-    const svc = container.resolve<WriteService>("writeService");
-    expect(svc).toBeInstanceOf(WriteService);
+    const svc = container.resolve<FsStoreService>("fsStoreService");
+    expect(svc).toBeInstanceOf(FsStoreService);
     expect(typeof svc.save).toBe("function");
     expect(typeof svc.mkdir).toBe("function");
     expect(typeof svc.mv).toBe("function");
-  });
-
-  it("writeService is singleton", async () => {
-    const { container } = await init(tmpDir);
-    const s1 = container.resolve("writeService");
-    const s2 = container.resolve("writeService");
-    expect(s1).toBe(s2);
-  });
-
-  it("container resolves readService as ReadService instance", async () => {
-    const { container } = await init(tmpDir);
-    const svc = container.resolve<ReadService>("readService");
-    expect(svc).toBeInstanceOf(ReadService);
     expect(typeof svc.read).toBe("function");
+    expect(typeof svc.list).toBe("function");
+    expect(typeof svc.delete).toBe("function");
   });
 
-  it("readService is singleton", async () => {
+  it("fsStoreService is singleton", async () => {
     const { container } = await init(tmpDir);
-    const s1 = container.resolve("readService");
-    const s2 = container.resolve("readService");
+    const s1 = container.resolve("fsStoreService");
+    const s2 = container.resolve("fsStoreService");
     expect(s1).toBe(s2);
   });
 
   it("container resolves resourceService with importUrl method", async () => {
     const { container } = await init(tmpDir);
-    const svc = container.resolve("resourceService");
+    const svc = container.resolve<ResourceService>("resourceService");
     expect(svc).toBeDefined();
     expect(typeof svc.importUrl).toBe("function");
   });

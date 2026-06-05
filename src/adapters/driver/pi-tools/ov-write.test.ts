@@ -1,18 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createOvWriteTool } from "./ov-write";
-import type { WriteService } from "../../../domain/services/write-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { WriteResult } from "../../../domain/ports/fs-store";
 import type { Uri } from "../../../domain/common/uri";
 import { Pipeline } from "../../../domain/pipeline/pipeline";
 
-function makeWriteService(overrides?: Partial<WriteService>): WriteService {
+function makeFsStoreService(overrides?: Partial<FsStoreService>): FsStoreService {
   return {
     save: vi.fn().mockResolvedValue({ uri: { value: "viking://a" } as Uri, success: true } as WriteResult),
     mkdir: vi.fn().mockResolvedValue(undefined),
     mv: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as unknown as WriteService;
+  } as unknown as FsStoreService;
 }
 
 function makePipeline() {
@@ -44,14 +44,14 @@ function getText(result: any): string {
 
 describe("ov_write tool", () => {
   it("has correct name and schema", () => {
-    const tool = createOvWriteTool(makeWriteService(), makePipeline());
+    const tool = createOvWriteTool(makeFsStoreService(), makePipeline());
     expect(tool.name).toBe("ov_write");
     expect(tool.parameters).toBeDefined();
   });
 
   it("action=save delegates to service.save", async () => {
     const calls: unknown[] = [];
-    const svc = makeWriteService({
+    const svc = makeFsStoreService({
       save: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return { uri: { value: "viking://docs/a.md" } as Uri, success: true };
@@ -73,7 +73,7 @@ describe("ov_write tool", () => {
 
   it("action=mkdir delegates to service.mkdir", async () => {
     const calls: unknown[] = [];
-    const svc = makeWriteService({
+    const svc = makeFsStoreService({
       mkdir: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
       }),
@@ -92,7 +92,7 @@ describe("ov_write tool", () => {
 
   it("action=mv delegates to service.mv", async () => {
     const calls: unknown[] = [];
-    const svc = makeWriteService({
+    const svc = makeFsStoreService({
       mv: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
       }),
@@ -111,13 +111,13 @@ describe("ov_write tool", () => {
   });
 
   it("returns error on unknown action", async () => {
-    const tool = createOvWriteTool(makeWriteService(), makePipeline());
+    const tool = createOvWriteTool(makeFsStoreService(), makePipeline());
     const result = await executeTool(tool, { action: "bogus", uri: "viking://x" });
     expect(getText(result)).toContain("failed");
   });
 
   it("returns error when mv called without targetUri", async () => {
-    const tool = createOvWriteTool(makeWriteService(), makePipeline());
+    const tool = createOvWriteTool(makeFsStoreService(), makePipeline());
     const result = await executeTool(tool, { action: "mv", uri: "viking://x" });
     expect(getText(result)).toContain("failed");
   });

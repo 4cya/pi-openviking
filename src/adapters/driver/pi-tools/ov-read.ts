@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
-import type { ReadService } from "../../../domain/services/read-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { Content } from "../../../domain/ports/fs-store";
 
 const ReadSchema = Type.Object({
@@ -17,7 +17,7 @@ const ReadSchema = Type.Object({
 });
 
 export function createOvReadTool(
-  svc: ReadService,
+  svc: FsStoreService,
   pipeline: Pipeline<Content>,
 ): ToolDefinition<typeof ReadSchema> {
   return defineTool({

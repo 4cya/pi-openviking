@@ -1,21 +1,21 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createOvStatTool } from "./ov-stat";
-import type { FsService } from "../../../domain/services/fs-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { FsEntry } from "../../../domain/ports/fs-store";
 import type { Uri } from "../../../domain/common/uri";
 import { Pipeline } from "../../../domain/pipeline/pipeline";
 
 const sampleEntry: FsEntry = { uri: { value: "viking://docs/a.md" } as Uri, type: "file", size: 1024, modTime: "2025-01-01" };
 
-function makeFsService(overrides?: Partial<FsService>): FsService {
+function makeFsStoreService(overrides?: Partial<FsStoreService>): FsStoreService {
   return {
     list: vi.fn().mockResolvedValue([]),
     tree: vi.fn().mockResolvedValue([]),
     stat: vi.fn().mockResolvedValue(sampleEntry),
     delete: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as unknown as FsService;
+  } as unknown as FsStoreService;
 }
 
 function makePipeline() {
@@ -47,14 +47,14 @@ function getText(result: any): string {
 
 describe("ov_stat tool", () => {
   it("has correct name and schema", () => {
-    const tool = createOvStatTool(makeFsService(), makePipeline());
+    const tool = createOvStatTool(makeFsStoreService(), makePipeline());
     expect(tool.name).toBe("ov_stat");
     expect(tool.parameters).toBeDefined();
   });
 
   it("delegates to service.stat with uri", async () => {
     const calls: unknown[] = [];
-    const svc = makeFsService({
+    const svc = makeFsStoreService({
       stat: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return sampleEntry;
@@ -69,7 +69,7 @@ describe("ov_stat tool", () => {
   });
 
   it("returns entry as JSON", async () => {
-    const svc = makeFsService();
+    const svc = makeFsStoreService();
     const tool = createOvStatTool(svc, makePipeline());
 
     const result = await executeTool(tool, { uri: "viking://docs/a.md" });
@@ -81,7 +81,7 @@ describe("ov_stat tool", () => {
   });
 
   it("returns error on failure", async () => {
-    const svc = makeFsService({
+    const svc = makeFsStoreService({
       stat: vi.fn().mockRejectedValue(new Error("not found")),
     });
     const tool = createOvStatTool(svc, makePipeline());

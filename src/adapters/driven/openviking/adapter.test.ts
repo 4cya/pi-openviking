@@ -7,6 +7,7 @@ const TEST_CONFIG: OVAdapterConfig = {
   apiKey: "test-key",
   account: "test-account",
   user: "test-user",
+  agentId: "pi",
   timeout: 5000,
   commitTimeout: 120_000,
   maxRetries: 2,

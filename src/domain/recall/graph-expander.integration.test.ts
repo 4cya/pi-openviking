@@ -23,6 +23,7 @@ function makeConfig(overrides?: Partial<RecallConfig>): RecallConfig {
     expandGraphDepth: 1,
     expandGraphMaxRatio: 0.2,
     expandGraphMinSeedScore: 0.4,
+    recallSearchTimeout: 5000,
     autoRecall: true,
     ...overrides,
   };
@@ -85,6 +86,7 @@ describe("GraphExpander + RecallCurator integration", () => {
       mkdir: vi.fn(),
       mv: vi.fn(),
       delete: vi.fn(),
+      reindex: vi.fn(),
     };
 
     const logger = makeLogger();
@@ -141,6 +143,7 @@ describe("GraphExpander + RecallCurator integration", () => {
       mkdir: vi.fn(),
       mv: vi.fn(),
       delete: vi.fn(),
+      reindex: vi.fn(),
     };
 
     const logger = makeLogger();

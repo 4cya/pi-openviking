@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
-import type { FsService } from "../../../domain/services/fs-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 
 const DeleteSchema = Type.Object({
   uri: Type.String({ description: "URI to delete (viking://...)" }),
@@ -9,7 +9,7 @@ const DeleteSchema = Type.Object({
 });
 
 export function createOvDeleteTool(
-  svc: FsService,
+  svc: FsStoreService,
   pipeline: Pipeline<void>,
 ): ToolDefinition<typeof DeleteSchema> {
   return defineTool({

@@ -3,10 +3,14 @@ import type { FsEntry, WriteResult } from "../../../../domain/ports/fs-store";
 
 export function toWriteResult(raw: unknown, expectedUri: string): WriteResult {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const success =
-    typeof r.success === "boolean"
-      ? r.success
-      : r.status === "ok";
+  // Trust explicit `success` field if present.
+  // Fall back to `status === "ok"` if status field present (envelope unwrapped).
+  // Default true — HTTP 2xx already confirms the write succeeded.
+  const success = typeof r.success === "boolean"
+    ? r.success
+    : typeof r.status === "string"
+      ? r.status === "ok"
+      : true;
   return {
     uri: new Uri(expectedUri),
     success,

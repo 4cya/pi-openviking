@@ -1,19 +1,19 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createOvListTool } from "./ov-list";
-import type { FsService } from "../../../domain/services/fs-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { FsEntry } from "../../../domain/ports/fs-store";
 import type { Uri } from "../../../domain/common/uri";
 import { Pipeline } from "../../../domain/pipeline/pipeline";
 
-function makeFsService(overrides?: Partial<FsService>): FsService {
+function makeFsStoreService(overrides?: Partial<FsStoreService>): FsStoreService {
   return {
     list: vi.fn().mockResolvedValue([]),
     tree: vi.fn().mockResolvedValue([]),
     stat: vi.fn().mockResolvedValue({ uri: { value: "viking://a" } as Uri, type: "file" }),
     delete: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as unknown as FsService;
+  } as unknown as FsStoreService;
 }
 
 function makePipeline() {
@@ -45,14 +45,14 @@ function getText(result: any): string {
 
 describe("ov_list tool", () => {
   it("has correct name and schema", () => {
-    const tool = createOvListTool(makeFsService(), makePipeline());
+    const tool = createOvListTool(makeFsStoreService(), makePipeline());
     expect(tool.name).toBe("ov_list");
     expect(tool.parameters).toBeDefined();
   });
 
   it("delegates to service.list with uri", async () => {
     const calls: unknown[] = [];
-    const svc = makeFsService({
+    const svc = makeFsStoreService({
       list: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return [];
@@ -70,7 +70,7 @@ describe("ov_list tool", () => {
 
   it("passes recursive flag", async () => {
     const calls: unknown[] = [];
-    const svc = makeFsService({
+    const svc = makeFsStoreService({
       list: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return [];
@@ -89,7 +89,7 @@ describe("ov_list tool", () => {
       { uri: { value: "viking://docs/a.md" } as Uri, type: "file", size: 100 },
       { uri: { value: "viking://docs/sub" } as Uri, type: "directory" },
     ];
-    const svc = makeFsService({ list: vi.fn().mockResolvedValue(entries) });
+    const svc = makeFsStoreService({ list: vi.fn().mockResolvedValue(entries) });
     const tool = createOvListTool(svc, makePipeline());
 
     const result = await executeTool(tool, { uri: "viking://docs" });
@@ -100,7 +100,7 @@ describe("ov_list tool", () => {
   });
 
   it("returns error on failure", async () => {
-    const svc = makeFsService({
+    const svc = makeFsStoreService({
       list: vi.fn().mockRejectedValue(new Error("access denied")),
     });
     const tool = createOvListTool(svc, makePipeline());

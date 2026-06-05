@@ -14,8 +14,7 @@ import { createOvReadTool } from "./ov-read";
 import { createOvRecallTool } from "./ov-recall";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
-import { WriteService } from "../../../domain/services/write-service";
-import { ReadService } from "../../../domain/services/read-service";
+import { FsStoreService } from "../../../domain/services/fs-store-service";
 import { FsStoreAdapter } from "../../driven/openviking/fs-store";
 import type { SearchResult } from "../../../domain/knowledge/model/search-result";
 import type { GlobResult, GrepResult } from "../../../domain/ports/knowledge-base";
@@ -146,6 +145,7 @@ function wireStack() {
     apiKey: "test-key",
     account: "test-account",
     user: "test-user",
+    agentId: "pi",
     timeout: 5000,
     commitTimeout: 120_000,
     maxRetries: 0,
@@ -164,8 +164,7 @@ function wireStack() {
   grepPipeline.use(loggingMiddleware("grep", logger as any));
 
   const fsStore = new FsStoreAdapter(transport);
-  const writeService = new WriteService(fsStore);
-  const readService = new ReadService(fsStore);
+  const fsStoreService = new FsStoreService(fsStore);
 
   const writePipeline = new Pipeline<unknown>();
   writePipeline.use(loggingMiddleware("write", logger as any));
@@ -173,7 +172,7 @@ function wireStack() {
   readPipeline.use(loggingMiddleware("read", logger as any));
 
   // Recall
-  const recallConfig = { topN: 5, scoreThreshold: 0.5, maxTokens: 4000, expandGraph: false, expandGraphDepth: 1 as const, expandGraphMaxRatio: 0.2, expandGraphMinSeedScore: 0.4, searchMode: "find" as const, autoRecall: true as const };
+  const recallConfig = { topN: 5, scoreThreshold: 0.5, maxTokens: 4000, expandGraph: false, expandGraphDepth: 1 as const, expandGraphMaxRatio: 0.2, expandGraphMinSeedScore: 0.4, searchMode: "find" as const, recallSearchTimeout: 5000, autoRecall: true as const };
   const curator = new RecallCurator(recallConfig, [], logger as any);
   const recallService = new RecallService(kb, curator, recallConfig, logger as any, true);
   const recallPipeline = new Pipeline<RecallResult>();
@@ -183,8 +182,8 @@ function wireStack() {
     searchTool: createOvSearchTool(svc, searchPipeline),
     globTool: createOvGlobTool(svc, globPipeline),
     grepTool: createOvGrepTool(svc, grepPipeline),
-    writeTool: createOvWriteTool(writeService, writePipeline),
-    readTool: createOvReadTool(readService, readPipeline),
+    writeTool: createOvWriteTool(fsStoreService, writePipeline),
+    readTool: createOvReadTool(fsStoreService, readPipeline),
     recallTool: createOvRecallTool(recallService, recallPipeline),
   };
 }

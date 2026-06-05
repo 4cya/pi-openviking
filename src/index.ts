@@ -4,9 +4,7 @@ import type { PiOVConfig } from "./infrastructure/config/schema";
 import type { DIContainer } from "./infrastructure/di/container";
 import type { Logger } from "./domain/ports/logger";
 import type { SearchService } from "./domain/services/search-service";
-import type { WriteService } from "./domain/services/write-service";
-import type { ReadService } from "./domain/services/read-service";
-import type { FsService } from "./domain/services/fs-service";
+import type { FsStoreService } from "./domain/services/fs-store-service";
 import type { ResourceService } from "./domain/services/resource-service";
 import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
@@ -45,9 +43,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
 
       // Resolve services from container
       const searchService = container.resolve<SearchService>("searchService");
-      const writeService = container.resolve<WriteService>("writeService");
-      const readService = container.resolve<ReadService>("readService");
-      const fsService = container.resolve<FsService>("fsService");
+      const fsStoreService = container.resolve<FsStoreService>("fsStoreService");
       recallService = container.resolve<RecallService>("recallService");
       const fsStore = container.resolve<FsStore>("fsStore");
       const knowledgeBase = container.resolve<KnowledgeBase>("knowledgeBase");
@@ -63,7 +59,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const resourceService = container.resolve<ResourceService>("resourceService");
 
       // Register all 13 tools (once per process)
-      registerAllTools(pi, { searchService, writeService, readService, recallService, fsService, resourceService }, logger);
+      registerAllTools(pi, { searchService, fsStoreService, recallService, resourceService }, logger);
 
       // Register all 6 commands (once per process)
       registerAllCommands(pi, {

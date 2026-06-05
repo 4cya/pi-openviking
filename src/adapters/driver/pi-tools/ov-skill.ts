@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
-import type { WriteService } from "../../../domain/services/write-service";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 
 const SKILL_PREFIX = "viking://skills/";
 
@@ -17,7 +17,7 @@ const SkillSchema = Type.Object({
 });
 
 export function createOvSkillTool(
-  svc: WriteService,
+  svc: FsStoreService,
   pipeline: Pipeline<unknown>,
 ): ToolDefinition<typeof SkillSchema> {
   return defineTool({

@@ -311,10 +311,10 @@ Pi tool for resource deletion. TypeBox schema: `{ uri: string, recursive?: boole
 _Avoid_: ov_delete with glob, delete with confirmation
 
 **ov_resource** *(implemented — `adapters/driver/pi-tools/ov-resource.ts`)*:
-Pi tool for saving resources. Validates URI prefix `viking://resources/`, delegates to `WriteService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 6 unit tests.
+Pi tool for saving resources. Validates URI prefix `viking://resources/`, delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 6 unit tests.
 
 **ov_skill** *(implemented — `adapters/driver/pi-tools/ov-skill.ts`)*:
-Pi tool for saving skills. Validates URI prefix `viking://skills/`, delegates to `WriteService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 4 unit tests.
+Pi tool for saving skills. Validates URI prefix `viking://skills/`, delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 4 unit tests.
 
 **ResourceStore** *(port — `domain/ports/resource-store.ts`)*:
 Port interface for importing external resources into OpenViking. Single method `importUrl(url, options?, signal?)` → `Promise<ResourceImportResult>`. Options: `targetUri` (custom `viking://` path), `reason` (import motivation), `wait` (block until server processing completes). Return type `ResourceImportResult` carries `status`, `rootUri`, `sourcePath`, optional `errors[]`.

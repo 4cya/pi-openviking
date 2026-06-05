@@ -8,9 +8,7 @@ import { relevanceScorer, temporalScorer } from "../domain/recall/curate";
 import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
-import { WriteService } from "../domain/services/write-service";
-import { ReadService } from "../domain/services/read-service";
-import { FsService } from "../domain/services/fs-service";
+import { FsStoreService } from "../domain/services/fs-store-service";
 import { ResourceService } from "../domain/services/resource-service";
 import { ProfileManager } from "../domain/profile/service/ProfileManager";
 import type { Logger } from "../domain/ports/logger";
@@ -87,14 +85,8 @@ export async function init(cwd: string): Promise<{
   const searchService = new SearchService(adapter.knowledgeBase, config.recall, logger);
   container.register("searchService", () => searchService, true);
 
-  const writeService = new WriteService(adapter.fsStore);
-  container.register("writeService", () => writeService, true);
-
-  const readService = new ReadService(adapter.fsStore);
-  container.register("readService", () => readService, true);
-
-  const fsService = new FsService(adapter.fsStore);
-  container.register("fsService", () => fsService, true);
+  const fsStoreService = new FsStoreService(adapter.fsStore);
+  container.register("fsStoreService", () => fsStoreService, true);
 
   const resourceService = new ResourceService(adapter.resourceStore);
   container.register("resourceService", () => resourceService, true);
