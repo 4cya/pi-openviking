@@ -49,8 +49,9 @@ describe("GlobResult", () => {
 });
 
 describe("GrepOptions", () => {
-  it("accepts optional fields", () => {
-    const opts: GrepOptions = { caseInsensitive: true, nodeLimit: 10 };
+  it("accepts required uri and optional fields", () => {
+    const opts: GrepOptions = { uri: "viking://", caseInsensitive: true, nodeLimit: 10 };
+    expect(opts.uri).toBe("viking://");
     expect(opts.caseInsensitive).toBe(true);
     expect(opts.nodeLimit).toBe(10);
   });

@@ -33,8 +33,8 @@ describe("toWriteResult", () => {
 });
 
 describe("toFsEntry", () => {
-  it("maps file entry", () => {
-    const raw = { uri: "viking://docs/file.md", type: "file", size: 1234, modTime: "2026-01-01T00:00:00Z" };
+  it("maps file entry from OV ls/tree response (isDir=false)", () => {
+    const raw = { uri: "viking://docs/file.md", isDir: false, size: 1234, modTime: "2026-01-01T00:00:00Z" };
     const entry = toFsEntry(raw);
     expect(entry.uri.value).toBe("viking://docs/file.md");
     expect(entry.type).toBe("file");
@@ -42,40 +42,55 @@ describe("toFsEntry", () => {
     expect(entry.modTime).toBe("2026-01-01T00:00:00Z");
   });
 
-  it("maps directory entry", () => {
-    const raw = { uri: "viking://docs/", type: "directory" };
+  it("maps directory entry from OV ls/tree response (isDir=true)", () => {
+    const raw = { uri: "viking://docs/", isDir: true };
     const entry = toFsEntry(raw);
     expect(entry.type).toBe("directory");
   });
 
+  it("maps stat response using name + fallbackUri", () => {
+    const raw = { name: "INDEX.md", isDir: false, size: 2295, modTime: "2026-06-05T05:05:41Z" };
+    const entry = toFsEntry(raw, "viking://resources/docs-ov/INDEX.md");
+    expect(entry.uri.value).toBe("viking://resources/docs-ov/INDEX.md");
+    expect(entry.type).toBe("file");
+    expect(entry.size).toBe(2295);
+  });
+
   it("handles missing optional fields", () => {
-    const raw = { uri: "viking://docs/file.md", type: "file" };
+    const raw = { uri: "viking://docs/file.md", isDir: false };
     const entry = toFsEntry(raw);
     expect(entry.size).toBeUndefined();
     expect(entry.modTime).toBeUndefined();
   });
 
-  it("throws on invalid type", () => {
+  it("still accepts legacy type field (backward compat)", () => {
+    const raw = { uri: "viking://docs/file.md", type: "file", size: 100 };
+    const entry = toFsEntry(raw);
+    expect(entry.type).toBe("file");
+    expect(entry.size).toBe(100);
+  });
+
+  it("throws on invalid type when no isDir", () => {
     const raw = { uri: "viking://x", type: "symlink" };
     expect(() => toFsEntry(raw)).toThrow();
   });
 
-  it("throws on missing type", () => {
-    const raw = { uri: "viking://x" };
+  it("throws on missing uri and no fallbackUri", () => {
+    const raw = { name: "file.md", isDir: false };
     expect(() => toFsEntry(raw)).toThrow();
   });
 
-  it("throws on missing uri", () => {
-    const raw = { type: "file" };
-    expect(() => toFsEntry(raw)).toThrow();
+  it("does not accept bare name without fallbackUri (not a valid viking:// URI)", () => {
+    const raw = { name: "file.md", isDir: false };
+    expect(() => toFsEntry(raw)).toThrow(/viking/);
   });
 });
 
 describe("toFsEntries", () => {
-  it("maps array of entries", () => {
+  it("maps array of entries (OV format)", () => {
     const raw = [
-      { uri: "viking://a.md", type: "file", size: 100 },
-      { uri: "viking://b.md", type: "file", size: 200 },
+      { uri: "viking://a.md", isDir: false, size: 100 },
+      { uri: "viking://b.md", isDir: false, size: 200 },
     ];
     const entries = toFsEntries(raw);
     expect(entries).toHaveLength(2);
@@ -85,14 +100,6 @@ describe("toFsEntries", () => {
 
   it("returns empty array for empty input", () => {
     expect(toFsEntries([])).toHaveLength(0);
-  });
-
-  it("throws if any entry is invalid", () => {
-    const raw = [
-      { uri: "viking://a.md", type: "file" },
-      { uri: "viking://b.md", type: "unknown" },
-    ];
-    expect(() => toFsEntries(raw)).toThrow();
   });
 
   it("handles null/undefined by returning empty array", () => {

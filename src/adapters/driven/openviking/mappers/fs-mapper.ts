@@ -26,21 +26,30 @@ function assertValidType(t: unknown): asserts t is "file" | "directory" {
   }
 }
 
-export function toFsEntry(raw: unknown): FsEntry {
+export function toFsEntry(raw: unknown, fallbackUri?: string): FsEntry {
   const r = getRecord(raw);
 
-  if (typeof r.uri !== "string" || !r.uri) {
+  // OV returns `uri` (ls/tree) or `name` (stat) for the identifier
+  const uriStr = typeof r.uri === "string" && r.uri
+    ? r.uri
+    : typeof r.name === "string" && r.name
+      ? (fallbackUri ?? r.name)
+      : undefined;
+
+  if (!uriStr) {
     throw new Error("FsEntry missing required field: uri");
   }
-  if (!r.type) {
-    throw new Error("FsEntry missing required field: type");
-  }
 
-  assertValidType(r.type);
+  // OV returns `isDir` (boolean); fallback to `type` string for backward compat
+  const type = typeof r.isDir === "boolean"
+    ? (r.isDir ? ("directory" as const) : ("file" as const))
+    : typeof r.type === "string"
+      ? (assertValidType(r.type), r.type)
+      : ("file" as const);
 
   return {
-    uri: new Uri(r.uri),
-    type: r.type,
+    uri: new Uri(uriStr),
+    type,
     size: safeNumber(r.size),
     modTime: safeOptionalString(r.modTime),
   };
@@ -48,5 +57,5 @@ export function toFsEntry(raw: unknown): FsEntry {
 
 export function toFsEntries(raw: unknown): FsEntry[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map(toFsEntry);
+  return raw.map((item) => toFsEntry(item));
 }

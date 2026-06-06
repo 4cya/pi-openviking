@@ -53,9 +53,9 @@ describe("ov_grep tool", () => {
       },
     });
     const tool = createOvGrepTool(svc, makePipeline());
-    const result = await executeTool(tool, { pattern: "hello", caseInsensitive: true });
+    const result = await executeTool(tool, { pattern: "hello", uri: "viking://", caseInsensitive: true });
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ pattern: "hello", opts: { caseInsensitive: true } });
+    expect(calls[0]).toMatchObject({ pattern: "hello", opts: { uri: "viking://", caseInsensitive: true } });
     expect(result.content[0]).toMatchObject({ type: "text" });
   });
 });

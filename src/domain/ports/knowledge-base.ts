@@ -7,6 +7,8 @@ export interface GlobResult {
 }
 
 export interface GrepOptions {
+  /** URI to scope the search — OV requires this field */
+  uri: string;
   caseInsensitive?: boolean;
   excludeUri?: string;
   levelLimit?: number;

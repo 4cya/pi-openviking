@@ -184,12 +184,12 @@ describe("KnowledgeBaseAdapter.grep", () => {
   it("calls POST /api/v1/search/grep with pattern and uri", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      matches: [{ uri: "viking://src/a.ts", lineNumber: 5, line: "import" }],
-      total: 1,
+      matches: [{ uri: "viking://src/a.ts", line: 5, content: "import" }],
+      count: 1,
     });
 
     const kb = new KnowledgeBaseAdapter(transport);
-    const result = await kb.grep("import");
+    const result = await kb.grep("import", { uri: "viking://src/" });
 
     const [label, path, opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(label).toBe("KnowledgeBase.grep");
@@ -197,17 +197,19 @@ describe("KnowledgeBaseAdapter.grep", () => {
     expect(opts.method).toBe("POST");
     const body = JSON.parse(opts.body);
     expect(body.pattern).toBe("import");
+    expect(body.uri).toBe("viking://src/");
     expect(result.matches).toHaveLength(1);
   });
 
   it("passes uri and all filter opts", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      matches: [], total: 0,
+      matches: [], count: 0,
     });
 
     const kb = new KnowledgeBaseAdapter(transport);
     await kb.grep("function", {
+      uri: "viking://src/",
       caseInsensitive: true,
       excludeUri: "viking://node_modules/",
       levelLimit: 3,
@@ -216,6 +218,7 @@ describe("KnowledgeBaseAdapter.grep", () => {
 
     const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(opts.body);
+    expect(body.uri).toBe("viking://src/");
     expect(body.case_insensitive).toBe(true);
     expect(body.exclude_uri).toBe("viking://node_modules/");
     expect(body.level_limit).toBe(3);
@@ -225,15 +228,16 @@ describe("KnowledgeBaseAdapter.grep", () => {
   it("works with required fields only", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      matches: [], total: 0,
+      matches: [], count: 0,
     });
 
     const kb = new KnowledgeBaseAdapter(transport);
-    await kb.grep("todo");
+    await kb.grep("todo", { uri: "viking://" });
 
     const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.pattern).toBe("todo");
+    expect(body.uri).toBe("viking://");
     expect(body.case_insensitive).toBeUndefined();
   });
 });

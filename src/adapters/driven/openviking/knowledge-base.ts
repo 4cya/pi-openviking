@@ -58,6 +58,7 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
   async grep(pattern: string, opts?: GrepOptions, signal?: AbortSignal): Promise<GrepResult> {
     const body: Record<string, unknown> = {
       pattern,
+      uri: opts?.uri ?? "",
     };
     if (opts?.caseInsensitive !== undefined) body.case_insensitive = opts.caseInsensitive;
     if (opts?.excludeUri !== undefined) body.exclude_uri = opts.excludeUri;

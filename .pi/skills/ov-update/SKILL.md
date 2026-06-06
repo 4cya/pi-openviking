@@ -9,7 +9,9 @@ Update `pi-openviking` container to latest OV release, then re-import official d
 
 ## Workflow
 
-### 1. Check Latest OV Release
+### 1. Determine Target Version & Doc Source
+
+#### 1a. Check latest release tag
 
 Scrape GitHub releases to find latest tag:
 
@@ -17,7 +19,25 @@ Scrape GitHub releases to find latest tag:
 firecrawl_scrape url="https://github.com/volcengine/OpenViking/releases/latest"
 ```
 
-Extract version tag (e.g. `v0.3.23`) from page. Compare with current running version (check `version.md` resource). If same → stop.
+Extract version tag (e.g. `v0.3.23`) from page URL (`/releases/tag/{tag}`).
+
+#### 1b. Check if `main` has newer docs
+
+Compare with the current installed version (check `version.md` resource):
+- If the latest release tag **matches** the current version, check whether `main` has doc commits since that tag:
+  ```
+  firecrawl_scrape url="https://github.com/volcengine/OpenViking/compare/{tag}...main" onlyMainContent=true
+  ```
+  Search for `docs/en/` file changes. If `main` has doc changes → use `main` as the doc source (bleeding-edge docs).
+- If the latest release tag **differs** from current → update to the new release. Use the release tag as the doc source.
+- If same tag **and** no doc changes on `main` → stop (nothing to do).
+
+Set `$DOC_SOURCE` to either `main` or `{tag}` for subsequent steps.
+
+#### 1c. Compare semver for container update
+
+If release tag > current version → proceed with Docker update (steps 2-4).
+Otherwise skip steps 2-4 (only docs refresh needed).
 
 ### 2. Check Changelog for Breaking Changes
 
@@ -61,11 +81,13 @@ Wait for health check to pass (container says `(healthy)`). If health check fail
 
 Before deleting old resources, check if OV added/removed docs since last import.
 
+Use `$DOC_SOURCE` determined in step 1 (either `{tag}` or `main`).
+
 Scrape the GitHub tree for both directories:
 
 ```
-firecrawl_scrape url="https://github.com/volcengine/OpenViking/tree/{tag}/docs/en/concepts" onlyMainContent=true formats=["links"]
-firecrawl_scrape url="https://github.com/volcengine/OpenViking/tree/{tag}/docs/en/api" onlyMainContent=true formats=["links"]
+firecrawl_scrape url="https://github.com/volcengine/OpenViking/tree/{DOC_SOURCE}/docs/en/concepts" onlyMainContent=true formats=["links"]
+firecrawl_scrape url="https://github.com/volcengine/OpenViking/tree/{DOC_SOURCE}/docs/en/api" onlyMainContent=true formats=["links"]
 ```
 
 Extract `.md` file links (not `../`). Compare with REFERENCE.md list:
@@ -85,9 +107,9 @@ ov_delete --recursive viking://resources/pi-openviking/docs-ov/
 
 ### 8. Re-import OV Docs from GitHub
 
-Use `ov_import` for each doc URL from [REFERENCE.md](REFERENCE.md), substituting the tag into URLs:
+Use `ov_import` for each doc URL from [REFERENCE.md](REFERENCE.md), substituting `$DOC_SOURCE` into URLs:
 
-- Replace `main` with the release `{tag}` in all URLs (e.g. `main` → `v0.3.23`)
+- Replace `main` with `$DOC_SOURCE` (either a tag like `v0.3.23` or `main` for bleeding-edge)
 - Import concepts/, api/, and README
 - Import order does not matter — OV processes async
 
@@ -101,7 +123,7 @@ Use `ov_import` with:
 After all imports succeed:
 
 ```bash
-ov_write action="save" uri="viking://resources/pi-openviking/docs-ov/version.md" content="# OV Docs Version\n\n**Version:** {tag}\n**Import date:** $(date +%Y-%m-%d)\n**Source:** https://github.com/volcengine/OpenViking/tree/{tag}"
+ov_write action="save" uri="viking://resources/pi-openviking/docs-ov/version.md" content="# OV Docs Version\n\n**Version:** {tag}\n**Import date:** $(date +%Y-%m-%d)\n**Doc source:** {DOC_SOURCE}\n**Source:** https://github.com/volcengine/OpenViking/tree/{DOC_SOURCE}"
 ```
 
 ### 10. Verify
@@ -116,6 +138,6 @@ Should return results from the freshly imported docs.
 
 - Container is `pi-openviking` (production), not `pi-openviking-test` (CI only)
 - `docker-compose.yml` uses `pull_policy: always` → `docker compose pull` always fetches latest `:latest` tag
-- OV docs at `main` branch are ahead of the latest release by some commits — use the **release tag** for URLs to stay version-locked
+- OV docs at `main` branch are ahead of the latest release by some commits. By default the skill uses the **release tag** for URLs (version-locked), but if `main` has doc changes since the release, it switches to `main` for docs import (bleeding-edge). This ensures we always get the latest docs even between releases.
 - Docs import is async on OV side (VLM generates L0/L1 in background). Search may not work immediately after import — wait a few seconds
 - If any `ov_import` fails (HTTP 404), the doc was renamed/removed in new version — check the GitHub tree and update REFERENCE.md URLs accordingly

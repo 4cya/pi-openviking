@@ -5,7 +5,7 @@ describe("toSearchResult", () => {
   it("maps full search response with all fields", () => {
     const raw = {
       memories: [
-        { uri: "viking://mem/1", text: "memory text", abstract: "mem abs", score: 0.9, category: "docs", level: 1, modTime: "2026-01-01T00:00:00Z" },
+        { uri: "viking://mem/1", abstract: "mem abs", score: 0.9, category: "docs", level: 1, modTime: "2026-01-01T00:00:00Z" },
       ],
       resources: [
         { uri: "viking://res/1", score: 0.8, abstract: "res abs" },
@@ -14,19 +14,21 @@ describe("toSearchResult", () => {
         { uri: "viking://skill/1", score: 0.7, abstract: "skill abs" },
       ],
       total: 3,
-      queryPlan: "semantic search",
+      query_plan: { reasoning: "deep search", queries: [] },
     };
 
     const result = toSearchResult(raw);
     expect(result.memories).toHaveLength(1);
     expect(result.memories[0].uri).toBe("viking://mem/1");
     expect(result.memories[0].category).toBe("docs");
+    // text falls back to abstract since OV doesn't return a text field
+    expect(result.memories[0].text).toBe("mem abs");
     expect(result.resources).toHaveLength(1);
     expect(result.resources[0].abstract).toBe("res abs");
     expect(result.skills).toHaveLength(1);
     expect(result.skills[0].uri).toBe("viking://skill/1");
     expect(result.total).toBe(3);
-    expect(result.queryPlan).toBe("semantic search");
+    expect(result.queryPlan).toBe('{"reasoning":"deep search","queries":[]}');
   });
 
   it("handles empty arrays", () => {
@@ -40,13 +42,13 @@ describe("toSearchResult", () => {
 
   it("handles missing optional fields inside items", () => {
     const raw = {
-      memories: [{ uri: "viking://mem/1", text: "no abstract" }],
+      memories: [{ uri: "viking://mem/1", abstract: "has abstract" }],
       resources: [{ uri: "viking://res/1" }],
       skills: [],
       total: 1,
     };
     const result = toSearchResult(raw);
-    expect(result.memories[0].abstract).toBeUndefined();
+    expect(result.memories[0].text).toBe("has abstract");
     expect(result.resources[0].score).toBeUndefined();
   });
 
@@ -59,13 +61,33 @@ describe("toSearchResult", () => {
     expect(empty2.memories).toHaveLength(0);
   });
 
-  it("handles missing queryPlan", () => {
+  it("handles missing query_plan", () => {
     const raw = { memories: [], resources: [], skills: [], total: 0 };
     const result = toSearchResult(raw);
     expect(result.queryPlan).toBeUndefined();
   });
 
-  it("handles item with missing text field", () => {
+  it("handles query_plan as string", () => {
+    const raw = {
+      memories: [], resources: [], skills: [], total: 0,
+      query_plan: "simple plan",
+    };
+    const result = toSearchResult(raw);
+    expect(result.queryPlan).toBe("simple plan");
+  });
+
+  it("falls back text to abstract when no text field", () => {
+    const raw = {
+      memories: [{ uri: "viking://mem/1", abstract: "fallback abstract" }],
+      resources: [],
+      skills: [],
+      total: 1,
+    };
+    const result = toSearchResult(raw);
+    expect(result.memories[0].text).toBe("fallback abstract");
+  });
+
+  it("returns empty text when neither text nor abstract present", () => {
     const raw = {
       memories: [{ uri: "viking://mem/1" }],
       resources: [],
@@ -102,32 +124,48 @@ describe("toGlobResult", () => {
 });
 
 describe("toGrepResult", () => {
-  it("maps grep response with line numbers", () => {
+  it("maps grep response in OV format (line, content, count)", () => {
     const raw = {
       matches: [
-        { uri: "viking://docs/a.md", lineNumber: 10, line: "function foo()" },
-        { uri: "viking://docs/a.md", lineNumber: 20, line: "function bar()" },
+        { uri: "viking://docs/a.md", line: 15, content: "function foo()" },
+        { uri: "viking://docs/a.md", line: 25, content: "function bar()" },
       ],
-      total: 2,
+      count: 2,
     };
     const result = toGrepResult(raw);
     expect(result.matches).toHaveLength(2);
-    expect(result.matches[0].lineNumber).toBe(10);
+    expect(result.matches[0].lineNumber).toBe(15);
     expect(result.matches[0].line).toBe("function foo()");
     expect(result.total).toBe(2);
+    expect(result.matches[1].lineNumber).toBe(25);
+    expect(result.matches[1].line).toBe("function bar()");
+  });
+
+  it("handles legacy format (lineNumber, line, total) for backward compat", () => {
+    const raw = {
+      matches: [
+        { uri: "viking://docs/a.md", lineNumber: 10, line: "legacy content" },
+      ],
+      total: 1,
+    };
+    const result = toGrepResult(raw);
+    expect(result.matches[0].lineNumber).toBe(10);
+    expect(result.matches[0].line).toBe("legacy content");
+    expect(result.total).toBe(1);
   });
 
   it("handles matches without line numbers", () => {
     const raw = {
-      matches: [{ uri: "viking://docs/a.md", line: "content" }],
-      total: 1,
+      matches: [{ uri: "viking://docs/a.md", content: "content" }],
+      count: 1,
     };
     const result = toGrepResult(raw);
     expect(result.matches[0].lineNumber).toBeUndefined();
+    expect(result.matches[0].line).toBe("content");
   });
 
   it("handles empty matches", () => {
-    const result = toGrepResult({ matches: [], total: 0 });
+    const result = toGrepResult({ matches: [], count: 0 });
     expect(result.matches).toHaveLength(0);
   });
 

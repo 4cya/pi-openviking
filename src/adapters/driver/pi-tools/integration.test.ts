@@ -67,8 +67,8 @@ beforeAll(async () => {
       if (url.pathname === "/api/v1/search/grep") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
-          matches: [{ uri: "viking://docs/a.md", line: "hello world", line_number: 5 }],
-          total: 1,
+          matches: [{ uri: "viking://docs/a.md", line: 5, content: "hello world" }],
+          count: 1,
         }));
         return;
       }

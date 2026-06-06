@@ -97,7 +97,7 @@ export class FsStoreAdapter implements FsStore {
       undefined,
       signal,
     );
-    return toFsEntry(raw);
+    return toFsEntry(raw, uri.value);
   }
 
   async mkdir(uri: Uri, signal?: AbortSignal): Promise<void> {
