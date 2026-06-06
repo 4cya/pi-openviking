@@ -1,20 +1,22 @@
+/**
+ * Mapper for OV content read endpoint.
+ *
+ * See OV 03-filesystem.md.
+ */
 import type { Content } from "../../../../domain/ports/fs-store";
 import type { ContentLevel } from "../../../../domain/common/content-level";
 import { Uri } from "../../../../domain/common/uri";
-import { getRecord, safeString } from "./mapper-utils";
+import type { OVContentReadResponse } from "../types/ov-common";
 
-function extractBody(raw: unknown): string {
+function extractBody(raw: OVContentReadResponse): string {
   // OV v0.3.x returns result as a direct string (markdown text)
-  // e.g. {"status":"ok","result":"# Content..."}
-  // The Transport unwraps the envelope, so raw may be a string.
   if (typeof raw === "string") return raw;
 
-  // Fallback: object with body field (backward compat / test mocks)
-  const r = getRecord(raw);
-  return safeString(r.body);
+  // Object with body field (backward compat / test mocks)
+  return raw?.body ?? "";
 }
 
-export function toContent(raw: unknown, uri: Uri, level?: ContentLevel): Content {
+export function toContent(raw: OVContentReadResponse, uri: Uri, level?: ContentLevel): Content {
   const body = extractBody(raw);
   return {
     uri,

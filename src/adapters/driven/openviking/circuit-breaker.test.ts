@@ -67,6 +67,7 @@ describe("CircuitBreaker", () => {
       consecutiveFails: 3,
       threshold: 3,
       resetTimeoutMs: 10_000,
+      maxResetTimeoutMs: 300_000,
       openSince: 0,
       lastProbeTime: 10_000,
     };
@@ -82,6 +83,7 @@ describe("CircuitBreaker", () => {
       consecutiveFails: 3,
       threshold: 3,
       resetTimeoutMs: 10_000,
+      maxResetTimeoutMs: 300_000,
       openSince: 0,
       lastProbeTime: 10_000,
     };
@@ -92,6 +94,40 @@ describe("CircuitBreaker", () => {
     expect(reopened.openSince).toBe(12_000);
     expect(reopened.resetTimeoutMs).toBe(20_000);
     expect(allowsRequest(reopened)).toBe(false);
+  });
+
+  it("HALF_OPEN failure doubles timeout up to maxResetTimeoutMs cap", () => {
+    const start: CircuitBreakerState = {
+      status: "HALF_OPEN",
+      consecutiveFails: 3,
+      threshold: 3,
+      resetTimeoutMs: 200_000,
+      maxResetTimeoutMs: 300_000,
+      openSince: 0,
+      lastProbeTime: 10_000,
+    };
+
+    const reopened = circuitBreakerReducer(start, { type: "RECORD_FAILURE", now: 12_000 });
+    expect(reopened.status).toBe("OPEN");
+    // 200k * 2 = 400k, capped at 300k
+    expect(reopened.resetTimeoutMs).toBe(300_000);
+  });
+
+  it("HALF_OPEN failure doubles timeout within cap", () => {
+    const start: CircuitBreakerState = {
+      status: "HALF_OPEN",
+      consecutiveFails: 3,
+      threshold: 3,
+      resetTimeoutMs: 10_000,
+      maxResetTimeoutMs: 300_000,
+      openSince: 0,
+      lastProbeTime: 10_000,
+    };
+
+    const reopened = circuitBreakerReducer(start, { type: "RECORD_FAILURE", now: 12_000 });
+    expect(reopened.status).toBe("OPEN");
+    // 10k * 2 = 20k, under cap
+    expect(reopened.resetTimeoutMs).toBe(20_000);
   });
 
   it("RESET returns to initial state", () => {

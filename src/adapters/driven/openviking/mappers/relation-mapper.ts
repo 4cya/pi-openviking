@@ -1,18 +1,22 @@
+/**
+ * Mappers for OV relation/graph endpoints.
+ *
+ * See OV 08-relations.md.
+ */
 import { Uri } from "../../../../domain/common/uri";
 import type { LinkResult } from "../../../../domain/ports/graph-store";
 import type { Relation } from "../../../../domain/knowledge/model/relation";
-import { getRecord, safeOptionalString, safeString } from "./mapper-utils";
+import type { OVRelationItem, OVRelationEnvelope } from "../types/ov-relation";
 
-function toRelationItem(raw: unknown): Relation {
-  const r = getRecord(raw);
+function toRelationItem(raw: OVRelationItem): Relation {
   return {
-    uri: safeString(r.uri),
-    reason: safeOptionalString(r.reason),
+    uri: raw.uri,
+    reason: raw.reason ?? undefined,
   };
 }
 
 export function toLinkResult(
-  raw: unknown,
+  _raw: unknown,
   source: Uri,
   targets: Uri[],
   reason?: string,
@@ -24,8 +28,8 @@ export function toLinkResult(
   };
 }
 
-export function toRelations(raw: unknown): Relation[] {
-  const r = getRecord(raw);
-  const items = Array.isArray(raw) ? raw : (Array.isArray(r.relations) ? r.relations : []);
+export function toRelations(raw: OVRelationItem[] | OVRelationEnvelope | null | undefined): Relation[] {
+  if (!raw) return [];
+  const items = Array.isArray(raw) ? raw : (Array.isArray(raw.relations) ? raw.relations : []);
   return items.map(toRelationItem);
 }

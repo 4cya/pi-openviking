@@ -258,3 +258,99 @@ describe("SessionStoreAdapter.deleteSession", () => {
     expect(opts.method).toBe("DELETE");
   });
 });
+
+describe("SessionStoreAdapter.getSession", () => {
+  it("calls GET /api/v1/sessions/{id} and returns SessionInfo", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      session_id: "sess-1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+      message_count: 42,
+      commit_count: 3,
+    });
+
+    const ss = new SessionStoreAdapter(transport);
+    const info = await ss.getSession(new SessionId("sess-1"));
+
+    const [label, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("SessionStore.getSession");
+    expect(path).toBe("/api/v1/sessions/sess-1");
+    expect(info.sessionId).toBe("sess-1");
+    expect(info.messageCount).toBe(42);
+    expect(info.commitCount).toBe(3);
+  });
+
+  it("handles full session info response", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      session_id: "sess-2",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+      message_count: 10,
+      total_message_count: 50,
+      commit_count: 2,
+      memories_extracted: { profile: 3, preferences: 4, total: 7 },
+      last_commit_at: "2026-06-01T00:00:00Z",
+    });
+
+    const ss = new SessionStoreAdapter(transport);
+    const info = await ss.getSession(new SessionId("sess-2"));
+
+    expect(info.totalMessageCount).toBe(50);
+    expect(info.memoriesExtracted).toBe(7);
+    expect(info.lastCommitAt).toBe("2026-06-01T00:00:00Z");
+  });
+});
+
+describe("SessionStoreAdapter.listSessions", () => {
+  it("calls GET /api/v1/sessions and returns SessionInfo array", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        session_id: "sess-1",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-06-01T00:00:00Z",
+        message_count: 42,
+        commit_count: 3,
+      },
+      {
+        session_id: "sess-2",
+        created_at: "2026-02-01T00:00:00Z",
+        updated_at: "2026-06-01T00:00:00Z",
+        message_count: 10,
+        commit_count: 1,
+      },
+    ]);
+
+    const ss = new SessionStoreAdapter(transport);
+    const sessions = await ss.listSessions();
+
+    const [label, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(label).toBe("SessionStore.listSessions");
+    expect(path).toBe("/api/v1/sessions");
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0].sessionId).toBe("sess-1");
+    expect(sessions[1].sessionId).toBe("sess-2");
+  });
+
+  it("handles empty list", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const ss = new SessionStoreAdapter(transport);
+    const sessions = await ss.listSessions();
+
+    expect(sessions).toHaveLength(0);
+  });
+
+  it("handles non-array response gracefully", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    const ss = new SessionStoreAdapter(transport);
+    const sessions = await ss.listSessions();
+
+    expect(sessions).toHaveLength(0);
+  });
+});

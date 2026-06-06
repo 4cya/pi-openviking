@@ -6,7 +6,6 @@ import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
 import type { ResourceService } from "./domain/services/resource-service";
 import type { OVAdapter } from "./adapters/driven/openviking/adapter";
-import type { FsStore } from "./domain/ports/fs-store";
 import type { KnowledgeBase } from "./domain/ports/knowledge-base";
 import type { ProfileManager } from "./domain/profile/service/ProfileManager";
 import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
@@ -37,7 +36,6 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const fsStoreService = container.resolve<FsStoreService>("fsStoreService");
       const recallService = container.resolve<RecallService>("recallService");
       const sessionService = container.resolve<SessionService>("sessionService");
-      const fsStore = container.resolve<FsStore>("fsStore");
       const knowledgeBase = container.resolve<KnowledgeBase>("knowledgeBase");
       const profileManager = container.resolve<ProfileManager>("profileManager");
       const adapter = container.resolve<OVAdapter>("adapter");
@@ -51,7 +49,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         recallService,
         sessionService,
         searchService,
-        fsStore,
+        fsStoreService,
         knowledgeBase,
         profileManager,
         autoDetectRules: config.profile.autoDetectRules,

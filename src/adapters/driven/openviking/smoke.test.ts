@@ -31,7 +31,7 @@ beforeAll(async () => {
     if (url.pathname === "/api/v1/search/find" && req.method === "POST") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
-        memories: [{ uri: "viking://smoke/1", text: "smoke result" }],
+        memories: [{ uri: "viking://smoke/1", abstract: "smoke result", context_type: "memory", score: 0.5, level: 1, category: "", match_reason: "" }],
         resources: [],
         skills: [],
         total: 1,

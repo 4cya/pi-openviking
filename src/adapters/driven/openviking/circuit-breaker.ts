@@ -5,6 +5,7 @@ export interface CircuitBreakerState {
   consecutiveFails: number;
   threshold: number;
   resetTimeoutMs: number;
+  maxResetTimeoutMs: number;
   openSince: number | null;
   lastProbeTime: number | null;
 }
@@ -12,12 +13,14 @@ export interface CircuitBreakerState {
 export function createCircuitBreaker(
   threshold = 3,
   resetTimeoutMs = 30_000,
+  maxResetTimeoutMs = 300_000,
 ): CircuitBreakerState {
   return {
     status: "CLOSED",
     consecutiveFails: 0,
     threshold,
     resetTimeoutMs,
+    maxResetTimeoutMs,
     openSince: null,
     lastProbeTime: null,
   };
@@ -50,12 +53,13 @@ export function circuitBreakerReducer(
         };
       }
       if (state.status === "HALF_OPEN") {
+        const doubled = state.resetTimeoutMs * 2;
         return {
           ...state,
           status: "OPEN",
           consecutiveFails: fails,
           openSince: action.now,
-          resetTimeoutMs: state.resetTimeoutMs * 2,
+          resetTimeoutMs: Math.min(doubled, state.maxResetTimeoutMs),
           lastProbeTime: null,
         };
       }

@@ -1,23 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createOvReindexCommand } from "./ov-reindex-command";
-import type { FsStore } from "../../../domain/ports/fs-store";
-import type { Uri } from "../../../domain/common/uri";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 
-function makeFsStore(overrides?: Partial<FsStore>): FsStore {
-  const reindex = vi.fn().mockResolvedValue(undefined);
+function makeStore(): FsStoreService {
   return {
     read: vi.fn(),
-    write: vi.fn(),
+    save: vi.fn(),
+    mkdir: vi.fn(),
+    mv: vi.fn(),
     list: vi.fn(),
     tree: vi.fn(),
     stat: vi.fn(),
-    mkdir: vi.fn(),
-    mv: vi.fn(),
     delete: vi.fn(),
-    reindex,
-    ...overrides,
-  } as unknown as FsStore;
+    reindex: vi.fn().mockResolvedValue(undefined),
+  } as unknown as FsStoreService;
 }
 
 function mockCtx(): ExtensionCommandContext {
@@ -47,14 +44,14 @@ function mockCtx(): ExtensionCommandContext {
 
 describe("ov-reindex command", () => {
   it("reindexes a URI with default mode", async () => {
-    const store = makeFsStore();
+    const store = makeStore();
     const cmd = createOvReindexCommand(store);
     const ctx = mockCtx();
 
     await cmd.handler("viking://resources/test.md", ctx);
 
     expect(store.reindex).toHaveBeenCalledWith(
-      expect.objectContaining({ value: "viking://resources/test.md" }),
+      "viking://resources/test.md",
       "vectors_only",
       undefined,
     );
@@ -65,14 +62,14 @@ describe("ov-reindex command", () => {
   });
 
   it("passes --mode full flag", async () => {
-    const store = makeFsStore();
+    const store = makeStore();
     const cmd = createOvReindexCommand(store);
     const ctx = mockCtx();
 
     await cmd.handler("viking://resources/test.md --mode full", ctx);
 
     expect(store.reindex).toHaveBeenCalledWith(
-      expect.objectContaining({ value: "viking://resources/test.md" }),
+      "viking://resources/test.md",
       "full",
       undefined,
     );
@@ -83,7 +80,7 @@ describe("ov-reindex command", () => {
   });
 
   it("shows usage when no URI provided", async () => {
-    const store = makeFsStore();
+    const store = makeStore();
     const cmd = createOvReindexCommand(store);
     const ctx = mockCtx();
 
@@ -97,7 +94,7 @@ describe("ov-reindex command", () => {
   });
 
   it("validates URI", async () => {
-    const store = makeFsStore();
+    const store = makeStore();
     const cmd = createOvReindexCommand(store);
     const ctx = mockCtx();
 
@@ -111,9 +108,8 @@ describe("ov-reindex command", () => {
   });
 
   it("handles error", async () => {
-    const store = makeFsStore({
-      reindex: vi.fn().mockRejectedValue(new Error("OV unreachable")),
-    });
+    const store = makeStore();
+    store.reindex = vi.fn().mockRejectedValue(new Error("OV unreachable"));
     const cmd = createOvReindexCommand(store);
     const ctx = mockCtx();
 

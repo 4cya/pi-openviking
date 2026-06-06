@@ -21,3 +21,16 @@ export interface SearchRequest {
   sessionId?: SessionId;
   targetUri?: Uri;
 }
+
+/**
+ * SearchOptions: advanced search parameters for filtering and provenance.
+ * Passed alongside FindQuery or SearchRequest.
+ */
+export interface SearchOptions {
+  scoreThreshold?: number;
+  since?: string;
+  until?: string;
+  timeField?: string;
+  level?: number;
+  includeProvenance?: boolean;
+}

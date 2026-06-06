@@ -12,6 +12,7 @@ export { BUILTIN_PROFILES } from "./profile-schema";
 const CircuitBreakerConfigSchema = z.object({
   threshold: z.coerce.number().int().min(1).default(3),
   resetTimeoutMs: z.coerce.number().int().positive().default(30_000),
+  maxResetTimeoutMs: z.coerce.number().int().positive().default(300_000),
 });
 
 export const OVAdapterConfigSchema = z.object({

@@ -1,20 +1,27 @@
+/**
+ * Mapper for OV error responses.
+ *
+ * See OV 01-overview.md (error response format).
+ */
 import { ConnectionError } from "../../../../domain/errors/connection-error";
 import { NotFoundError } from "../../../../domain/errors/not-found-error";
 import { ValidationError } from "../../../../domain/errors/validation-error";
 import { DomainError } from "../../../../domain/errors/domain-error";
-import { getRecord } from "./mapper-utils";
+import type { OVErrorBody } from "../types/ov-common";
 
-function extractMessage(body: unknown): string {
-  const b = getRecord(body);
-  if (typeof b.message === "string") return b.message;
-  if (typeof b.error === "string") return b.error;
-  if (typeof b.detail === "string") return b.detail;
+function extractMessage(body: OVErrorBody | Record<string, unknown> | null | undefined): string {
+  if (!body) return "";
+  if (typeof body.message === "string") return body.message;
+  // OVErrorBody only has code/message; check error/detail via Record fallback
+  const r = body as Record<string, unknown>;
+  if (typeof r.error === "string") return r.error;
+  if (typeof r.detail === "string") return r.detail;
   return "";
 }
 
 export function toDomainError(
   httpStatus: number,
-  body: unknown,
+  body: OVErrorBody | Record<string, unknown> | null | undefined,
   methodLabel: string,
 ): DomainError {
   const msg = extractMessage(body);

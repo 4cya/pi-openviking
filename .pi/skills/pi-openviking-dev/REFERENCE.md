@@ -68,7 +68,7 @@ Pi docs are at `/home/dani/.config/nvm/versions/node/v25.1.0/lib/node_modules/@e
 
 | Category | Files |
 |----------|-------|
-| **Bootstrap** | `src/bootstrap.ts` — DI container wiring |
+| **Bootstrap** | `src/infrastructure/lifecycle.ts` — DI container wiring, async init, sync shutdown |
 | **Ports** | `src/domain/ports/` — interfaces (FsStore, SessionStore, KnowledgeBase, ResourceStore) |
 | **Adapters** | `src/adapters/driven/openviking/` — OV HTTP implementation |
 | **Driver** | `src/adapters/driver/pi-tools/` — agent-facing tools |

@@ -1,6 +1,12 @@
+/**
+ * Adapter for OV resource import endpoint.
+ *
+ * See OV 02-resources.md.
+ */
 import type { Transport } from "./transport";
 import { toResourceImportResult } from "./mappers/resource-mapper";
 import type { ResourceStore, ResourceImportResult, ImportOptions } from "../../../domain/ports/resource-store";
+import type { OVResourceImportResponse } from "./types/ov-resource";
 
 export class ResourceStoreAdapter implements ResourceStore {
   constructor(private readonly transport: Transport) {}
@@ -12,7 +18,7 @@ export class ResourceStoreAdapter implements ResourceStore {
     if (options?.reason) body.reason = options.reason;
     if (options?.wait) body.wait = true;
 
-    const raw = await this.transport.request<Record<string, unknown>>(
+    const raw = await this.transport.request<OVResourceImportResponse>(
       "ResourceStore.importUrl",
       "/api/v1/resources",
       { method: "POST", body: JSON.stringify(body) },

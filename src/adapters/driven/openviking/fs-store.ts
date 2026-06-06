@@ -1,3 +1,8 @@
+/**
+ * Adapter for OV filesystem endpoints (read, write, ls, tree, stat, mkdir, mv, delete, reindex).
+ *
+ * See OV 03-filesystem.md.
+ */
 import type { Transport } from "./transport";
 import { toContent } from "./mappers/content-mapper";
 import { toWriteResult, toFsEntries, toFsEntry } from "./mappers/fs-mapper";
@@ -7,6 +12,7 @@ import type { WriteMode } from "../../../domain/common/write-mode";
 import type { Content, FsStore, FsEntry, WriteResult, ReindexMode } from "../../../domain/ports/fs-store";
 import { ValidationError } from "../../../domain/errors/validation-error";
 import { NotFoundError } from "../../../domain/errors/not-found-error";
+import type { OVWriteResponse, OVFsEntry } from "./types/ov-fs";
 
 function buildQuery(
   uri: Uri,
@@ -97,7 +103,7 @@ export class FsStoreAdapter implements FsStore {
       wait: false,
     });
 
-    const raw = await this.transport.request<Record<string, unknown>>(
+    const raw = await this.transport.request<OVWriteResponse>(
       "FsStore.write",
       "/api/v1/content/write",
       { method: "POST", body },
@@ -109,7 +115,7 @@ export class FsStoreAdapter implements FsStore {
 
   async list(uri: Uri, recursive?: boolean, signal?: AbortSignal): Promise<FsEntry[]> {
     const query = recursive ? `uri=${encodeURIComponent(uri.value)}&recursive=true` : uriQuery(uri);
-    const raw = await this.transport.request<unknown>(
+    const raw = await this.transport.request<OVFsEntry[]>(
       "FsStore.list",
       `/api/v1/fs/ls?${query}`,
       undefined,
@@ -119,7 +125,7 @@ export class FsStoreAdapter implements FsStore {
   }
 
   async tree(uri: Uri, signal?: AbortSignal): Promise<FsEntry[]> {
-    const raw = await this.transport.request<unknown>(
+    const raw = await this.transport.request<OVFsEntry[]>(
       "FsStore.tree",
       `/api/v1/fs/tree?${uriQuery(uri)}`,
       undefined,
@@ -129,7 +135,7 @@ export class FsStoreAdapter implements FsStore {
   }
 
   async stat(uri: Uri, signal?: AbortSignal): Promise<FsEntry> {
-    const raw = await this.transport.request<Record<string, unknown>>(
+    const raw = await this.transport.request<OVFsEntry>(
       "FsStore.stat",
       `/api/v1/fs/stat?${uriQuery(uri)}`,
       undefined,

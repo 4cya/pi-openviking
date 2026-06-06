@@ -58,7 +58,7 @@ An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers
 _Avoid_: http client, fetcher
 
 **CircuitBreaker**:
-A decorator wrapper inside `Transport` that protects against OV unavailability. States: **CLOSED** (normal) → 3 failures (configurable `threshold`) → **OPEN** (rejects instantly with `ConnectionError`) → `resetTimeoutMs` (default 30s, configurable) → **HALF_OPEN** (allows 1 probe request) → success = back to CLOSED, failure = back to OPEN with `resetTimeoutMs × 2`. Circuit breaker is driven by real request failures — not by health check. Config lives in `OVAdapterConfig.circuitBreaker? { threshold: number, resetTimeoutMs: number }`. Env vars: `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`. Module at `adapters/driven/openviking/circuit-breaker.ts`. 8 pure reducer tests + 3 Transport integration tests. Issue #74.
+A decorator wrapper inside `Transport` that protects against OV unavailability. States: **CLOSED** (normal) → `threshold` failures (default 3) → **OPEN** (rejects instantly with `ConnectionError`) → `resetTimeoutMs` (default 30s, configurable) → timeout elapses → next request triggers **lazy TICK** → **HALF_OPEN** (allows 1 probe request) → success = back to CLOSED, failure = back to OPEN with `resetTimeoutMs × 2` (capped at `maxResetTimeoutMs`, default 300s). The lazy TICK check runs at the start of each `Transport.request()` — no timers or polling. Circuit breaker is driven by real request failures — not by health check. Config lives in `OVAdapterConfig.circuitBreaker? { threshold: number, resetTimeoutMs: number, maxResetTimeoutMs: number }`. Env vars: `OV_CIRCUIT_BREAKER_THRESHOLD`, `OV_CIRCUIT_BREAKER_RESET_TIMEOUT`. Module at `adapters/driven/openviking/circuit-breaker.ts`. 10 pure reducer tests + 4 Transport integration tests. Issue #74.
 _Avoid_: cb, breaker, fault tolerance
 
 **HealthCheck**:
@@ -77,28 +77,28 @@ _Avoid_: content parser, response mapper
 A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` maps level to endpoint segment (`/api/v1/content/{read|abstract|overview}`) with `uri`, `offset`, `limit` query params. `write()` calls `POST /api/v1/content/write` with `wait: false` (async — OV processes embedding in background). Navigation methods (`list`, `tree`, `stat`) call `GET /api/v1/fs/{ls|tree|stat}`. Management methods (`mkdir`, `mv`) use POST with URI payload. `delete()` calls `DELETE /api/v1/fs?uri=` and auto-retries with `recursive=true` on recursive-required errors. `reindex()` calls `POST /api/v1/content/reindex {uri, mode}` with `mode` defaulting to `"vectors_only"`.
 
 **FsMapper**:
-Pure functions in `adapters/driven/openviking/mappers/fs-mapper.ts`: `toFsEntry(raw)` validates type (`file|directory`) and returns domain `FsEntry`; `toFsEntries(raw)` maps arrays; `toWriteResult(raw, expectedUri)` infers success from `success` flag or `status` field.
+Pure functions in `adapters/driven/openviking/mappers/fs-mapper.ts`: `toFsEntry(raw: OVFsEntry)` extracts `uri`, `type` (from `isDir`), `size`, `modTime` and returns domain `FsEntry`; `toFsEntries(raw: OVFsEntry[])` maps arrays; `toWriteResult(raw: OVWriteResponse, expectedUri)` returns `success: true` (HTTP 2xx implies success).
 
 **SearchMapper**:
-Pure functions in `adapters/driven/openviking/mappers/search-mapper.ts`: `toSearchResult(raw)` maps OV search response (memories/resources/skills arrays) into domain `SearchResult`; `toGlobResult(raw)` maps glob entries; `toGrepResult(raw)` maps grep matches with line numbers. All null-safe.
+Pure functions in `adapters/driven/openviking/mappers/search-mapper.ts`: `toSearchResult(raw: OVFindResponse)` maps OV search response into domain `SearchResult`, extracting `contextType` and `matchReason` from each `MatchedContext`; `toGlobResult(raw: OVGlobResponse)` maps `matches`→`entries`, `count`→`total`; `toGrepResult(raw: OVGrepResponse)` maps `OVGrepMatch{uri,line,content}` → domain matches with `lineNumber`/`line`.
 _Avoid_: search parser, search response mapper
 
 **KnowledgeBaseAdapter**:
 An implementation of the `KnowledgeBase` port in `adapters/driven/openviking/knowledge-base.ts`. `find()` calls `POST /api/v1/search/find` (no session). `search()` calls `POST /api/v1/search/search` with optional `session_id`. `glob()` calls `POST /api/v1/search/glob`. `grep()` calls `POST /api/v1/search/grep` with all filter params (`case_insensitive`, `exclude_uri`, `level_limit`, `node_limit`). All methods use `SearchMapper` for response mapping.
 
 **SessionMapper**:
-Pure functions in `adapters/driven/openviking/mappers/session-mapper.ts`: `toSessionId(raw)` extracts the session identifier from OV create response; `toCommitResult(raw)` maps commit response to `{ sessionId, taskId? }`; `toTaskStatus(raw)` maps task status (pending/running/completed/failed). Also exports `serializePart(part)` and `serializeParts(parts)` which convert domain `Part` types to OV JSON format with camelCase→snake_case key mapping.
+Pure functions in `adapters/driven/openviking/mappers/session-mapper.ts`: `toSessionId(raw: OVCreateSessionResponse | OVCommitResponse)` extracts `session_id`; `toCommitResult(raw: OVCommitResponse)` maps to `{ sessionId, taskId?, archiveUri?, archived? }`; `toTaskStatus(raw: OVTaskResponse)` maps task status; `toSessionInfo(raw: OVSessionInfo)` maps full session info, extracting `memoriesExtracted` from `memories_extracted` Record (via `total` key or sum). Also exports `serializePart(part)` and `serializeParts(parts)`.
 _Avoid_: session parser
 
 **SessionStoreAdapter**:
-An implementation of the `SessionStore` port in `adapters/driven/openviking/session-store.ts`. All 8 methods implemented: `create()` → `POST /api/v1/sessions`; `sendMessage()` → `POST /api/v1/sessions/{id}/messages` with serialized `Part[]`; `sendMessages()` → batch endpoint; `commit()` → `POST /api/v1/sessions/{id}/commit` with `keep_recent_count`; `getTaskStatus()` → `GET /api/v1/tasks/{id}`; `listTasks()` → `GET /api/v1/tasks` with optional filters; `sessionUsed()` → `POST /api/v1/sessions/{id}/used`; `deleteSession()` → `DELETE /api/v1/sessions/{id}`.
+An implementation of the `SessionStore` port in `adapters/driven/openviking/session-store.ts`. All 10 methods implemented: `create()` → `POST /api/v1/sessions`; `sendMessage()` → `POST /api/v1/sessions/{id}/messages` with serialized `Part[]`; `sendMessages()` → batch endpoint; `commit()` → `POST /api/v1/sessions/{id}/commit` with `keep_recent_count`; `getTaskStatus()` → `GET /api/v1/tasks/{id}`; `listTasks()` → `GET /api/v1/tasks` with optional filters; `sessionUsed()` → `POST /api/v1/sessions/{id}/used`; `deleteSession()` → `DELETE /api/v1/sessions/{id}`; `getSession()` → `GET /api/v1/sessions/{id}`; `listSessions()` → `GET /api/v1/sessions`.
 
 **RelationMapper**:
 Pure functions in `adapters/driven/openviking/mappers/relation-mapper.ts`: `toLinkResult(raw, source, targets, reason?)` constructs a `LinkResult` from domain params; `toRelations(raw)` maps OV graph response (array or `{ relations: [...] }` shape) into domain `Relation[]`.
 
-**MapperUtils**:
-Shared guard functions in `adapters/driven/openviking/mappers/mapper-utils.ts` for safely extracting fields from untrusted OV JSON. Provides `getRecord(raw)` (null-safe cast to `Record`), `safeString(v)` (`""` on non-string), `safeOptionalString(v)` (`undefined` on non-string), `safeNumber(v)` (`undefined` on non-number), `toArray(raw)` (`[]` on non-array). Imported by all 7 mappers — eliminates inline `typeof` + cast boilerplate.
-_Avoid_: safe-utils, guard functions
+**Typed Mappers**:
+All mappers now accept typed OV wire-format inputs (e.g. `OVFindResponse`, `OVSessionInfo`, `OVWriteResponse`) instead of `raw: unknown`. The `mapper-utils.ts` guard functions (`getRecord`, `safeString`, `safeNumber`, `safeOptionalString`, `toArray`) were removed — the transport layer guarantees non-null responses on success paths. Each mapper accesses fields directly on the typed object, with `?? undefined` for optional-to-optional conversions and explicit `typeof` guards only where TypeScript cannot reach runtime (e.g. `OVSessionInfo.memories_extracted` Record → number).
+_Avoid_: guard functions, safe-utils
 
 **GraphStoreAdapter**:
 An implementation of the `GraphStore` port in `adapters/driven/openviking/graph-store.ts`. `link()` calls `POST /api/v1/relations/link` with `from_uri`, `to_uris[]`, optional `reason`. `unlink()` calls `DELETE /api/v1/relations/link` with `from_uri`, `to_uri`. `graph()` calls `GET /api/v1/relations?uri=` and maps via `RelationMapper`.
@@ -194,6 +194,9 @@ Maps to OV `POST /api/v1/search/find`. Lives in `domain/common/search-query.ts`.
 A data object with `query`, optional `limit`, `sessionId`, `targetUri`. Used for deep search
 with server-side intent analysis. Maps to OV `POST /api/v1/search/search`.
 Lives in `domain/common/search-query.ts`.
+
+**SearchOptions**:
+Optional config bag for advanced OV search params: `scoreThreshold`, `since`, `until`, `timeField`, `level`, `filter`, `includeProvenance`. Passed as optional `opts` parameter alongside `FindQuery`/`SearchRequest`. Not inlined into query types to keep them lean for common case. Lives in `domain/common/search-query.ts`.
 
 **ContentLevel**:
 A string literal union: `"abstract" | "overview" | "read"`. Controls response detail level for `FsStore.read()`.
@@ -319,10 +322,10 @@ Pi tool for resource deletion. TypeBox schema: `{ uri: string, recursive?: boole
 _Avoid_: ov_delete with glob, delete with confirmation
 
 **ov_resource** *(implemented — `adapters/driver/pi-tools/ov-resource.ts`)*:
-Pi tool for saving resources. Validates URI prefix `viking://resources/`, delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 6 unit tests.
+Pi tool for saving resources. Validates URI prefix `viking://resources/`, delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 6 unit tests. Thin alias of `ov_write` with prefix validation — does not use dedicated OV endpoint. Decline to consolidate into `ov_write` per grill decision: agent discoverability via search benefits from having a named resource tool.
 
 **ov_skill** *(implemented — `adapters/driver/pi-tools/ov-skill.ts`)*:
-Pi tool for saving skills. Validates URI prefix `viking://skills/`, delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 4 unit tests.
+Pi tool for saving skills. Validates URI prefix `viking://user/skills/` (corrected from `viking://skills/`), delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 4 unit tests. Future: may migrate to dedicated `POST /api/v1/skills` endpoint for MCP auto-detect support.
 
 **ResourceStore** *(port — `domain/ports/resource-store.ts`)*:
 Port interface for importing external resources into OpenViking. Single method `importUrl(url, options?, signal?)` → `Promise<ResourceImportResult>`. Options: `targetUri` (custom `viking://` path), `reason` (import motivation), `wait` (block until server processing completes). Return type `ResourceImportResult` carries `status`, `rootUri`, `sourcePath`, optional `errors[]`.
@@ -366,7 +369,7 @@ Toggles `RecallService.setEnabled()`. Validates arg is `on` or `off`, shows usag
 Reads current state from `config.ov.endpoint`, `sessionService.getActive()`, `recallService.isEnabled()`, `config.recall.targetUri`, and `config.recall.searchMode`. Formats and displays via `ctx.ui.notify()`. Shows `"(global)"` when no target URI set. Shows `"none"` when no active session. 2 tests.
 
 **`/ov-tree [uri]`** *(implemented — `adapters/driver/pi-commands/ov-tree-command.ts`)*:
-Calls `fsStore.tree(parsedUri)` with parsed `Uri` value object. Defaults to `viking://` when no URI provided. Formats result as indented tree with 📁 (directory) and 📄 (file) icons. Computes relative paths via common prefix. Shows `"(empty)"` for empty result. Validates URI, shows error on failure. 5 tests.
+Calls `fsStoreService.tree(uriStr)` with parsed `Uri` validation. Defaults to `viking://` when no URI provided. Formats result as indented tree with 📁 (directory) and 📄 (file) icons. Shows `"(empty)"` for empty result. Validates URI, shows error on failure. 5 tests.
 
 **`/ov-commit [--wait]`** *(implemented — `adapters/driver/pi-commands/ov-commit-command.ts`)*:
 Calls `sessionService.commit(activeSessionId)`. Shows warning if no active session. When `--wait` flag passed and `taskId` returned, calls `sessionService.waitForCommit(taskId)` and shows task status (completed/failed). 5 tests.
@@ -375,10 +378,10 @@ Calls `sessionService.commit(activeSessionId)`. Shows warning if no active sessi
 Calls `searchService.search({ query, mode: "fast" })`. Formats results as readable lines with URI, score (3 decimal places), and abstract. Shows memories, resources, and skills sections. Shows `"No results found."` for empty results. Shows usage on empty query. 6 tests.
 
 **`/ov-delete <uri>`** *(implemented — `adapters/driver/pi-commands/ov-delete-command.ts`)*:
-Shows `ctx.ui.confirm()` confirmation dialog before calling `fsStore.delete(parsedUri)`. Validates URI. Cancels gracefully on user rejection. Shows error on failure. 5 tests.
+Shows `ctx.ui.confirm()` confirmation dialog before calling `fsStoreService.delete(input)`. Validates URI. Cancels gracefully on user rejection. Supports glob patterns via `kb.glob()`. Shows error on failure. 5 tests.
 
 **`/ov-reindex <uri> [--mode vectors_only|full]`** *(implemented — `adapters/driver/pi-commands/ov-reindex-command.ts`)*:
-Calls `fsStore.reindex(parsedUri, mode)`. Rebuilds vector embeddings for a URI (default `vectors_only`). Validates URI, shows error on failure. 5 tests.
+Calls `fsStoreService.reindex(uriStr, mode, signal)`. Rebuilds vector embeddings for a URI (default `vectors_only`). Validates URI, shows error on failure. Provides argument completions for `--mode`. 5 tests.
 
 ### OVWidget (F5.5)
 

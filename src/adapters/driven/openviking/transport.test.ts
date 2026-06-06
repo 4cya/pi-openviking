@@ -422,4 +422,53 @@ describe("Circuit breaker integration", () => {
 
     expect(t.isCircuitBreakerOpen()).toBe(false);
   });
+
+  it("retry sleep respects AbortSignal — aborts during backoff", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+    agentId: "pi",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 3,
+      rateLimitPerSecond: 0,
+    });
+
+    const controller = new AbortController();
+    const promise = t.request("test", "/api/v1/always-500", undefined, controller.signal);
+    // Abort after a small delay to let retry sleep start
+    setTimeout(() => controller.abort(), 50);
+
+    // Should throw AbortError (DOMException), not retry until success
+    await expect(promise).rejects.toThrow();
+  });
+
+  it("lazy TICK transitions OPEN to HALF_OPEN after resetTimeout elapses", async () => {
+    const t = new Transport({
+      endpoint: `http://127.0.0.1:${port}`,
+      apiKey: "test-key",
+      account: "test-account",
+      user: "test-user",
+    agentId: "pi",
+      timeout: 5000,
+      commitTimeout: 120_000,
+      maxRetries: 0,
+      rateLimitPerSecond: 0,
+      circuitBreaker: { threshold: 1, resetTimeoutMs: 500, maxResetTimeoutMs: 5000 },
+    });
+
+    // Trip to OPEN
+    await expect(t.request("test", "/api/v1/always-500")).rejects.toThrow(ConnectionError);
+    expect(t.isCircuitBreakerOpen()).toBe(true);
+
+    // Wait for resetTimeout to elapse
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Lazy TICK should transition to HALF_OPEN on next request, probe succeeds
+    const result = await t.request<{ status: string }>("test", "/api/v1/success");
+    expect(result.status).toBe("ok");
+    expect(t.isCircuitBreakerOpen()).toBe(false);
+  });
 });

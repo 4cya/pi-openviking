@@ -1,4 +1,4 @@
-import type { FindQuery, SearchRequest } from "../common/search-query";
+import type { FindQuery, SearchRequest, SearchOptions } from "../common/search-query";
 import type { SearchResult } from "../knowledge/model/search-result";
 
 export interface GlobResult {
@@ -22,9 +22,9 @@ export interface GrepResult {
 
 export interface KnowledgeBase {
   /** Simple semantic search, no session context. POST /api/v1/search/find */
-  find(query: FindQuery, signal?: AbortSignal): Promise<SearchResult>;
+  find(query: FindQuery, opts?: SearchOptions, signal?: AbortSignal): Promise<SearchResult>;
   /** Deep search with session + intent analysis. POST /api/v1/search/search */
-  search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResult>;
+  search(request: SearchRequest, opts?: SearchOptions, signal?: AbortSignal): Promise<SearchResult>;
   glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult>;
   grep(pattern: string, opts?: GrepOptions, signal?: AbortSignal): Promise<GrepResult>;
 }

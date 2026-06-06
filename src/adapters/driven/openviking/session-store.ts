@@ -1,9 +1,16 @@
+/**
+ * Adapter for OV session endpoints.
+ *
+ * See OV 05-sessions.md.
+ */
 import type { Transport } from "./transport";
-import { toSessionId, toCommitResult, toTaskStatus, serializeParts } from "./mappers/session-mapper";
-import type { SessionStore, CommitResult, CommitOptions, TaskStatus, TaskFilter } from "../../../domain/ports/session-store";
+import { toSessionId, toCommitResult, toTaskStatus, toSessionInfo, serializeParts } from "./mappers/session-mapper";
+import type { SessionStore, CommitResult, CommitOptions, TaskStatus, TaskFilter, SessionInfo } from "../../../domain/ports/session-store";
 import type { SessionId } from "../../../domain/common/session-id";
 import type { Uri } from "../../../domain/common/uri";
 import type { Part } from "../../../domain/common/part";
+import type { OVCreateSessionResponse, OVCommitResponse, OVSessionInfo } from "./types/ov-session";
+import type { OVTaskResponse } from "./types/ov-task";
 
 export class SessionStoreAdapter implements SessionStore {
   private readonly commitTimeout: number;
@@ -16,7 +23,7 @@ export class SessionStoreAdapter implements SessionStore {
   }
 
   async create(signal?: AbortSignal): Promise<SessionId> {
-    const raw = await this.transport.request<Record<string, unknown>>(
+    const raw = await this.transport.request<OVCreateSessionResponse>(
       "SessionStore.create",
       "/api/v1/sessions",
       { method: "POST" },
@@ -64,7 +71,7 @@ export class SessionStoreAdapter implements SessionStore {
     }
     const body = Object.keys(bodyObj).length > 0 ? JSON.stringify(bodyObj) : undefined;
 
-    const raw = await this.transport.request<Record<string, unknown>>(
+    const raw = await this.transport.request<OVCommitResponse>(
       "SessionStore.commit",
       `/api/v1/sessions/${sessionId.value}/commit`,
       body
@@ -76,7 +83,7 @@ export class SessionStoreAdapter implements SessionStore {
   }
 
   async getTaskStatus(taskId: string, signal?: AbortSignal): Promise<TaskStatus> {
-    const raw = await this.transport.request<Record<string, unknown>>(
+    const raw = await this.transport.request<OVTaskResponse>(
       "SessionStore.getTaskStatus",
       `/api/v1/tasks/${taskId}`,
       undefined,
@@ -95,7 +102,7 @@ export class SessionStoreAdapter implements SessionStore {
     const query = params.toString();
     const path = query ? `/api/v1/tasks?${query}` : "/api/v1/tasks";
 
-    const raw = await this.transport.request<unknown[]>(
+    const raw = await this.transport.request<OVTaskResponse[]>(
       "SessionStore.listTasks",
       path,
       undefined,
@@ -123,5 +130,25 @@ export class SessionStoreAdapter implements SessionStore {
       { method: "DELETE" },
       signal,
     );
+  }
+
+  async getSession(sessionId: SessionId, signal?: AbortSignal): Promise<SessionInfo> {
+    const raw = await this.transport.request<OVSessionInfo>(
+      "SessionStore.getSession",
+      `/api/v1/sessions/${sessionId.value}`,
+      undefined,
+      signal,
+    );
+    return toSessionInfo(raw);
+  }
+
+  async listSessions(signal?: AbortSignal): Promise<SessionInfo[]> {
+    const raw = await this.transport.request<OVSessionInfo[]>(
+      "SessionStore.listSessions",
+      "/api/v1/sessions",
+      undefined,
+      signal,
+    );
+    return (Array.isArray(raw) ? raw : []).map((item) => toSessionInfo(item));
   }
 }

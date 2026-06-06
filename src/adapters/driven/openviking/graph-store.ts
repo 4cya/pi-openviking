@@ -1,8 +1,14 @@
+/**
+ * Adapter for OV relation/graph endpoints.
+ *
+ * See OV 08-relations.md.
+ */
 import type { Transport } from "./transport";
 import { toLinkResult, toRelations } from "./mappers/relation-mapper";
 import type { GraphStore, LinkResult } from "../../../domain/ports/graph-store";
 import type { Relation } from "../../../domain/knowledge/model/relation";
 import type { Uri } from "../../../domain/common/uri";
+import type { OVRelationItem } from "./types/ov-relation";
 
 export class GraphStoreAdapter implements GraphStore {
   constructor(private readonly transport: Transport) {}
@@ -39,7 +45,7 @@ export class GraphStoreAdapter implements GraphStore {
   }
 
   async graph(uri: Uri, signal?: AbortSignal): Promise<Relation[]> {
-    const raw = await this.transport.request<Record<string, unknown>>(
+    const raw = await this.transport.request<OVRelationItem[]>(
       "GraphStore.graph",
       `/api/v1/relations?uri=${encodeURIComponent(uri.value)}`,
       undefined,

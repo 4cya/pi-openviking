@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { Part, TextPart, ToolPart } from "./part";
+import type { Part, TextPart, ToolPart, ContextPart } from "./part";
 
 describe("Part", () => {
   it("TextPart works", () => {
@@ -65,5 +65,53 @@ describe("Part", () => {
 
     expect(texts).toHaveLength(1);
     expect(tools).toHaveLength(1);
+  });
+
+  it("includes ContextPart in the union", () => {
+    const cp: ContextPart = {
+      type: "context",
+      uri: "viking://resources/doc.md",
+      contextType: "resource",
+      abstract: "Some doc",
+    };
+    expect(cp.type).toBe("context");
+    expect(cp.uri).toBe("viking://resources/doc.md");
+    expect(cp.contextType).toBe("resource");
+    expect(cp.abstract).toBe("Some doc");
+  });
+
+  it("ContextPart accepts memory and skill types", () => {
+    const mem: ContextPart = { type: "context", uri: "viking://mem/1", contextType: "memory", abstract: "mem" };
+    const skill: ContextPart = { type: "context", uri: "viking://skills/x", contextType: "skill", abstract: "skill" };
+    expect(mem.contextType).toBe("memory");
+    expect(skill.contextType).toBe("skill");
+  });
+
+  it("discriminates ContextPart from other parts", () => {
+    const parts: Part[] = [
+      { type: "text", text: "hi" },
+      { type: "context", uri: "u", contextType: "resource", abstract: "a" },
+      { type: "tool", toolId: "t1", toolName: "n", toolInput: {}, toolOutput: "", toolStatus: "ok", toolOutputTruncated: false, toolUri: "u", skillUri: "s", durationMs: null, promptTokens: null, completionTokens: null, toolOutputRef: "r" },
+    ];
+
+    const contexts = parts.filter((p): p is ContextPart => p.type === "context");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0].contextType).toBe("resource");
+  });
+
+  it("narrows correctly in if/else", () => {
+    const parts: Part[] = [
+      { type: "text", text: "hello" },
+      { type: "context", uri: "u", contextType: "memory", abstract: "a" },
+    ];
+
+    for (const p of parts) {
+      if (p.type === "context") {
+        expect(p.contextType).toBeDefined();
+        expect(p.uri).toBeDefined();
+      } else if (p.type === "text") {
+        expect(p.text).toBeDefined();
+      }
+    }
   });
 });

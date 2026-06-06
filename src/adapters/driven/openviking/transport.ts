@@ -105,7 +105,11 @@ export class Transport {
     this.logger = logger;
     this.rateLimiter = new TokenBucket(config.rateLimitPerSecond ?? 0);
     this.cb = config.circuitBreaker
-      ? createCircuitBreaker(config.circuitBreaker.threshold, config.circuitBreaker.resetTimeoutMs)
+      ? createCircuitBreaker(
+          config.circuitBreaker.threshold,
+          config.circuitBreaker.resetTimeoutMs,
+          config.circuitBreaker.maxResetTimeoutMs,
+        )
       : null;
   }
 
@@ -134,14 +138,25 @@ export class Transport {
     let lastError: Error | null = null;
     let status: number | null = null;
 
-    // Circuit breaker check — reject fast if OPEN
+    // Circuit breaker check — reject fast if OPEN (with lazy TICK for automatic recovery)
     if (this.cb && !allowsRequest(this.cb)) {
-      this.logger?.debug(
-        `[${methodLabel}] ${method} ${path} -> REJECTED (circuit breaker OPEN)`,
-      );
-      throw new ConnectionError(
-        `[${methodLabel}] Circuit breaker OPEN — request rejected`,
-      );
+      // Lazy TICK: if resetTimeout has elapsed, transition to HALF_OPEN for probe
+      if (
+        this.cb.openSince !== null &&
+        Date.now() - this.cb.openSince >= this.cb.resetTimeoutMs
+      ) {
+        this.cb = circuitBreakerReducer(this.cb, { type: "TICK", now: Date.now() });
+        this.logger?.debug(
+          `[${methodLabel}] ${method} ${path} -> PROBE (circuit breaker HALF_OPEN)`,
+        );
+      } else {
+        this.logger?.debug(
+          `[${methodLabel}] ${method} ${path} -> REJECTED (circuit breaker OPEN)`,
+        );
+        throw new ConnectionError(
+          `[${methodLabel}] Circuit breaker OPEN — request rejected`,
+        );
+      }
     }
 
     // Acquire rate-limit token before sending
@@ -198,7 +213,7 @@ export class Transport {
 
             if (response.status >= 400 && response.status < 500) {
               // 4xx — client error, don't feed to CB
-              throw toDomainError(response.status, responseBody, methodLabel);
+              throw toDomainError(response.status, responseBody as Record<string, unknown>, methodLabel);
             }
 
             // 5xx — feed to CB
@@ -207,12 +222,12 @@ export class Transport {
             }
 
             if (attempt < maxRetries) {
-              lastError = toDomainError(response.status, responseBody, methodLabel);
-              await sleep(Math.pow(2, attempt) * 1000);
+              lastError = toDomainError(response.status, responseBody as Record<string, unknown>, methodLabel);
+              await sleepWithSignal(Math.pow(2, attempt) * 1000, signal);
               continue;
             }
 
-            throw toDomainError(response.status, responseBody, methodLabel);
+            throw toDomainError(response.status, responseBody as Record<string, unknown>, methodLabel);
           }
 
           // Success — reset CB fail count
@@ -234,7 +249,7 @@ export class Transport {
           ) {
             if (parsed.status === "error") {
               const errBody = parsed.error ?? {};
-              throw toDomainError(response.status, errBody, methodLabel);
+              throw toDomainError(response.status, errBody as Record<string, unknown>, methodLabel);
             }
             // status === "ok" — return result (or null/undefined if absent)
             return parsed.result as T;
@@ -251,7 +266,7 @@ export class Transport {
               }
               if (attempt < maxRetries) {
                 lastError = err as Error;
-                await sleep(Math.pow(2, attempt) * 1000);
+                await sleepWithSignal(Math.pow(2, attempt) * 1000, signal);
                 continue;
               }
               throw toDomainError(503, { message: `Timeout after ${requestTimeout}ms` }, methodLabel);
@@ -269,7 +284,7 @@ export class Transport {
             }
             if (attempt < maxRetries) {
               lastError = new ConnectionError(`Network error — ${(err as Error).message}`);
-              await sleep(Math.pow(2, attempt) * 1000);
+              await sleepWithSignal(Math.pow(2, attempt) * 1000, signal);
               continue;
             }
             throw new ConnectionError(
@@ -288,7 +303,7 @@ export class Transport {
           }
           if (attempt < maxRetries) {
             lastError = err as Error;
-            await sleep(Math.pow(2, attempt) * 1000);
+            await sleepWithSignal(Math.pow(2, attempt) * 1000, signal);
             continue;
           }
           throw new ConnectionError(`[${methodLabel}] Unexpected error — ${(err as Error).message}`);
@@ -309,6 +324,3 @@ export class Transport {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

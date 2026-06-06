@@ -1,35 +1,59 @@
+/**
+ * Mappers for OV session endpoints.
+ *
+ * See OV 05-sessions.md.
+ */
 import { SessionId } from "../../../../domain/common/session-id";
-import type { CommitResult, TaskStatus } from "../../../../domain/ports/session-store";
+import type { CommitResult, SessionInfo, TaskStatus } from "../../../../domain/ports/session-store";
 import type { Part } from "../../../../domain/common/part";
-import { getRecord, safeOptionalString, safeString } from "./mapper-utils";
+import type { OVCreateSessionResponse, OVCommitResponse, OVSessionInfo } from "../types/ov-session";
+import type { OVTaskResponse } from "../types/ov-task";
+
+function extractMemoriesTotal(memories: Record<string, number> | undefined): number | undefined {
+  if (memories === undefined) return undefined;
+  if (typeof memories.total === "number") return memories.total;
+  const values = Object.values(memories).filter((v): v is number => typeof v === "number");
+  return values.length > 0 ? values.reduce((a, b) => a + b, 0) : undefined;
+}
 
 // ── Session Mappers ───────────────────────────────────────────────────────────
 
-export function toSessionId(raw: unknown): SessionId {
-  const r = getRecord(raw);
-  const id = r.session_id ?? r.id;
+export function toSessionId(raw: OVCreateSessionResponse | OVCommitResponse): SessionId {
+  const id = raw.session_id;
   if (typeof id !== "string" || !id) {
     throw new Error("Invalid session create response: missing session_id");
   }
   return new SessionId(id);
 }
 
-export function toCommitResult(raw: unknown): CommitResult {
-  const r = getRecord(raw);
+export function toCommitResult(raw: OVCommitResponse): CommitResult {
   const sessionId = toSessionId(raw);
   return {
     sessionId,
-    taskId: safeOptionalString(r.task_id),
+    taskId: raw.task_id ?? undefined,
+    archiveUri: raw.archive_uri ?? undefined,
+    archived: raw.archived ?? undefined,
   };
 }
 
-export function toTaskStatus(raw: unknown): TaskStatus {
-  const r = getRecord(raw);
-  const taskId = safeString(r.task_id);
+export function toTaskStatus(raw: OVTaskResponse): TaskStatus {
   return {
-    taskId,
-    status: (typeof r.status === "string" ? r.status : "unknown") as TaskStatus["status"],
-    result: r.result !== undefined ? r.result : undefined,
+    taskId: raw.task_id,
+    status: raw.status as TaskStatus["status"],
+    result: raw.result ?? undefined,
+  };
+}
+
+export function toSessionInfo(raw: OVSessionInfo): SessionInfo {
+  return {
+    sessionId: raw.session_id,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    messageCount: raw.message_count,
+    totalMessageCount: raw.total_message_count,
+    commitCount: raw.commit_count,
+    memoriesExtracted: extractMemoriesTotal(raw.memories_extracted),
+    lastCommitAt: raw.last_commit_at,
   };
 }
 

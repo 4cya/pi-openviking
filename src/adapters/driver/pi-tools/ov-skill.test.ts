@@ -8,7 +8,7 @@ import { Pipeline } from "../../../domain/pipeline/pipeline";
 
 function makeFsStoreService(overrides?: Partial<FsStoreService>): FsStoreService {
   return {
-    save: vi.fn().mockResolvedValue({ uri: { value: "viking://skills/test" } as Uri, success: true } as WriteResult),
+    save: vi.fn().mockResolvedValue({ uri: { value: "viking://user/skills/test" } as Uri, success: true } as WriteResult),
     mkdir: vi.fn().mockResolvedValue(undefined),
     mv: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -49,35 +49,49 @@ describe("ov_skill tool", () => {
     expect(tool.parameters).toBeDefined();
   });
 
-  it("rejects URI not under viking://skills/", async () => {
+  it("rejects URI not under viking://user/skills/", async () => {
     const tool = createOvSkillTool(makeFsStoreService(), makePipeline());
     const result = await executeTool(tool, {
       uri: "viking://resources/test",
       content: "skill content",
     });
-    expect(getText(result)).toContain("must start with viking://skills/");
+    expect(getText(result)).toContain("must start with viking://user/skills/");
   });
 
-  it("delegates to FsStoreService.save for valid skill URI", async () => {
+  it("accepts URI under viking://user/skills/", async () => {
     const calls: unknown[] = [];
     const svc = makeFsStoreService({
       save: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
-        return { uri: { value: "viking://skills/test.md" } as Uri, success: true };
+        return { uri: { value: "viking://user/skills/test.md" } as Uri, success: true };
       }),
     });
     const tool = createOvSkillTool(svc, makePipeline());
 
     const result = await executeTool(tool, {
-      uri: "viking://skills/test.md",
+      uri: "viking://user/skills/test.md",
       content: "skill content",
     });
 
     expect(calls).toHaveLength(1);
     const args = calls[0] as [string, string];
-    expect(args[0]).toBe("viking://skills/test.md");
+    expect(args[0]).toBe("viking://user/skills/test.md");
     expect(args[1]).toBe("skill content");
     expect(getText(result)).toContain("success");
+  });
+
+  it("rejects legacy viking://skills/ prefix", async () => {
+    const svc = makeFsStoreService({
+      save: vi.fn().mockRejectedValue(new Error("OV unavailable")),
+    });
+    const tool = createOvSkillTool(svc, makePipeline());
+
+    const result = await executeTool(tool, {
+      uri: "viking://skills/test.md",
+      content: "x",
+    });
+
+    expect(getText(result)).toContain("must start with viking://user/skills/");
   });
 
   it("returns error message on failure", async () => {
@@ -87,7 +101,7 @@ describe("ov_skill tool", () => {
     const tool = createOvSkillTool(svc, makePipeline());
 
     const result = await executeTool(tool, {
-      uri: "viking://skills/test.md",
+      uri: "viking://user/skills/test.md",
       content: "x",
     });
 

@@ -46,8 +46,8 @@ describe("toContent", () => {
     expect(result.body).toBe("");
   });
 
-  it("handles null body from OV", () => {
-    const raw = { uri: "viking://null.md", body: null };
+  it("handles empty string from OV", () => {
+    const raw = "";
     const result = toContent(raw, uri, "read");
     expect(result.body).toBe("");
   });

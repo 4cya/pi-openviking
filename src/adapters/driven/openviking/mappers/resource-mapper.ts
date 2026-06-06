@@ -1,16 +1,20 @@
+/**
+ * Mapper for OV resource import endpoint.
+ *
+ * See OV 02-resources.md.
+ */
 import type { ResourceImportResult } from "../../../../domain/ports/resource-store";
-import { getRecord, safeString } from "./mapper-utils";
+import type { OVResourceImportResponse } from "../types/ov-resource";
 
-export function toResourceImportResult(raw: unknown): ResourceImportResult {
-  const r = getRecord(raw);
-
-  const status = typeof r.status === "string" ? r.status : "unknown";
-  const rootUri = safeString(r.root_uri);
-  const sourcePath = safeString(r.source_path);
-  const errorsRaw = r.errors;
-  const errors = Array.isArray(errorsRaw)
-    ? errorsRaw.filter((e): e is string => typeof e === "string")
+export function toResourceImportResult(raw: OVResourceImportResponse): ResourceImportResult {
+  const errors = Array.isArray(raw.errors)
+    ? raw.errors.filter((e): e is string => typeof e === "string")
     : undefined;
 
-  return { status, rootUri, sourcePath, errors: errors?.length ? errors : undefined };
+  return {
+    status: raw.status,
+    rootUri: raw.root_uri,
+    sourcePath: raw.source_path,
+    errors: errors?.length ? errors : undefined,
+  };
 }

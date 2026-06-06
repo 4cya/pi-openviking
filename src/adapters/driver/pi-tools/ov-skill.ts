@@ -3,10 +3,10 @@ import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
 import type { FsStoreService } from "../../../domain/services/fs-store-service";
 
-const SKILL_PREFIX = "viking://skills/";
+const SKILL_PREFIX = "viking://user/skills/";
 
 const SkillSchema = Type.Object({
-  uri: Type.String({ description: "Skill URI (must start with viking://skills/)" }),
+  uri: Type.String({ description: "Skill URI (must start with viking://user/skills/)" }),
   content: Type.String({ description: "Skill content" }),
   mode: Type.Optional(
     Type.Union(
@@ -23,7 +23,7 @@ export function createOvSkillTool(
   return defineTool({
     name: "ov_skill",
     label: "Save Skill",
-    description: "Save a skill definition to the OpenViking knowledge base (viking://skills/...). Use ov_write for other URI schemes.",
+    description: "Save a skill definition to the OpenViking knowledge base (viking://user/skills/...). Use ov_write for other URI schemes.",
     promptSnippet: "ov_skill(uri, content, mode?) — save skill definition",
     parameters: SkillSchema,
     async execute(_toolCallId, params, signal) {

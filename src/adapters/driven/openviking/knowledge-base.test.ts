@@ -3,7 +3,7 @@ import { KnowledgeBaseAdapter } from "./knowledge-base";
 import { Uri } from "../../../domain/common/uri";
 import { SessionId } from "../../../domain/common/session-id";
 import type { Transport } from "./transport";
-import type { FindQuery, SearchRequest } from "../../../domain/common/search-query";
+import type { FindQuery, SearchRequest, SearchOptions } from "../../../domain/common/search-query";
 
 function mockTransport(): Transport {
   return {
@@ -61,10 +61,56 @@ describe("KnowledgeBaseAdapter.find", () => {
     expect(body.target_uri).toBe("viking://docs/");
   });
 
+  it("passes SearchOptions fields when provided", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      memories: [], resources: [], skills: [], total: 0,
+    });
+
+    const kb = new KnowledgeBaseAdapter(transport);
+    const opts: SearchOptions = {
+      scoreThreshold: 0.5,
+      since: "2026-01-01T00:00:00Z",
+      until: "2026-06-01T00:00:00Z",
+      timeField: "modTime",
+      level: 2,
+      includeProvenance: true,
+    };
+    await kb.find({ query: "test" }, opts);
+
+    const [, , optsReq] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(optsReq.body);
+    expect(body.score_threshold).toBe(0.5);
+    expect(body.since).toBe("2026-01-01T00:00:00Z");
+    expect(body.until).toBe("2026-06-01T00:00:00Z");
+    expect(body.time_field).toBe("modTime");
+    expect(body.level).toBe(2);
+    expect(body.include_provenance).toBe(true);
+  });
+
+  it("omits SearchOptions fields when undefined", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      memories: [], resources: [], skills: [], total: 0,
+    });
+
+    const kb = new KnowledgeBaseAdapter(transport);
+    await kb.find({ query: "test" });
+
+    const [, , optsReq] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(optsReq.body);
+    expect(body.score_threshold).toBeUndefined();
+    expect(body.since).toBeUndefined();
+    expect(body.until).toBeUndefined();
+    expect(body.time_field).toBeUndefined();
+    expect(body.level).toBeUndefined();
+    expect(body.include_provenance).toBeUndefined();
+  });
+
   it("maps response via SearchResult", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      memories: [{ uri: "viking://mem/1", text: "found it" }],
+      memories: [{ uri: "viking://mem/1", abstract: "found it", context_type: "memory", score: 0.5, level: 1, category: "", match_reason: "" }],
       resources: [],
       skills: [],
       total: 1,
@@ -142,14 +188,33 @@ describe("KnowledgeBaseAdapter.search", () => {
     const body = JSON.parse(opts.body);
     expect(body.session_id).toBeUndefined();
   });
+
+  it("passes SearchOptions with search", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      memories: [], resources: [], skills: [], total: 0,
+    });
+
+    const kb = new KnowledgeBaseAdapter(transport);
+    const opts: SearchOptions = {
+      scoreThreshold: 0.7,
+      includeProvenance: true,
+    };
+    await kb.search({ query: "deep" }, opts);
+
+    const [, , reqOpts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(reqOpts.body);
+    expect(body.score_threshold).toBe(0.7);
+    expect(body.include_provenance).toBe(true);
+  });
 });
 
 describe("KnowledgeBaseAdapter.glob", () => {
   it("calls POST /api/v1/search/glob with pattern", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      entries: ["viking://docs/a.md", "viking://docs/b.md"],
-      total: 2,
+      matches: ["viking://docs/a.md", "viking://docs/b.md"],
+      count: 2,
     });
 
     const kb = new KnowledgeBaseAdapter(transport);
@@ -167,7 +232,7 @@ describe("KnowledgeBaseAdapter.glob", () => {
   it("includes uri and limit when provided", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      entries: [], total: 0,
+      matches: [], count: 0,
     });
 
     const kb = new KnowledgeBaseAdapter(transport);

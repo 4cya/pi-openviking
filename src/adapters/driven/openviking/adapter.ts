@@ -1,3 +1,10 @@
+/**
+ * OV adapter factory.
+ * Creates all driven adapters for OV API endpoints.
+ *
+ * See OV 01-overview.md (connection/auth), 02-resources.md, 03-filesystem.md,
+ *     05-sessions.md, 06-retrieval.md, 08-relations.md.
+ */
 import type { KnowledgeBase } from "../../../domain/ports/knowledge-base";
 import type { FsStore } from "../../../domain/ports/fs-store";
 import type { GraphStore } from "../../../domain/ports/graph-store";

@@ -1,5 +1,5 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import type { FsStore } from "../../../domain/ports/fs-store";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { KnowledgeBase } from "../../../domain/ports/knowledge-base";
 import { Uri } from "../../../domain/common/uri";
 
@@ -7,7 +7,7 @@ function isGlobPattern(s: string): boolean {
   return /[*?[]/.test(s);
 }
 
-export function createOvDeleteCommand(fsStore: FsStore, kb: KnowledgeBase) {
+export function createOvDeleteCommand(fsStoreService: FsStoreService, kb: KnowledgeBase) {
   return {
     description:
       "Delete a resource from OV. Usage: /ov-delete <uri>. Supports glob patterns: /ov-delete viking://path/*",
@@ -38,7 +38,7 @@ export function createOvDeleteCommand(fsStore: FsStore, kb: KnowledgeBase) {
         let failures = 0;
         for (const entry of globResult.entries) {
           try {
-            await fsStore.delete(new Uri(entry));
+            await fsStoreService.delete(entry);
           } catch {
             failures++;
           }
@@ -71,7 +71,7 @@ export function createOvDeleteCommand(fsStore: FsStore, kb: KnowledgeBase) {
       }
 
       try {
-        await fsStore.delete(uri);
+        await fsStoreService.delete(input);
         ctx.ui.notify(`Deleted: ${input}`, "info");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

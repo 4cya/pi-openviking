@@ -82,7 +82,7 @@ Before writing ANY code, always do this in order:
 ## Architecture Constraints
 
 - **Ports/Adapters**: Domain defines port interfaces. Adapters implement them. Drivers (Pi commands/tools) depend on ports only.
-- **DI**: Manual DI container (`src/bootstrap.ts`). No framework. Add new deps there.
+- **DI**: Manual DI container (`src/infrastructure/lifecycle.ts`). No framework. Add new deps there.
 - **Mappers**: API responses → domain types via mapper functions. Each mapper type has own file.
 - **Tests**: vitest. No mocks for domain services. Adapter tests use real HTTP against `pi-openviking-test` Docker container.
 - **OV Resource paths**: Tools write to `viking://resources/pi-openviking/{feature}`. Skills at `viking://agent/{agent_id}/skills/`.

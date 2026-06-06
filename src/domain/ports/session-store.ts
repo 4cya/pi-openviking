@@ -5,6 +5,8 @@ import type { Part } from "../common/part";
 export interface CommitResult {
   sessionId: SessionId;
   taskId?: string;
+  archiveUri?: string;
+  archived?: boolean;
 }
 
 export interface CommitOptions {
@@ -18,6 +20,17 @@ export interface TaskStatus {
   taskId: string;
   status: "pending" | "running" | "completed" | "failed";
   result?: unknown;
+}
+
+export interface SessionInfo {
+  sessionId: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  totalMessageCount?: number;
+  commitCount: number;
+  memoriesExtracted?: number;
+  lastCommitAt?: string;
 }
 
 export interface TaskFilter {
@@ -38,4 +51,6 @@ export interface SessionStore {
   listTasks(filter?: TaskFilter, signal?: AbortSignal): Promise<TaskStatus[]>;
   sessionUsed(sessionId: SessionId, contexts: Uri[], signal?: AbortSignal): Promise<void>;
   deleteSession(sessionId: SessionId, signal?: AbortSignal): Promise<void>;
+  getSession(sessionId: SessionId, signal?: AbortSignal): Promise<SessionInfo>;
+  listSessions(signal?: AbortSignal): Promise<SessionInfo[]>;
 }

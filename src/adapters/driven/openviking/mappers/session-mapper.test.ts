@@ -1,47 +1,68 @@
 import { describe, it, expect } from "vitest";
-import { toSessionId, toCommitResult, toTaskStatus, serializePart, serializeParts } from "./session-mapper";
+import { toSessionId, toCommitResult, toTaskStatus, toSessionInfo, serializePart, serializeParts } from "./session-mapper";
 import { SessionId } from "../../../../domain/common/session-id";
-import type { Part, TextPart, ToolPart } from "../../../../domain/common/part";
+import type { Part, TextPart, ToolPart, ContextPart } from "../../../../domain/common/part";
+import type { OVCreateSessionResponse, OVCommitResponse, OVSessionInfo } from "../types/ov-session";
+import type { OVTaskResponse } from "../types/ov-task";
 
 describe("toSessionId", () => {
   it("extracts session_id from create response", () => {
-    const raw = { session_id: "sess-abc-123" };
+    const raw: OVCreateSessionResponse = { session_id: "sess-abc-123", user: { account_id: "default", user_id: "alice" } };
     const id = toSessionId(raw);
     expect(id).toBeInstanceOf(SessionId);
     expect(id.value).toBe("sess-abc-123");
   });
 
-  it("extracts id from response with 'id' field", () => {
-    const raw = { id: "sess-xyz" };
+  it("extracts session_id from commit response", () => {
+    const raw: OVCommitResponse = { session_id: "sess-xyz", status: "accepted" };
     const id = toSessionId(raw);
     expect(id.value).toBe("sess-xyz");
   });
 
-  it("throws on missing session identifier", () => {
-    expect(() => toSessionId({})).toThrow();
-    expect(() => toSessionId(null)).toThrow();
-    expect(() => toSessionId("invalid")).toThrow();
+  it("throws on missing session_id", () => {
+    expect(() => toSessionId({} as OVCreateSessionResponse)).toThrow();
   });
 });
 
 describe("toCommitResult", () => {
   it("maps commit response with sessionId and taskId", () => {
-    const raw = { session_id: "sess-1", task_id: "task-42" };
+    const raw: OVCommitResponse = { session_id: "sess-1", status: "accepted", task_id: "task-42" };
     const result = toCommitResult(raw);
     expect(result.sessionId.value).toBe("sess-1");
     expect(result.taskId).toBe("task-42");
   });
 
   it("handles missing taskId", () => {
-    const raw = { session_id: "sess-1" };
+    const raw: OVCommitResponse = { session_id: "sess-1", status: "accepted" };
     const result = toCommitResult(raw);
     expect(result.taskId).toBeUndefined();
+  });
+
+  it("extracts archive_uri and archived from commit response", () => {
+    const raw: OVCommitResponse = { session_id: "sess-1", status: "accepted", archive_uri: "viking://archive/sess-1.json", archived: true };
+    const result = toCommitResult(raw);
+    expect(result.archiveUri).toBe("viking://archive/sess-1.json");
+    expect(result.archived).toBe(true);
+  });
+
+  it("omits archiveUri when archive_uri absent", () => {
+    const raw: OVCommitResponse = { session_id: "sess-1", status: "accepted" };
+    const result = toCommitResult(raw);
+    expect(result.archiveUri).toBeUndefined();
+    expect(result.archived).toBeUndefined();
+  });
+
+  it("handles archived=false", () => {
+    const raw: OVCommitResponse = { session_id: "sess-1", status: "accepted", archive_uri: "viking://archive/sess-1.json", archived: false };
+    const result = toCommitResult(raw);
+    expect(result.archiveUri).toBe("viking://archive/sess-1.json");
+    expect(result.archived).toBe(false);
   });
 });
 
 describe("toTaskStatus", () => {
   it("maps completed task", () => {
-    const raw = { task_id: "task-1", status: "completed", result: { ok: true } };
+    const raw: OVTaskResponse = { task_id: "task-1", status: "completed", result: { ok: true } };
     const status = toTaskStatus(raw);
     expect(status.taskId).toBe("task-1");
     expect(status.status).toBe("completed");
@@ -49,25 +70,25 @@ describe("toTaskStatus", () => {
   });
 
   it("maps pending task", () => {
-    const raw = { task_id: "task-2", status: "pending" };
+    const raw: OVTaskResponse = { task_id: "task-2", status: "pending" };
     const status = toTaskStatus(raw);
     expect(status.status).toBe("pending");
   });
 
   it("maps failed task", () => {
-    const raw = { task_id: "task-3", status: "failed" };
+    const raw: OVTaskResponse = { task_id: "task-3", status: "failed" };
     const status = toTaskStatus(raw);
     expect(status.status).toBe("failed");
   });
 
   it("maps unknown status safely", () => {
-    const raw = { task_id: "task-4", status: "unknown" };
+    const raw: OVTaskResponse = { task_id: "task-4", status: "unknown" };
     const status = toTaskStatus(raw);
     expect(status.status).toBe("unknown"); // passthrough — caller validates
   });
 
   it("handles missing result", () => {
-    const raw = { task_id: "task-5", status: "running" };
+    const raw: OVTaskResponse = { task_id: "task-5", status: "running" };
     const status = toTaskStatus(raw);
     expect(status.result).toBeUndefined();
   });
@@ -137,6 +158,27 @@ describe("serializePart", () => {
     expect(json.completion_tokens).toBeNull();
   });
 
+  it("serializes ContextPart with contextType → context_type", () => {
+    const part: ContextPart = { type: "context", uri: "viking://resources/doc.md", contextType: "resource", abstract: "A doc" };
+    const json = serializePart(part);
+    expect(json.type).toBe("context");
+    expect(json.uri).toBe("viking://resources/doc.md");
+    expect(json.context_type).toBe("resource");
+    expect(json.abstract).toBe("A doc");
+    expect(json.contextType).toBeUndefined();
+  });
+
+  it("serializes ContextPart with memory type", () => {
+    const part: ContextPart = { type: "context", uri: "viking://mem/1", contextType: "memory", abstract: "Memory" };
+    const json = serializePart(part);
+    expect(json.context_type).toBe("memory");
+  });
+
+  it("serializes ContextPart with skill type", () => {
+    const part: ContextPart = { type: "context", uri: "viking://skills/x", contextType: "skill", abstract: "Skill" };
+    const json = serializePart(part);
+    expect(json.context_type).toBe("skill");
+  });
 });
 
 describe("serializeParts", () => {
@@ -153,5 +195,59 @@ describe("serializeParts", () => {
     expect(json[1].tool_id).toBe("t1");
     expect(json[2].type).toBe("context");
     expect(json[2].context_type).toBe("resource");
+  });
+});
+
+describe("toSessionInfo", () => {
+  it("maps full session info response", () => {
+    const raw: OVSessionInfo = {
+      session_id: "sess-1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+      message_count: 42,
+      total_message_count: 100,
+      commit_count: 3,
+      memories_extracted: { profile: 5, preferences: 3, total: 15 },
+      last_commit_at: "2026-06-01T00:00:00Z",
+    };
+    const info = toSessionInfo(raw);
+    expect(info.sessionId).toBe("sess-1");
+    expect(info.createdAt).toBe("2026-01-01T00:00:00Z");
+    expect(info.updatedAt).toBe("2026-06-01T00:00:00Z");
+    expect(info.messageCount).toBe(42);
+    expect(info.totalMessageCount).toBe(100);
+    expect(info.commitCount).toBe(3);
+    expect(info.memoriesExtracted).toBe(15);
+    expect(info.lastCommitAt).toBe("2026-06-01T00:00:00Z");
+  });
+
+  it("sums memories_extracted when no total key", () => {
+    const raw: OVSessionInfo = {
+      session_id: "sess-1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+      message_count: 10,
+      commit_count: 1,
+      memories_extracted: { profile: 5, preferences: 3 },
+    };
+    const info = toSessionInfo(raw);
+    expect(info.memoriesExtracted).toBe(8);
+  });
+
+  it("handles minimal session info", () => {
+    const raw: OVSessionInfo = {
+      session_id: "sess-2",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T01:00:00Z",
+      message_count: 5,
+      commit_count: 0,
+    };
+    const info = toSessionInfo(raw);
+    expect(info.sessionId).toBe("sess-2");
+    expect(info.messageCount).toBe(5);
+    expect(info.commitCount).toBe(0);
+    expect(info.totalMessageCount).toBeUndefined();
+    expect(info.memoriesExtracted).toBeUndefined();
+    expect(info.lastCommitAt).toBeUndefined();
   });
 });

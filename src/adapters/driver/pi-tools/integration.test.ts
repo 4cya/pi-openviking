@@ -35,7 +35,7 @@ beforeAll(async () => {
       if (url.pathname === "/api/v1/search/find") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
-          memories: [{ uri: "viking://kb/test", text: "found content", score: 0.9 }],
+          memories: [{ uri: "viking://kb/test", abstract: "found content", context_type: "memory", score: 0.9, level: 1, category: "", match_reason: "" }],
           resources: [],
           skills: [],
           total: 1,
@@ -46,11 +46,11 @@ beforeAll(async () => {
       if (url.pathname === "/api/v1/search/search") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
-          memories: [{ uri: "viking://kb/deep", text: "deep content", score: 0.95 }],
+          memories: [{ uri: "viking://kb/deep", abstract: "deep content", context_type: "memory", score: 0.95, level: 1, category: "", match_reason: "" }],
           resources: [],
           skills: [],
           total: 1,
-          queryPlan: "deep plan",
+          query_plan: "deep plan",
         }));
         return;
       }
@@ -58,8 +58,8 @@ beforeAll(async () => {
       if (url.pathname === "/api/v1/search/glob") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
-          entries: ["viking://docs/a.md", "viking://docs/b.md"],
-          total: 2,
+          matches: ["viking://docs/a.md", "viking://docs/b.md"],
+          count: 2,
         }));
         return;
       }

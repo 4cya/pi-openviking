@@ -1,8 +1,9 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import type { FsStore, ReindexMode } from "../../../domain/ports/fs-store";
+import type { ReindexMode } from "../../../domain/ports/fs-store";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import { Uri } from "../../../domain/common/uri";
 
-export function createOvReindexCommand(fsStore: FsStore) {
+export function createOvReindexCommand(fsStoreService: FsStoreService) {
   return {
     description: "Reindex a resource or skill in OpenViking. Usage: /ov-reindex <uri> [--mode vectors_only|full]",
     getArgumentCompletions: (prefix: string) => {
@@ -42,7 +43,7 @@ export function createOvReindexCommand(fsStore: FsStore) {
       }
 
       try {
-        await fsStore.reindex(uri, mode, ctx.signal);
+        await fsStoreService.reindex(uriStr, mode, ctx.signal);
         ctx.ui.notify(`Reindexed: ${uriStr} (${mode})`, "info");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

@@ -7,4 +7,6 @@ export interface KnowledgeItem {
   category?: string;
   level?: number;
   modTime?: string;
+  contextType?: "memory" | "resource" | "skill";
+  matchReason?: string;
 }

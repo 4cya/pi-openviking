@@ -270,8 +270,8 @@ describe("FsStoreAdapter.tree", () => {
   it("calls GET /api/v1/fs/tree with uri param", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { uri: "viking://docs/a.md", type: "file" },
-      { uri: "viking://docs/sub/", type: "directory" },
+      { uri: "viking://docs/a.md", name: "a.md", isDir: false, size: 100, mode: 33188, modTime: "" },
+      { uri: "viking://docs/sub/", name: "sub", isDir: true, size: 4096, mode: 16877, modTime: "" },
     ]);
 
     const fs = new FsStoreAdapter(transport);
