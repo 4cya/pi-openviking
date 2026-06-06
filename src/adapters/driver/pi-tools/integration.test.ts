@@ -199,13 +199,13 @@ function resultText(r: any): string {
 describe("Tools integration (mock HTTP)", () => {
   it("ov_search calls /api/v1/search/find and returns results", async () => {
     const { searchTool } = wireStack();
-    const result = await exec(searchTool, { query: "test", mode: "fast" });
+    const result = await exec(searchTool, { query: "test", mode: "find" });
     expect(resultText(result)).toContain("viking://kb/test");
   });
 
   it("ov_search calls /api/v1/search/search with mode=deep", async () => {
     const { searchTool } = wireStack();
-    const result = await exec(searchTool, { query: "deep test", mode: "deep" });
+    const result = await exec(searchTool, { query: "deep test", mode: "search" });
     expect(resultText(result)).toContain("viking://kb/deep");
   });
 

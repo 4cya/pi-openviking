@@ -54,10 +54,58 @@ Example: `concepts/08-session.md` → `viking://resources/pi-openviking/docs-ov/
 
 ## Import Command Template
 
-```bash
-ov_import url="https://raw.githubusercontent.com/volcengine/OpenViking/{tag}/docs/en/concepts/08-session.md" \
-  targetUri="viking://resources/pi-openviking/docs-ov/concepts/08-session.md" \
-  reason="OV session docs (v{tag})"
+⚠️ Use `ov_write`, not `ov_import`. OV's ResourceStore (`ov_import`) parses markdown headings
+into directory trees — files become directories. `ov_write` (FsStore) writes raw content as flat files.
+
+```python
+import json, subprocess
+
+AUTH = [
+    "-H", "X-API-Key: dev",
+    "-H", "X-OpenViking-Account: default",
+    "-H", "X-OpenViking-User: default",
+    "-H", "X-OpenViking-Agent: pi",
+]
+
+def import_doc(gh_rel_path, ov_rel_path, doc_source, mode="create"):
+    """Fetch raw markdown from GitHub and write to OV as flat file."""
+    gh_url = f"https://raw.githubusercontent.com/volcengine/OpenViking/{doc_source}/{gh_rel_path}"
+    ov_uri = f"viking://resources/pi-openviking/docs-ov/{ov_rel_path}"
+
+    subprocess.run(["curl", "-s", "-o", "/tmp/doc.md", gh_url])
+    content = open("/tmp/doc.md").read()
+    if len(content) < 50:
+        print(f"SKIP {ov_rel_path} — empty/small ({len(content)}b)")
+        return False
+
+    body = json.dumps({"uri": ov_uri, "content": content, "mode": mode})
+    r = subprocess.run(
+        ["curl", "-s", "-o", "/tmp/ov-res.json", "-w", "%{http_code}",
+         "http://localhost:1933/api/v1/content/write",
+         "-H", "Content-Type: application/json"] + AUTH + ["-d", body],
+        capture_output=True, text=True,
+    )
+    code = r.stdout.strip()
+    if code != "200":
+        print(f"FAIL {ov_rel_path} (HTTP {code})")
+        return False
+
+    res = json.load(open("/tmp/ov-res.json"))
+    status = res.get("status", "")
+    if status == "ok":
+        print(f"OK   {ov_rel_path} ({len(content)}b)")
+        return True
+
+    err = res.get("error", {}).get("code", "")
+    # If ALREADY_EXISTS with mode=create, retry with mode=replace
+    if err == "ALREADY_EXISTS" and mode == "create":
+        return import_doc(gh_rel_path, ov_rel_path, doc_source, mode="replace")
+
+    print(f"FAIL {ov_rel_path}: {err} — {res.get('error', {}).get('message', '?')}")
+    return False
 ```
 
-Where `{tag}` is the release tag (e.g. `v0.3.23`) and the path comes from the table above.
+Usage: `import_doc("docs/en/concepts/08-session.md", "concepts/08-session.md", "main")`
+
+Where `doc_source` is the branch/tag (e.g. `main` or `v0.3.24`).
+The function auto-retries with `mode="replace"` if file already exists.

@@ -12,7 +12,7 @@ export function createOvSearchCommand(searchService: SearchService) {
       }
 
       try {
-        const result = await searchService.search({ query, mode: "fast" });
+        const result = await searchService.search({ query, mode: "find" });
         if (result.total === 0) {
           ctx.ui.notify("No results found.", "info");
           return;

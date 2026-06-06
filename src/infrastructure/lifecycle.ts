@@ -42,13 +42,10 @@ export async function init(cwd: string): Promise<{
   );
   container.register("profileManager", () => profileManager, true);
 
-  const mergedRecall = mergeBehaviorIntoRecall(
+  config.recall = mergeBehaviorIntoRecall(
     config.recall,
     profileManager.resolve(profileManager.getActive()),
   );
-  // Mutate config in-place so services receive merged config
-  // (config is a fresh Zod-parsed object from loadConfig())
-  Object.assign(config.recall, mergedRecall);
 
   // F4 — domain services
   const graphExpander = config.recall.expandGraph

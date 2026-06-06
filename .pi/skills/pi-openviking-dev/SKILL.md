@@ -11,7 +11,38 @@ Develop features and improve code for the pi-openviking plugin, following projec
 
 Before writing ANY code, always do this in order:
 
-1. **Read OV docs** — Search `viking://resources/pi-openviking/docs-ov/` for the relevant API/concept using `ov_search`. Read full doc with `ov_read level=read`. Match implementation to OV spec exactly (field names, endpoints, part types, headers).
+0. **Verify OV docs exist** — Check `viking://resources/pi-openviking/docs-ov/version.md` exists via `ov_stat`. If absent, OV docs not imported yet:
+   - Suggest user run `ov-update` skill first (imports OV docs from GitHub)
+   - Or fetch directly from GitHub raw as fallback:
+     `firecrawl_scrape url="https://raw.githubusercontent.com/volcengine/OpenViking/{DOC_SOURCE}/docs/en/api/05-sessions.md"`
+     where `{DOC_SOURCE}` is `main` or latest release tag
+   - If docs present but `ov_search` times out, skip search — use direct `ov_read` instead
+
+1. **Read OV docs** — REFERENCE.md lists exact URIs for each doc.
+
+   ⚠️ **OV v0.3.x: content levels work via dotfiles**
+
+   | Level | Works for | OV endpoint |
+   |-------|-----------|-------------|
+   | `level="read"` | Files + directories | `GET /api/v1/content/read?uri=X&offset=Y&limit=Z` |
+   | `level="abstract"` | **Directories only** | `GET /api/v1/content/read?uri=X/.abstract.md` |
+   | `level="overview"` | **Directories only** | `GET /api/v1/content/read?uri=X/.overview.md` |
+
+   OV v0.3.24 does NOT have `/api/v1/content/abstract` or `/api/v1/content/overview` endpoints.
+   Instead, L0 (abstract) and L1 (overview) are stored as dotfiles (`.abstract.md`, `.overview.md`)
+   alongside directories. For files, `level="abstract"`/`"overview"` return body empty gracefully.
+
+   **Preferred:** `ov_read level=read` with the known path (works everywhere).
+   - API: `viking://resources/pi-openviking/docs-ov/api/{NN-name}.md`
+   - Concepts: `viking://resources/pi-openviking/docs-ov/concepts/{NN-name}.md`
+   - Only use `ov_search` when you don't know the exact doc path.
+   - If `ov_search` fails/timeouts → fall back to listing the dir (`ov_list`) to find the right doc, then `ov_read` directly.
+   - Match implementation to OV spec exactly (field names, endpoints, part types, headers).
+
+   ⚠️ **Batch your `ctx_search` queries**
+   - **ALWAYS batch ALL queries in ONE call** — `ctx_search(queries: [q1, q2, q3, q4, q5, q6, q7], limit: 3)` counts as 1 call.
+   - Separate calls consume a throttle window (cap 8 calls). After call #3, results shrink (2/query); after #5, only 1/query.
+   - Verify OV server version via `GET /health` → returns `{"version":"v0.3.24"}`.
 
 2. **Read Pi extension docs** — See [REFERENCE.md](REFERENCE.md) for which Pi SDK/docs to consult. Check examples/ for existing plugin patterns.
 
@@ -43,6 +74,10 @@ Before writing ANY code, always do this in order:
 2. Check the adapter implementation (mappers, transport)
 3. Check circuit breaker / health status
 4. Run the specific test file: `npx vitest run path/to/test`
+
+5. **Probe OV server directly with curl when adapter returns unexpected errors** —
+   Use `curl -s -o /tmp/ov-out.txt -w "%{http_code}" -H "X-API-Key: dev" -H "X-OpenViking-Account: default" -H "X-OpenViking-User: default" "http://localhost:1933/api/v1/..."`,
+   then inspect with `ctx_execute_file path=/tmp/ov-out.txt ...` to avoid flooding context.
 
 ## Architecture Constraints
 

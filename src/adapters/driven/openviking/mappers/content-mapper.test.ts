@@ -63,4 +63,34 @@ describe("toContent", () => {
     expect(result.body).toBe("content with metadata");
     expect(result.level).toBe("read");
   });
+
+  // ── String result (OV transport unwraps envelope, returns result as string) ──
+
+  it("handles string result from OV transport (read level)", () => {
+    // Transport returns parsed.result which is "# Markdown content..."
+    const raw = "# Architecture\n\nHexagonal design.";
+    const result = toContent(raw, uri, "read");
+    expect(result.body).toBe("# Architecture\n\nHexagonal design.");
+    expect(result.uri).toEqual(uri);
+    expect(result.level).toBe("read");
+  });
+
+  it("handles string result from OV transport (abstract level)", () => {
+    const raw = "Hexagonal architecture overview";
+    const result = toContent(raw, uri, "abstract");
+    expect(result.body).toBe("Hexagonal architecture overview");
+    expect(result.level).toBe("abstract");
+  });
+
+  it("handles string result from OV transport (overview level)", () => {
+    const raw = "File: architecture.md — Hexagonal design document";
+    const result = toContent(raw, uri, "overview");
+    expect(result.body).toBe("File: architecture.md — Hexagonal design document");
+    expect(result.level).toBe("overview");
+  });
+
+  it("handles empty string result", () => {
+    const result = toContent("", uri, "read");
+    expect(result.body).toBe("");
+  });
 });

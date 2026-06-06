@@ -73,10 +73,15 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       };
       registerLifecycleHooks(pi, lifecycleServices);
 
+      // Reset guard on shutdown so fork/resume gets a fresh init
+      pi.on("session_shutdown", () => {
+        initialized = false;
+      });
+
       initialized = true;
     }
 
-    // Per-session work (runs on every session_start)
+    // Per-session work (runs on every session_start including fork/resume)
     await handleSessionStart(ctx, lifecycleServices);
   });
 }

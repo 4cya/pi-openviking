@@ -12,13 +12,14 @@ function mockTransport(): Transport {
 
 describe("FsStoreAdapter.read", () => {
   const uri = new Uri("viking://docs/architecture.md");
+  const dirUri = new Uri("viking://docs/");
 
   it("calls /api/v1/content/read for level=read", async () => {
     const transport = mockTransport();
-    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      uri: "viking://docs/architecture.md",
-      body: "# Architecture\n\ncontent",
-    });
+    // OV transport returns result as direct string (envelope unwrapped)
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "# Architecture\n\ncontent",
+    );
 
     const fs = new FsStoreAdapter(transport);
     const result = await fs.read(uri, "read");
@@ -27,65 +28,83 @@ describe("FsStoreAdapter.read", () => {
     const [label, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(label).toBe("FsStore.read");
     expect(path).toContain("/api/v1/content/read");
+    expect(path).toContain("uri=");
     expect(result.body).toBe("# Architecture\n\ncontent");
     expect(result.uri).toEqual(uri);
     expect(result.level).toBe("read");
   });
 
-  it("calls /api/v1/content/abstract for level=abstract", async () => {
+  it("calls /api/v1/content/read with .abstract.md for level=abstract", async () => {
     const transport = mockTransport();
-    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      uri: "viking://docs/architecture.md",
-      body: "Hexagonal architecture overview",
-    });
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "Hexagonal architecture overview",
+    );
 
     const fs = new FsStoreAdapter(transport);
-    const result = await fs.read(uri, "abstract");
+    const result = await fs.read(dirUri, "abstract");
 
     const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(path).toContain("/api/v1/content/abstract");
+    expect(path).toContain("/api/v1/content/read");
+    expect(path).toContain(".abstract.md");
+    expect(path).not.toContain("offset=");
+    expect(path).not.toContain("limit=");
     expect(result.body).toBe("Hexagonal architecture overview");
     expect(result.level).toBe("abstract");
   });
 
-  it("calls /api/v1/content/overview for level=overview", async () => {
+  it("calls /api/v1/content/read with .overview.md for level=overview", async () => {
     const transport = mockTransport();
-    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      uri: "viking://docs/architecture.md",
-      body: "File: architecture.md",
-    });
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "File: architecture.md",
+    );
 
     const fs = new FsStoreAdapter(transport);
-    const result = await fs.read(uri, "overview");
+    const result = await fs.read(dirUri, "overview");
 
     const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(path).toContain("/api/v1/content/overview");
+    expect(path).toContain("/api/v1/content/read");
+    expect(path).toContain(".overview.md");
+    expect(path).not.toContain("offset=");
+    expect(path).not.toContain("limit=");
     expect(result.body).toBe("File: architecture.md");
     expect(result.level).toBe("overview");
   });
 
   it("defaults to read level when level is undefined", async () => {
     const transport = mockTransport();
-    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      uri: "viking://docs/architecture.md",
-      body: "full content",
-    });
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "full content",
+    );
 
     const fs = new FsStoreAdapter(transport);
     const result = await fs.read(uri);
 
     const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(path).toContain("/api/v1/content/read");
+    expect(path).toContain("uri=");
+    expect(path).not.toContain(".abstract");
+    expect(path).not.toContain(".overview");
     expect(result.body).toBe("full content");
     expect(result.level).toBeUndefined();
   });
 
-  it("appends uri query param with encoded value", async () => {
+  it("handles 404 gracefully for abstract/overview on files", async () => {
     const transport = mockTransport();
-    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      uri: "viking://docs/architecture.md",
-      body: "content",
-    });
+    const { NotFoundError } = await import("../../../domain/errors/not-found-error");
+    (transport.request as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new NotFoundError("05-sessions.md/.abstract.md not found"),
+    );
+
+    const fs = new FsStoreAdapter(transport);
+    const result = await fs.read(uri, "abstract");
+
+    expect(result.body).toBe("");
+    expect(result.level).toBe("abstract");
+  });
+
+  it("appends uri query param with encoded value for read level", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue("content");
 
     const fs = new FsStoreAdapter(transport);
     await fs.read(uri, "read");
@@ -95,12 +114,9 @@ describe("FsStoreAdapter.read", () => {
     expect(path).toContain(encodeURIComponent("viking://docs/architecture.md"));
   });
 
-  it("appends offset query param when provided", async () => {
+  it("appends offset query param only for read level", async () => {
     const transport = mockTransport();
-    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      uri: "viking://docs/architecture.md",
-      body: "content",
-    });
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue("content");
 
     const fs = new FsStoreAdapter(transport);
     await fs.read(uri, "read", 100);
@@ -109,18 +125,40 @@ describe("FsStoreAdapter.read", () => {
     expect(path).toContain("offset=100");
   });
 
-  it("appends limit query param when provided", async () => {
+  it("appends limit query param only for read level", async () => {
     const transport = mockTransport();
-    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
-      uri: "viking://docs/architecture.md",
-      body: "content",
-    });
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue("content");
 
     const fs = new FsStoreAdapter(transport);
     await fs.read(uri, "read", undefined, 50);
 
     const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(path).toContain("limit=50");
+  });
+
+  it("does not append offset/limit for abstract level", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue("abstract");
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.read(dirUri, "abstract", 10, 20);
+
+    const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(path).toContain("/api/v1/content/read");
+    expect(path).toContain(".abstract.md");
+    expect(path).not.toContain("offset=");
+    expect(path).not.toContain("limit=");
+  });
+
+  it("propagates non-404 errors for abstract/overview", async () => {
+    const transport = mockTransport();
+    const { ConnectionError } = await import("../../../domain/errors/connection-error");
+    (transport.request as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new ConnectionError("OV unreachable"),
+    );
+
+    const fs = new FsStoreAdapter(transport);
+    await expect(fs.read(uri, "abstract")).rejects.toThrow(ConnectionError);
   });
 });
 

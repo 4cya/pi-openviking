@@ -232,4 +232,85 @@ describe("RecallService", () => {
 
     await expect(service.recall("any prompt")).rejects.toThrow(ValidationError);
   });
+
+  // ── Cooldown tests ────────────────────────────────────────────────────────
+
+  it("enters 3-turn cooldown after timeout and skips KB calls", async () => {
+    const config = makeConfig({ recallSearchTimeout: 50 });
+    const kb = makeKB();
+    let calls = 0;
+    (kb.find as ReturnType<typeof vi.fn>).mockImplementation(
+      async () => {
+        calls++;
+        await new Promise<void>((_resolve, reject) => {
+          // Never resolves — will be timed out
+          setTimeout(() => reject(new ConnectionError("aborted")), 100);
+        });
+      },
+    );
+    const curator = makeCurator();
+    const logger = makeLogger();
+
+    const service = new RecallService(kb, curator, config, logger, true);
+
+    // 1st call: times out → cooldown = 3
+    const r1 = await service.recall("prompt");
+    expect(r1.timedOut).toBe(true);
+    expect(calls).toBe(1);
+
+    // 2nd–4th calls: skipped by cooldown (cooldown decrements: 2, 1, 0)
+    const r2 = await service.recall("prompt");
+    expect(r2.timedOut).toBe(false);
+    expect(r2.items).toHaveLength(0);
+    expect(calls).toBe(1);
+
+    const r3 = await service.recall("prompt");
+    expect(r3.timedOut).toBe(false);
+    expect(calls).toBe(1);
+
+    const r4 = await service.recall("prompt");
+    expect(r4.timedOut).toBe(false);
+    expect(calls).toBe(1);
+
+    // 5th call: cooldown expired → KB called again
+    const r5 = await service.recall("prompt");
+    expect(calls).toBe(2);  // KB called again, will timeout again
+    expect(r5.timedOut).toBe(true);
+  });
+
+  it("resets cooldown on success", async () => {
+    const config = makeConfig({ recallSearchTimeout: 5000 });
+    const kb = makeKB();
+    (kb.find as ReturnType<typeof vi.fn>).mockResolvedValue(sampleKBResult);
+    const curator = makeCurator({
+      items: [{ uri: "viking://a", text: "alpha", score: 0.9, source: "memory" as const }],
+      tokens: 10,
+    });
+    const logger = makeLogger();
+
+    const service = new RecallService(kb, curator, config, logger, true);
+
+    // First call succeeds
+    const r1 = await service.recall("success");
+    expect(r1.items).toHaveLength(1);
+    expect((kb.find as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+
+    // Manually set cooldown (simulate entering it somehow)
+    (service as any).cooldownTurns = 2;
+
+    // Next call should be blocked
+    const r2 = await service.recall("blocked");
+    expect(r2.items).toHaveLength(0);
+    expect((kb.find as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+
+    // After cooldown expires, success resets it
+    (service as any).cooldownTurns = 1;
+    await service.recall("skip");  // still in cooldown
+    expect((kb.find as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+
+    (service as any).cooldownTurns = 0;  // cooldown expired
+    const r3 = await service.recall("fresh");
+    expect(r3.items).toHaveLength(1);
+    expect((kb.find as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+  });
 });

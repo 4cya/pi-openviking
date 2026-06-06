@@ -47,7 +47,7 @@ describe("ov-search command", () => {
     await cmd.handler("find something", ctx);
 
     expect(search).toHaveBeenCalledWith(
-      { query: "find something", mode: "fast" },
+      { query: "find something", mode: "find" },
     );
   });
 

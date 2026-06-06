@@ -20,6 +20,7 @@ export function loadConfig(cwd: string): PiOVConfig {
     OV_EXPAND_GRAPH:   { path: "recall.expandGraph", parse: (v) => v === "true" },
     OV_SEARCH_MODE:    { path: "recall.searchMode" },
     OV_API_KEY:                    { path: "ov.apiKey" },
+    OV_RATE_LIMIT:                 { path: "ov.rateLimitPerSecond", parse: Number },
     OV_CIRCUIT_BREAKER_THRESHOLD: { path: "ov.circuitBreaker.threshold", parse: Number },
     OV_CIRCUIT_BREAKER_RESET_TIMEOUT: { path: "ov.circuitBreaker.resetTimeoutMs", parse: Number },
   };

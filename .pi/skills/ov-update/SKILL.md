@@ -98,41 +98,85 @@ Extract `.md` file links (not `../`). Compare with REFERENCE.md list:
 
 This ensures the import stays in sync with upstream, not just the last known snapshot.
 
-### 7. Delete Old OV Docs Resources
+### 6. Delete Old OV Docs Resources
 
 ```bash
-# Remove entire docs-ov tree from OV
-ov_delete --recursive viking://resources/pi-openviking/docs-ov/
+ov_delete uri="viking://resources/pi-openviking/docs-ov/" recursive=true
 ```
 
-### 8. Re-import OV Docs from GitHub
+### 7. Re-import OV Docs from GitHub
 
-Use `ov_import` for each doc URL from [REFERENCE.md](REFERENCE.md), substituting `$DOC_SOURCE` into URLs:
+⚠️ Do NOT use `ov_import` — OV's ResourceStore (POST /api/v1/resources) parses markdown headings
+into directory trees. Files become directories (size 0). Use `ov_write` (FsStore.write) instead
+with raw content fetched from GitHub.
 
-- Replace `main` with `$DOC_SOURCE` (either a tag like `v0.3.23` or `main` for bleeding-edge)
-- Import concepts/, api/, and README
-- Import order does not matter — OV processes async
+For each doc URL from [REFERENCE.md](REFERENCE.md), substituting `$DOC_SOURCE`:
 
-Use `ov_import` with:
-- `url`: the raw GitHub URL
-- `targetUri`: the corresponding `viking://resources/pi-openviking/docs-ov/...` path
-- `reason`: brief description
+1. Fetch raw markdown from GitHub raw URL
+2. Write to OV via `ov_write` with `mode: "create"` (or `"replace"` if re-importing)
 
-### 9. Write Version Marker
+Use `ov_write` with:
+- `uri`: the OV target path (`viking://resources/pi-openviking/docs-ov/...`)
+- `content`: the raw markdown body (read from fetched file)
+- `mode`: `"create"` for first import, `"replace"` for updates
+
+**Batch script template:**
+
+```python
+import json, subprocess
+
+AUTH = ["-H", "X-API-Key: dev", "-H", "X-OpenViking-Account: default",
+        "-H", "X-OpenViking-User: default", "-H", "X-OpenViking-Agent: pi"]
+
+docs = [
+    # (gh_rel_path, ov_rel_path)  — see REFERENCE.md for full list
+    ("docs/en/concepts/01-architecture.md", "concepts/01-architecture.md"),
+    # ...
+]
+
+for gh_path, ov_path in docs:
+    gh_url = f"https://raw.githubusercontent.com/volcengine/OpenViking/{DOC_SOURCE}/{gh_path}"
+    ov_uri = f"viking://resources/pi-openviking/docs-ov/{ov_path}"
+    
+    subprocess.run(["curl", "-s", "-o", "/tmp/doc.md", gh_url])
+    content = open("/tmp/doc.md").read()
+    
+    body = json.dumps({"uri": ov_uri, "content": content, "mode": "create"})
+    subprocess.run(["curl", "-s",
+        "http://localhost:1933/api/v1/content/write",
+        "-H", "Content-Type: application/json"] + AUTH + ["-d", body])
+```
+
+If a file already exists (e.g. on re-import), replace `"mode": "create"` with `"mode": "replace"`
+or use a try-create-then-replace strategy.
+
+### 8. Write Version Marker
 
 After all imports succeed:
 
 ```bash
-ov_write action="save" uri="viking://resources/pi-openviking/docs-ov/version.md" content="# OV Docs Version\n\n**Version:** {tag}\n**Import date:** $(date +%Y-%m-%d)\n**Doc source:** {DOC_SOURCE}\n**Source:** https://github.com/volcengine/OpenViking/tree/{DOC_SOURCE}"
+ov_write uri="viking://resources/pi-openviking/docs-ov/version.md" content="# OV Docs Version\n\n**Version:** {tag}\n**Import date:** $(date +%Y-%m-%d)\n**Doc source:** {DOC_SOURCE}\n**Source:** https://github.com/volcengine/OpenViking/tree/{DOC_SOURCE}" mode="replace"
 ```
 
-### 10. Verify
+### 9. Verify
 
 ```
-ov_search query="OpenViking session memory" source="docs-ov"
+ov_search query="OpenViking session memory"
 ```
 
 Should return results from the freshly imported docs.
+
+## Why ov_write not ov_import
+
+OV has two distinct APIs for writing content:
+
+| API | Endpoint | Behavior |
+|-----|----------|----------|
+| **ResourceStore** (`ov_import`) | `POST /api/v1/resources` | Parses markdown headings → directory tree. Use for importing external URLs as structured **resources** with L0/L1/L2 extraction. |
+| **FsStore** (`ov_write`) | `POST /api/v1/content/write` | Writes raw content as a flat file. Use for docs, reference files, any content that should stay **intact**. |
+
+`ov_import` is designed for URLs that OV should parse, extract, and index semantically (HTML pages, PDFs, articles with structure).
+For plain markdown docs that should remain as-is on disk, use `ov_write` with `mode: create|replace`.
 
 ## Notes
 

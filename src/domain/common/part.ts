@@ -19,11 +19,4 @@ export interface ToolPart {
   toolOutputRef: string;
 }
 
-export interface ContextPart {
-  type: "context";
-  uri: string;
-  contextType: "memory" | "resource" | "skill";
-  abstract: string;
-}
-
-export type Part = TextPart | ToolPart | ContextPart;
+export type Part = TextPart | ToolPart;

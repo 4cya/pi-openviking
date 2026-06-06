@@ -27,7 +27,10 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
   const { logger, sessionService, recallService, adapter, widget } = svcs;
 
   // message_end: sync user/assistant messages to OV session
-  pi.on("message_end", (event) => {
+  // OV only accepts "user" and "assistant" roles — skip toolResult
+  pi.on("message_end", async (event) => {
+    if (event.message.role === "toolResult") return;
+
     const parts = agentMessageToParts(event.message);
     if (parts.length === 0) return;
 
@@ -37,22 +40,26 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
       return;
     }
 
-    sessionService.sendMessage(active, event.message.role, parts).catch((err) => {
+    try {
+      await sessionService.sendMessage(active, event.message.role, parts);
+    } catch (err) {
       logger?.warn("message_end: failed to send message", { error: (err as Error).message });
-    });
+    }
   });
 
   // session_shutdown: commit active session to OV
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", async () => {
     const active = sessionService.getActive();
     if (!active) {
       logger?.debug("session_shutdown: no active session, skipping commit");
       return;
     }
 
-    sessionService.commit(active).catch((err) => {
+    try {
+      await sessionService.commit(active);
+    } catch (err) {
       logger?.warn("session_shutdown: failed to commit session", { error: (err as Error).message });
-    });
+    }
   });
 
   // before_agent_start: auto-recall with guard chain

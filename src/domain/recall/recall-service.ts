@@ -18,6 +18,8 @@ export interface RecallResult {
 }
 
 export class RecallService {
+  private cooldownTurns = 0;
+
   constructor(
     private readonly kb: KnowledgeBase,
     private readonly curator: RecallCurator,
@@ -40,7 +42,14 @@ export class RecallService {
       return { items: [], tokens: 0, formatted: "", total: 0, timedOut: false };
     }
 
-    const timeoutMs = this.config.recallSearchTimeout ?? 5000;
+    // Cooldown guard: skip if OV recently timed out
+    if (this.cooldownTurns > 0) {
+      this.cooldownTurns--;
+      this.logger.debug(`recall in cooldown (${this.cooldownTurns} turns remaining), skipping`);
+      return { items: [], tokens: 0, formatted: '', total: 0, timedOut: false };
+    }
+
+    const timeoutMs = this.config.recallSearchTimeout ?? 10000;
     const targetUri = this.config.targetUri ? new Uri(this.config.targetUri) : undefined;
 
     const abortController = new AbortController();
@@ -52,6 +61,9 @@ export class RecallService {
       const result = this.config.searchMode === "find"
         ? await this.kb.find({ query: prompt, limit: this.config.topN, targetUri }, abortController.signal)
         : await this.kb.search({ query: prompt, limit: this.config.topN, sessionId, targetUri }, abortController.signal);
+
+      // Success clears cooldown
+      this.cooldownTurns = 0;
 
       const curated: CuratedResult = await this.curator.curate(result);
       return {
@@ -68,6 +80,10 @@ export class RecallService {
             ? `OV search timed out after ${timeoutMs}ms, skipping recall`
             : `OV unavailable, skipping recall`,
         );
+        // Enter cooldown on timeout to avoid hammering saturated OV
+        if (isTimeout) {
+          this.cooldownTurns = 3;
+        }
         return { items: [], tokens: 0, formatted: '', total: 0, timedOut: isTimeout };
       }
       throw err;

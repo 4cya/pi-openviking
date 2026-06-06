@@ -4,6 +4,9 @@ import type { SessionService } from "../../../domain/services/session-service";
 export function createOvCommitCommand(sessionService: SessionService, widgetUpdater?: (field: string, value: string) => void) {
   return {
     description: "Commit the current OV session. Usage: /ov-commit [--wait]",
+    getArgumentCompletions: (_prefix: string) => [
+      { label: "--wait", description: "Wait for commit to complete before returning" },
+    ],
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       const active = sessionService.getActive();
       if (!active) {

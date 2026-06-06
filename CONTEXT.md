@@ -151,7 +151,7 @@ _Avoid_: container, ioc
 
 **Lifecycle**:
 The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
-Single `init()` in `infrastructure/lifecycle.ts`. Registers 13 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1-F3), plus recallCurator, sessionService, recallService (F4), plus searchService, writeService, readService (F5). No IntentDetector — recall toggle is command-based. Scorers `[relevanceScorer, temporalScorer]` wired in F4. No GraphExpander — absent until F8. 22 lifecycle smoke tests.
+Single `init()` in `infrastructure/lifecycle.ts`. Registers 16 singletons: config, logger, adapter, knowledgeBase, fsStore, graphStore, sessionStore, resourceStore, profileManager, graphExpander (conditional), recallCurator, sessionService, recallService, searchService, fsStoreService, resourceService. Scorers `[relevanceScorer, temporalScorer]` wired in F4. GraphExpander injected when `expandGraph` is enabled. 22 lifecycle smoke tests.
 _Avoid_: bootstrap lifecycle, module lifecycle
 
 ### Core Domain (future phases)
@@ -406,7 +406,7 @@ An `initialized` flag ensures `init()` runs once per process.
 
 **Tool barrel** (`adapters/driver/pi-tools/tool-registry.ts`): `registerAllTools(pi, services, logger)` creates typed Pipelines with LoggingMiddleware for each tool and registers all 12 in one call.
 
-**F5 complete**: 12 tools (ov_search, ov_glob, ov_grep, ov_write, ov_read, ov_recall, ov_list, ov_tree, ov_stat, ov_delete, ov_resource, ov_skill) + 9 commands (ov-recall, ov-status, ov-tree, ov-commit, ov-search, ov-delete, ov-profile, ov-start, ov-reindex) + OVWidget. Status bar pending.
+**F5 complete**: 13 tools (ov_search, ov_glob, ov_grep, ov_write, ov_read, ov_recall, ov_list, ov_tree, ov_stat, ov_delete, ov_resource, ov_skill, ov_import) + 9 commands (ov-recall, ov-status, ov-tree, ov-commit, ov-search, ov-delete, ov-profile, ov-start, ov-reindex) + OVWidget. Status bar pending.
 
 ### F6 — Auto-Recall + Session Sync
 

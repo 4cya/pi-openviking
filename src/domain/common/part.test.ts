@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { Part, TextPart, ToolPart, ContextPart } from "./part";
+import type { Part, TextPart, ToolPart } from "./part";
 
 describe("Part", () => {
   it("TextPart works", () => {
@@ -54,31 +54,16 @@ describe("Part", () => {
     expect(p.completionTokens).toBeNull();
   });
 
-  it("ContextPart works", () => {
-    const p: ContextPart = {
-      type: "context",
-      uri: "viking://memory/abc",
-      contextType: "memory",
-      abstract: "some memory",
-    };
-    expect(p.type).toBe("context");
-    expect(p.contextType).toBe("memory");
-    expect(p.abstract).toBe("some memory");
-  });
-
   it("discriminates on type field", () => {
     const parts: Part[] = [
       { type: "text", text: "hi" },
       { type: "tool", toolId: "t1", toolName: "n", toolInput: {}, toolOutput: "", toolStatus: "ok", toolOutputTruncated: false, toolUri: "u", skillUri: "s", durationMs: null, promptTokens: null, completionTokens: null, toolOutputRef: "r" },
-      { type: "context", uri: "u", contextType: "resource", abstract: "a" },
     ];
 
     const texts = parts.filter((p): p is TextPart => p.type === "text");
     const tools = parts.filter((p): p is ToolPart => p.type === "tool");
-    const contexts = parts.filter((p): p is ContextPart => p.type === "context");
 
     expect(texts).toHaveLength(1);
     expect(tools).toHaveLength(1);
-    expect(contexts).toHaveLength(1);
   });
 });

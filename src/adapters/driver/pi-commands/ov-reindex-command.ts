@@ -5,6 +5,18 @@ import { Uri } from "../../../domain/common/uri";
 export function createOvReindexCommand(fsStore: FsStore) {
   return {
     description: "Reindex a resource or skill in OpenViking. Usage: /ov-reindex <uri> [--mode vectors_only|full]",
+    getArgumentCompletions: (prefix: string) => {
+      if (prefix.startsWith("--mode ")) return [];
+      if (prefix.includes("--mode")) {
+        return [
+          { label: "vectors_only", description: "Rebuild vector embeddings only (default)" },
+          { label: "full", description: "Rebuild both scalar and vector indexes" },
+        ];
+      }
+      return [
+        { label: "--mode", description: "Reindex mode: vectors_only (default) or full" },
+      ];
+    },
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       const trimmed = args.trim();
       if (!trimmed) {

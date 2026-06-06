@@ -8,8 +8,8 @@ const SearchSchema = Type.Object({
   query: Type.String({ description: "Search query" }),
   mode: Type.Optional(
     Type.Union(
-      [Type.Literal("auto"), Type.Literal("fast"), Type.Literal("deep")],
-      { description: 'Search mode: "auto" uses config default, "fast" uses find(), "deep" uses search()' },
+      [Type.Literal("auto"), Type.Literal("find"), Type.Literal("search")],
+      { description: 'Search mode: "auto" uses config default, "find" for simple semantic search, "search" for deep intent-aware search' },
     ),
   ),
   limit: Type.Optional(Type.Number({ description: "Maximum results" })),

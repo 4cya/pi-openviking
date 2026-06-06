@@ -6,7 +6,7 @@ import { Uri } from "../common/uri";
 
 interface SearchParams {
   query: string;
-  mode: "auto" | "fast" | "deep";
+  mode: "auto" | "find" | "search";
   limit?: number;
   targetUri?: string;
 }
@@ -22,7 +22,7 @@ export class SearchService {
     const mode = params.mode === "auto" ? this.config.searchMode : params.mode;
     const targetUri = params.targetUri ? new Uri(params.targetUri) : undefined;
 
-    if (mode === "find" || mode === "fast") {
+    if (mode === "find") {
       return this.kb.find({ query: params.query, limit: params.limit, targetUri }, signal);
     }
     return this.kb.search({ query: params.query, limit: params.limit, targetUri, sessionId: undefined }, signal);

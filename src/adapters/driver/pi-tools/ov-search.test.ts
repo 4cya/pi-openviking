@@ -59,9 +59,9 @@ describe("ov_search tool", () => {
       },
     });
     const tool = createOvSearchTool(svc, makePipeline());
-    const result = await executeTool(tool, { query: "test query", mode: "fast" });
+    const result = await executeTool(tool, { query: "test query", mode: "find" });
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ query: "test query", mode: "fast" });
+    expect(calls[0]).toMatchObject({ query: "test query", mode: "find" });
     expect(result.content[0]).toMatchObject({ type: "text" });
     expect(getText(result)).not.toContain("failed");
   });

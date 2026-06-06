@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { toSessionId, toCommitResult, toTaskStatus, serializePart, serializeParts } from "./session-mapper";
 import { SessionId } from "../../../../domain/common/session-id";
-import type { Part, TextPart, ToolPart, ContextPart } from "../../../../domain/common/part";
+import type { Part, TextPart, ToolPart } from "../../../../domain/common/part";
 
 describe("toSessionId", () => {
   it("extracts session_id from create response", () => {
@@ -137,20 +137,6 @@ describe("serializePart", () => {
     expect(json.completion_tokens).toBeNull();
   });
 
-  it("serializes ContextPart", () => {
-    const part: ContextPart = {
-      type: "context",
-      uri: "viking://docs/arch.md",
-      contextType: "memory",
-      abstract: "Architecture overview",
-    };
-    const json = serializePart(part);
-    expect(json.type).toBe("context");
-    expect(json.uri).toBe("viking://docs/arch.md");
-    expect(json.context_type).toBe("memory");
-    expect(json.abstract).toBe("Architecture overview");
-    expect(json.contextType).toBeUndefined();
-  });
 });
 
 describe("serializeParts", () => {

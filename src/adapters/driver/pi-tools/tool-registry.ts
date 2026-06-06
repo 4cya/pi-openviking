@@ -14,6 +14,10 @@ import { createOvDeleteTool } from "./ov-delete";
 import { createOvResourceTool } from "./ov-resource";
 import { createOvSkillTool } from "./ov-skill";
 import { createOvImportTool } from "./ov-import";
+import type { SearchResult } from "../../../domain/knowledge/model/search-result";
+import type { GlobResult, GrepResult } from "../../../domain/ports/knowledge-base";
+import type { Content, FsEntry } from "../../../domain/ports/fs-store";
+import type { RecallResult } from "../../../domain/recall/recall-service";
 import type { SearchService } from "../../../domain/services/search-service";
 import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { RecallService } from "../../../domain/recall/recall-service";
@@ -28,55 +32,55 @@ export interface ToolServices {
 }
 
 export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: Logger): void {
-  const searchPipeline = new Pipeline();
+  const searchPipeline = new Pipeline<SearchResult>();
   searchPipeline.use(loggingMiddleware("search", logger));
-  pi.registerTool(createOvSearchTool(svcs.searchService, searchPipeline as any));
+  pi.registerTool(createOvSearchTool(svcs.searchService, searchPipeline));
 
-  const globPipeline = new Pipeline();
+  const globPipeline = new Pipeline<GlobResult>();
   globPipeline.use(loggingMiddleware("glob", logger));
-  pi.registerTool(createOvGlobTool(svcs.searchService, globPipeline as any));
+  pi.registerTool(createOvGlobTool(svcs.searchService, globPipeline));
 
-  const grepPipeline = new Pipeline();
+  const grepPipeline = new Pipeline<GrepResult>();
   grepPipeline.use(loggingMiddleware("grep", logger));
-  pi.registerTool(createOvGrepTool(svcs.searchService, grepPipeline as any));
+  pi.registerTool(createOvGrepTool(svcs.searchService, grepPipeline));
 
-  const writePipeline = new Pipeline();
+  const writePipeline = new Pipeline<unknown>();
   writePipeline.use(loggingMiddleware("write", logger));
-  pi.registerTool(createOvWriteTool(svcs.fsStoreService, writePipeline as any));
+  pi.registerTool(createOvWriteTool(svcs.fsStoreService, writePipeline));
 
-  const readPipeline = new Pipeline();
+  const readPipeline = new Pipeline<Content>();
   readPipeline.use(loggingMiddleware("read", logger));
-  pi.registerTool(createOvReadTool(svcs.fsStoreService, readPipeline as any));
+  pi.registerTool(createOvReadTool(svcs.fsStoreService, readPipeline));
 
-  const recallPipeline = new Pipeline();
+  const recallPipeline = new Pipeline<RecallResult>();
   recallPipeline.use(loggingMiddleware("recall", logger));
-  pi.registerTool(createOvRecallTool(svcs.recallService, recallPipeline as any));
+  pi.registerTool(createOvRecallTool(svcs.recallService, recallPipeline));
 
-  const listPipeline = new Pipeline();
+  const listPipeline = new Pipeline<FsEntry[]>();
   listPipeline.use(loggingMiddleware("list", logger));
-  pi.registerTool(createOvListTool(svcs.fsStoreService, listPipeline as any));
+  pi.registerTool(createOvListTool(svcs.fsStoreService, listPipeline));
 
-  const treePipeline = new Pipeline();
+  const treePipeline = new Pipeline<FsEntry[]>();
   treePipeline.use(loggingMiddleware("tree", logger));
-  pi.registerTool(createOvTreeTool(svcs.fsStoreService, treePipeline as any));
+  pi.registerTool(createOvTreeTool(svcs.fsStoreService, treePipeline));
 
-  const statPipeline = new Pipeline();
+  const statPipeline = new Pipeline<FsEntry>();
   statPipeline.use(loggingMiddleware("stat", logger));
-  pi.registerTool(createOvStatTool(svcs.fsStoreService, statPipeline as any));
+  pi.registerTool(createOvStatTool(svcs.fsStoreService, statPipeline));
 
-  const deletePipeline = new Pipeline();
+  const deletePipeline = new Pipeline<void>();
   deletePipeline.use(loggingMiddleware("delete", logger));
-  pi.registerTool(createOvDeleteTool(svcs.fsStoreService, deletePipeline as any));
+  pi.registerTool(createOvDeleteTool(svcs.fsStoreService, deletePipeline));
 
-  const resourcePipeline = new Pipeline();
+  const resourcePipeline = new Pipeline<unknown>();
   resourcePipeline.use(loggingMiddleware("resource", logger));
-  pi.registerTool(createOvResourceTool(svcs.fsStoreService, resourcePipeline as any));
+  pi.registerTool(createOvResourceTool(svcs.fsStoreService, resourcePipeline));
 
-  const skillPipeline = new Pipeline();
+  const skillPipeline = new Pipeline<unknown>();
   skillPipeline.use(loggingMiddleware("skill", logger));
-  pi.registerTool(createOvSkillTool(svcs.fsStoreService, skillPipeline as any));
+  pi.registerTool(createOvSkillTool(svcs.fsStoreService, skillPipeline));
 
-  const importPipeline = new Pipeline();
+  const importPipeline = new Pipeline<unknown>();
   importPipeline.use(loggingMiddleware("import", logger));
-  pi.registerTool(createOvImportTool(svcs.resourceService, importPipeline as any));
+  pi.registerTool(createOvImportTool(svcs.resourceService, importPipeline));
 }

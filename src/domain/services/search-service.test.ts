@@ -35,7 +35,7 @@ describe("SearchService", () => {
       find: async (q) => { findCalls.push(q); return emptyResult; },
     });
     const svc = new SearchService(kb, { searchMode: "find" } as RecallConfig, makeLogger());
-    await svc.search({ query: "test", mode: "fast" });
+    await svc.search({ query: "test", mode: "find" });
     expect(findCalls).toHaveLength(1);
     expect(findCalls[0]).toEqual({ query: "test", limit: undefined, targetUri: undefined });
   });
@@ -46,7 +46,7 @@ describe("SearchService", () => {
       search: async (r) => { searchCalls.push(r); return emptyResult; },
     });
     const svc = new SearchService(kb, { searchMode: "find" } as RecallConfig, makeLogger());
-    await svc.search({ query: "deep query", mode: "deep" });
+    await svc.search({ query: "deep query", mode: "search" });
     expect(searchCalls).toHaveLength(1);
     expect(searchCalls[0]).toMatchObject({ query: "deep query" });
   });
@@ -77,7 +77,7 @@ describe("SearchService", () => {
       find: async (q) => { findCalls.push(q); return emptyResult; },
     });
     const svc = new SearchService(kb, { searchMode: "find" } as RecallConfig, makeLogger());
-    await svc.search({ query: "test", mode: "fast", limit: 10, targetUri: "viking://kb/test" });
+    await svc.search({ query: "test", mode: "find", limit: 10, targetUri: "viking://kb/test" });
     expect(findCalls[0]).toEqual({ query: "test", limit: 10, targetUri: new Uri("viking://kb/test") });
   });
 

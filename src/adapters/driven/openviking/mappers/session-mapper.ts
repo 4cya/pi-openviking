@@ -1,6 +1,6 @@
 import { SessionId } from "../../../../domain/common/session-id";
 import type { CommitResult, TaskStatus } from "../../../../domain/ports/session-store";
-import type { Part, TextPart, ToolPart, ContextPart } from "../../../../domain/common/part";
+import type { Part } from "../../../../domain/common/part";
 import { getRecord, safeOptionalString, safeString } from "./mapper-utils";
 
 // ── Session Mappers ───────────────────────────────────────────────────────────

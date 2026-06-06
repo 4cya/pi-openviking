@@ -6,10 +6,7 @@ import type { ContentLevel } from "../../../domain/common/content-level";
 import type { WriteMode } from "../../../domain/common/write-mode";
 import type { Content, FsStore, FsEntry, WriteResult, ReindexMode } from "../../../domain/ports/fs-store";
 import { ValidationError } from "../../../domain/errors/validation-error";
-
-function levelPath(level?: ContentLevel): string {
-  return level ?? "read";
-}
+import { NotFoundError } from "../../../domain/errors/not-found-error";
 
 function buildQuery(
   uri: Uri,
@@ -27,6 +24,34 @@ function uriQuery(uri: Uri): string {
   return `uri=${encodeURIComponent(uri.value)}`;
 }
 
+/**
+ * OV v0.3.x only has /api/v1/content/read — there are no
+ * separate /abstract or /overview path segments.
+ *
+ * For level="read":     GET /api/v1/content/read?uri=X&offset=Y&limit=Z
+ * For level="abstract":  GET /api/v1/content/read?uri=X/.abstract.md
+ * For level="overview":  GET /api/v1/content/read?uri=X/.overview.md
+ *
+ * The dotfiles exist only for directories; for files the server
+ * returns 404 NOT_FOUND, which callers should handle gracefully.
+ */
+function buildReadPath(
+  uri: Uri,
+  level?: ContentLevel,
+  offset?: number,
+  limit?: number,
+): string {
+  if (level === "abstract") {
+    return `/api/v1/content/read?uri=${encodeURIComponent(uri.value)}/.abstract.md`;
+  }
+  if (level === "overview") {
+    return `/api/v1/content/read?uri=${encodeURIComponent(uri.value)}/.overview.md`;
+  }
+  // level === "read" or undefined
+  const query = buildQuery(uri, offset, limit);
+  return `/api/v1/content/read?${query}`;
+}
+
 export class FsStoreAdapter implements FsStore {
   constructor(private readonly transport: Transport) {}
 
@@ -37,18 +62,31 @@ export class FsStoreAdapter implements FsStore {
     limit?: number,
     signal?: AbortSignal,
   ): Promise<Content> {
-    const segment = levelPath(level);
-    const query = buildQuery(uri, offset, limit);
-    const path = `/api/v1/content/${segment}?${query}`;
+    const path = buildReadPath(uri, level, offset, limit);
 
-    const raw = await this.transport.request<Record<string, unknown>>(
-      "FsStore.read",
-      path,
-      undefined,
-      signal,
-    );
+    try {
+      // For abstract/overview, the transport returns a string (markdown text).
+      // For level=read, offset/limit paginate the full content.
+      const raw = await this.transport.request<string>(
+        "FsStore.read",
+        path,
+        undefined,
+        signal,
+      );
 
-    return toContent(raw, uri, level);
+      return toContent(raw, uri, level);
+    } catch (err: unknown) {
+      // Abstract/overview dotfiles only exist for directories.
+      // If the target is a file, OV returns 404 — return empty gracefully.
+      if (
+        err instanceof NotFoundError &&
+        level !== undefined &&
+        level !== "read"
+      ) {
+        return { uri, body: "", level };
+      }
+      throw err;
+    }
   }
 
   async write(uri: Uri, content: string, mode?: WriteMode, signal?: AbortSignal): Promise<WriteResult> {

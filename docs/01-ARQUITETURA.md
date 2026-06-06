@@ -13,8 +13,8 @@
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
-| **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 10 singletons total no container. Ver `02-PLANO.md`. |
-| **F5 Tools + Commands** | ✅ Completo (F5.1–F5.5 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: FsStoreService (merged former WriteService + ReadService + FsService) + ov_write + ov_read. F5.3 ✅: ov_recall tool. F5.4 ✅: 6 slash commands. F5.5 ✅: Wiring (guard pattern + tool/command barrels) + OVWidget. 6 tools + 6 commands + widget operacionais. Pendente: status bar. Ver `02-PLANO.md`. |
+| **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 16 singletons total no container. Ver `02-PLANO.md`. |
+| **F5 Tools + Commands** | ✅ Completo (F5.1–F5.5 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: FsStoreService (merged former WriteService + ReadService + FsService) + ov_write + ov_read. F5.3 ✅: ov_recall tool. F5.4 ✅: 9 slash commands. F5.5 ✅: Wiring (guard pattern + tool/command barrels) + OVWidget. 13 tools + 9 commands + widget operacionais. Pendente: status bar. Ver `02-PLANO.md`. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -259,16 +259,20 @@ interface FsStore {
 > **ReindexMode**: `"vectors_only" | "full"`. Default `"vectors_only"` rebuilds vector embeddings; `"full"` rebuilds both scalar and vector indexes. Maps to OV `POST /api/v1/content/reindex {uri, mode}`.
 
 > `read()` aceita `level` que mapeia para as camadas L0/L1/L2 do OV:
-> - `"abstract"` → L0 (~100 tokens, vetor de busca). OV: `GET /api/v1/content/abstract?uri=`
-> - `"overview"` → L1 (~2k tokens, resumo intermediário). OV: `GET /api/v1/content/overview?uri=`
+> - `"abstract"` → L0. OV v0.3.x: `GET /api/v1/content/read?uri=URI/.abstract.md` (apenas diretórios)
+> - `"overview"` → L1. OV v0.3.x: `GET /api/v1/content/read?uri=URI/.overview.md` (apenas diretórios)
 > - `"read"` → L2 (conteúdo completo). OV: `GET /api/v1/content/read?uri=&offset=&limit=`
+>
+> OV v0.3.24 NÃO possui endpoints `/api/v1/content/abstract` ou `/api/v1/content/overview`.
+> Os níveis L0/L1 são acessíveis via dotfiles (`.abstract.md`, `.overview.md`) no filesystem.
+> Para arquivos individuais, abstract/overview só estão disponíveis via search API,
+> não via content API. O adapter retorna body vazio com level nestes casos.
 >
 > `offset` (linha inicial, default 0) e `limit` (linhas, default -1) aplicam-se apenas ao nível `"read"`.
 >
-> `write()` não expõe `wait` no domínio — espera síncrona é detalhe de transporte OV,
-> resolvido no adapter (F3) via `wait: true` com timeout default de 30s.
-> Domínio não sabe de async processing. OV `POST /api/v1/content/write` aceita
-> `wait: bool` e `timeout: float`.
+> `write()` não expõe `wait` no domínio — detalhe de transporte resolvido no adapter
+> via `wait: false` (assíncrono — OV processa embedding em background).
+> OV `POST /api/v1/content/write` aceita `wait: bool` e `timeout: float`.
 >
 > **Nota sobre scopes OV:** OV organiza conteúdo em 4 scopes públicos sob `viking://`:
 > `resources/` (documentos), `user/{user_id}/` (memórias de usuário), `agent/{agent_id}/` (memórias/experiências do agent),
@@ -498,7 +502,7 @@ src/
 ├── application/               # (não utilizado — SearchService em domain/services/, Pipeline em domain/pipeline/)
 │
 ├── adapters/
-│   ├── driver/pi-tools/       # ✅ F5.1–F5.6: 12 tools registradas
+│   ├── driver/pi-tools/       # ✅ F5.1–F5.6: 13 tools registradas
 │   │   ├── ov-search.ts       # ✅ ov_search tool + TypeBox schema
 │   │   ├── ov-search.test.ts  # ✅ 3 unit tests
 │   │   ├── ov-glob.ts         # ✅ ov_glob tool
@@ -529,7 +533,7 @@ src/
 │   │   ├── register-lifecycle-hooks.ts # ✅ registerLifecycleHooks() + handleSessionStart()
 │   │   ├── message-mapper.ts     # ✅ agentMessageToParts() — 9 tests
 │   │   └── message-mapper.test.ts # ✅ 9 tests (user/assistant/tool/empty/null/ImageContent)
-│   ├── driver/pi-tools/         # ✅ F5.1–F5.5: 6 tools + barrel
+│   ├── driver/pi-tools/         # ✅ F5.1–F5.5: 13 tools + barrel
 │   │   ├── tool-registry.ts     # ✅ registerAllTools() barrel
 │   └── driven/
 │       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
@@ -562,8 +566,8 @@ src/
 │   │   ├── loader.ts          # ✅ Leitor .pi/settings.json
 │   │   └── profile-schema.ts  # ✅ ProfileSchema (só name+description em F1)
 │   ├── di/
-│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 15 singletons)
-│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F7b (15 singletons)
+│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 16 singletons)
+│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F7b (16 singletons)
 │   ├── lifecycle.test.ts      # ✅ 16 smoke tests (F1–F3 adapters + F4 services)
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │

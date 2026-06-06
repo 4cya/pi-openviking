@@ -19,16 +19,36 @@ All official OV docs are at `viking://resources/pi-openviking/docs-ov/`.
 | Version | `viking://resources/pi-openviking/docs-ov/version.md` |
 | Concepts (13) | `viking://resources/pi-openviking/docs-ov/concepts/` |
 | API reference (11) | `viking://resources/pi-openviking/docs-ov/api/` |
+| Getting started (5) | `viking://resources/pi-openviking/docs-ov/getting-started/` |
 
 Read a doc:
 ```
 ov_read level=read uri=viking://resources/pi-openviking/docs-ov/api/05-sessions.md
 ```
 
-Search across docs:
+Search across docs (use only when exact path unknown; `ov_search` may time out if VLM indexing incomplete):
 ```
 ov_search query="ToolPart tool_output tool_status" source="docs-ov"
 ```
+
+### Fallback: GitHub raw URLs
+
+If OV docs at `viking://resources/pi-openviking/docs-ov/` are missing (step 0 check fails),
+fetch directly from GitHub raw. Use `{DOC_SOURCE}` = `main` or release tag (v0.3.x):
+
+```
+Base: https://raw.githubusercontent.com/volcengine/OpenViking/{DOC_SOURCE}/docs/en/
+
+Concepts:  {base}concepts/{NN-name}.md
+  e.g. https://raw.githubusercontent.com/volcengine/OpenViking/main/docs/en/concepts/08-session.md
+
+API:       {base}api/{NN-name}.md
+  e.g. https://raw.githubusercontent.com/volcengine/OpenViking/main/docs/en/api/05-sessions.md
+
+Getting started: {base}getting-started/{NN-name}.md
+```
+
+Fetch with `firecrawl_scrape` or `ctx_fetch_and_index`, then read locally.
 
 ## Pi Agent Documentation
 
@@ -81,6 +101,33 @@ npx vitest
 - **Host**: `http://localhost:1933`
 - **Headers**: `X-API-Key: dev`, `X-OpenViking-Account: default`, `X-OpenViking-User: <user>`, `X-OpenViking-Agent: pi`
 - **Prefix**: `/api/v1/`
-- **Health**: `GET /health`
+- **Health**: `GET /health` (returns `{"healthy":true,"version":"v0.3.24"}`)
+- **Readiness**: `GET /ready` (returns checks: agfs, vectordb, api_key_manager, embedding)
 - **Part types**: `text`, `tool` (with `tool_id`, `tool_name`, `tool_input`, `tool_output`, `tool_status`), `context` (with `uri`, `context_type`, `abstract`)
 - **Message roles**: `user`, `assistant` only (no `toolResult`)
+
+### ⚠️ OV v0.3.x Content Levels
+
+There are no `/api/v1/content/{abstract|overview}` endpoints. Instead:
+
+| Level | How OV serves it | Works for |
+|-------|-----------------|-----------|
+| `"read"` | `GET /api/v1/content/read?uri=X&offset=Y&limit=Z` | Files + directories |
+| `"abstract"` | `GET /api/v1/content/read?uri=X/.abstract.md` (dotfile) | Directories only |
+| `"overview"` | `GET /api/v1/content/read?uri=X/.overview.md` (dotfile) | Directories only |
+
+Files don't have `.abstract.md` / `.overview.md` — reading them returns 404 (adapter handles gracefully, returns empty body).
+Use search API for file-level abstract/overview.
+
+### ⚠️ OV Response Envelope
+
+Every endpoint wraps in `{"status":"ok"|"error", "result": ..., "error": {...}}`.
+The Transport unwraps this automatically — adapters receive `result` directly. Errors carry `error.code` + `error.message`.
+
+### ⚠️ `ctx_search` Throttle
+
+- **ALWAYS batch queries**: `ctx_search(queries: [q1, q2, q3, q4, q5], limit: 3)` = 1 call
+- Hard cap: 8 calls per window. After call #3, result limit drops.
+- When you need multi-perspective search, compile all questions upfront.
+
+
