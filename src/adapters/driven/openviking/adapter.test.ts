@@ -15,13 +15,14 @@ const TEST_CONFIG: OVAdapterConfig = {
 };
 
 describe("createOVAdapter", () => {
-  it("returns all 5 port implementations", () => {
+  it("returns all 6 port implementations", () => {
     const adapter = createOVAdapter(TEST_CONFIG);
     expect(adapter).toHaveProperty("knowledgeBase");
     expect(adapter).toHaveProperty("fsStore");
     expect(adapter).toHaveProperty("graphStore");
     expect(adapter).toHaveProperty("sessionStore");
     expect(adapter).toHaveProperty("resourceStore");
+    expect(adapter).toHaveProperty("skillStore");
   });
 
   it("each adapter has the expected methods", () => {
@@ -60,6 +61,9 @@ describe("createOVAdapter", () => {
 
     // ResourceStore
     expect(typeof adapter.resourceStore.importUrl).toBe("function");
+
+    // SkillStore
+    expect(typeof adapter.skillStore.addSkill).toBe("function");
   });
 
   it("creates independent instances per call", () => {

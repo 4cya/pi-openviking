@@ -26,7 +26,7 @@ function createMockServices(overrides?: Partial<LifecycleServices>): LifecycleSe
     } as any,
     recallService: {
       isEnabled: vi.fn().mockReturnValue(true),
-      recall: vi.fn().mockResolvedValue({ formatted: "memories", timedOut: false }),
+      recall: vi.fn().mockResolvedValue({ formatted: "memories", timedOut: false, items: [] }),
     } as any,
     adapter: { circuitBreakerOpen: false } as any,
     widget: { update: vi.fn() } as any,
@@ -189,7 +189,7 @@ describe("registerLifecycleHooks", () => {
   describe("before_agent_start", () => {
     it("returns memories when recall is enabled and circuit breaker closed", async () => {
       const { pi, handlers } = createMockPi();
-      const recall = vi.fn().mockResolvedValue({ formatted: "relevant memories", timedOut: false });
+      const recall = vi.fn().mockResolvedValue({ formatted: "relevant memories", timedOut: false, items: [] });
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
         adapter: { circuitBreakerOpen: false } as any,
@@ -241,7 +241,7 @@ describe("registerLifecycleHooks", () => {
     it("auto-creates session when none active", async () => {
       const { pi, handlers } = createMockPi();
       const createAndSet = vi.fn().mockResolvedValue({ value: "new-session", toString: () => "new-session" });
-      const recall = vi.fn().mockResolvedValue({ formatted: "memories", timedOut: false });
+      const recall = vi.fn().mockResolvedValue({ formatted: "memories", timedOut: false, items: [] });
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
         adapter: { circuitBreakerOpen: false } as any,

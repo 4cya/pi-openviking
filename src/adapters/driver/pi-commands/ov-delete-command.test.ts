@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createOvDeleteCommand } from "./ov-delete-command";
-import type { FsStore } from "../../../domain/ports/fs-store";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { KnowledgeBase } from "../../../domain/ports/knowledge-base";
 
 function mockCtx(overrides?: Partial<ExtensionCommandContext>): ExtensionCommandContext {
@@ -44,7 +44,7 @@ describe("ov-delete command", () => {
     const del = vi.fn().mockResolvedValue(undefined);
     const confirm = vi.fn().mockResolvedValue(true);
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       makeKB(),
     );
     const ctx = mockCtx({ ui: { notify: vi.fn(), confirm } as any });
@@ -64,7 +64,7 @@ describe("ov-delete command", () => {
     const del = vi.fn();
     const confirm = vi.fn().mockResolvedValue(false);
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       makeKB(),
     );
     const ctx = mockCtx({ ui: { notify: vi.fn(), confirm } as any });
@@ -78,7 +78,7 @@ describe("ov-delete command", () => {
   it("shows usage for empty URI", async () => {
     const del = vi.fn();
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       makeKB(),
     );
     const ctx = mockCtx();
@@ -92,7 +92,7 @@ describe("ov-delete command", () => {
   it("rejects invalid URI", async () => {
     const del = vi.fn();
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       makeKB(),
     );
     const ctx = mockCtx();
@@ -110,7 +110,7 @@ describe("ov-delete command", () => {
     const del = vi.fn().mockRejectedValue(new Error("permission denied"));
     const confirm = vi.fn().mockResolvedValue(true);
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       makeKB(),
     );
     const ctx = mockCtx({ ui: { notify: vi.fn(), confirm } as any });
@@ -132,7 +132,7 @@ describe("ov-delete command", () => {
       total: 2,
     });
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       kb,
     );
     const ctx = mockCtx({ ui: { notify: vi.fn(), confirm } as any });
@@ -162,7 +162,7 @@ describe("ov-delete command", () => {
       total: 1,
     });
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       kb,
     );
     const ctx = mockCtx({ ui: { notify: vi.fn(), confirm } as any });
@@ -178,7 +178,7 @@ describe("ov-delete command", () => {
     const kb = makeKB();
     vi.mocked(kb.glob).mockResolvedValue({ entries: [], total: 0 });
     const cmd = createOvDeleteCommand(
-      { delete: del } as unknown as FsStore,
+      { delete: del } as unknown as FsStoreService,
       kb,
     );
     const ctx = mockCtx();

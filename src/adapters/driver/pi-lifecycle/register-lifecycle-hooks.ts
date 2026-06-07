@@ -4,6 +4,7 @@ import type { RecallService } from "../../../domain/recall/recall-service";
 import type { SessionService } from "../../../domain/services/session-service";
 import type { OVAdapter } from "../../driven/openviking/adapter";
 import type { ProfileManager } from "../../../domain/profile/service/ProfileManager";
+import { Uri } from "../../../domain/common/uri";
 import { OVWidget } from "../ov-widget";
 import { HealthCheck } from "../../driven/openviking/health";
 import { agentMessageToParts } from "./message-mapper";
@@ -86,13 +87,29 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
       }
     }
 
-    // Recall
-    const result = await recallService.recall(event.prompt ?? "", sessionId);
+    // Recall — wrap in try/catch so the hook never throws
+    let result;
+    try {
+      result = await recallService.recall(event.prompt ?? "", sessionId);
+    } catch (err) {
+      logger?.warn("before_agent_start: recall threw unexpectedly", { error: (err as Error).message });
+      return { message: { customType: "memory_context", content: "Auto-recall encountered an unexpected error. Use `ov_recall` to retry or `ov_search` to query the knowledge base directly.", display: false } };
+    }
+
     if (result.timedOut) {
       return { message: { customType: "memory_context", content: "⚠️ OpenViking search timed out — auto-recall skipped. The knowledge base may be busy indexing. Will retry on next turn. Try `ov_search` to query directly.", display: false } };
     }
     if (!result.formatted) {
       return { message: { customType: "memory_context", content: "No relevant memories found by auto-recall. Try `ov_search` to explore the knowledge base or `ov_recall` with a different query.", display: false } };
+    }
+
+    // Track used contexts so OV can improve ranking
+    const usedItems = result.items ?? [];
+    if (usedItems.length > 0) {
+      const usedUris = usedItems.map((item) => new Uri(item.uri));
+      sessionService.sessionUsed(sessionId, usedUris).catch((err) => {
+        logger?.warn("before_agent_start: failed to record used contexts", { error: (err as Error).message });
+      });
     }
 
     return { message: { customType: "memory_context", content: result.formatted, display: false } };

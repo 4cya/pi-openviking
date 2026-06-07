@@ -43,13 +43,8 @@ class TokenBucket {
         this.tokens -= 1;
         return;
       }
-      // Wait for next token
-      try {
-        await sleepWithSignal(this.intervalMs, signal);
-      } catch {
-        // Abort propagated
-        throw new DOMException("Aborted", "AbortError");
-      }
+      // Wait for next token — propagate original error (timeout vs abort)
+      await sleepWithSignal(this.intervalMs, signal);
     }
   }
 
@@ -64,14 +59,14 @@ class TokenBucket {
 function sleepWithSignal(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new DOMException("Aborted", "AbortError"));
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
       return;
     }
     const timer = setTimeout(resolve, ms);
     if (signal) {
       const onAbort = () => {
         clearTimeout(timer);
-        reject(new DOMException("Aborted", "AbortError"));
+        reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
       };
       signal.addEventListener("abort", onAbort, { once: true });
     }
@@ -160,7 +155,20 @@ export class Transport {
     }
 
     // Acquire rate-limit token before sending
-    await this.rateLimiter.acquire(signal);
+    try {
+      await this.rateLimiter.acquire(signal);
+    } catch (err) {
+      if (err instanceof DOMException) {
+        if (err.name === "TimeoutError") {
+          throw toDomainError(503, { message: `Rate limit wait timed out after ${requestTimeout}ms` }, methodLabel);
+        }
+        // AbortError or external abort — convert to ConnectionError for graceful handling upstream
+        throw new ConnectionError(
+          `[${methodLabel}] Request aborted — ${(err as Error).message ?? "cancelled"}`,
+        );
+      }
+      throw err;
+    }
 
     try {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {

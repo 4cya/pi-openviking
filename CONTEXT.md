@@ -50,11 +50,11 @@ The Zod schema that defines, validates, and provides defaults for all plugin con
 _Avoid_: schema, config definition
 
 **OVAdapterConfig**:
-A sub-schema of Config Schema (field `ov`) that defines server connection parameters: `endpoint`, `apiKey`, `account`, `user`, `agentId`, `timeout`, `commitTimeout`, `maxRetries`. Validated via Zod with sensible defaults (endpoint = `http://localhost:1933`, agentId = `"pi"`, timeout = 30s, maxRetries = 3).
+A sub-schema of Config Schema (field `ov`) that defines server connection parameters: `endpoint`, `apiKey`, `account`, `user`, `agentId`, `timeout`, `commitTimeout`, `maxRetries`, `rateLimitPerSecond`. Validated via Zod with sensible defaults (endpoint = `http://localhost:1933`, agentId = `"pi"`, timeout = 30s, maxRetries = 3, rateLimitPerSecond = 0 [disabled]). When > 0, Transport uses TokenBucket to throttle requests.
 _Avoid_: ov config, transport config
 
 **Transport**:
-An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers (`X-API-Key`, `X-OpenViking-Account`, `X-OpenViking-User`, `X-OpenViking-Agent`), exponential backoff retry (5xx/network), configurable timeout, and AbortSignal passthrough. Single method `request<T>(methodLabel, path, opts?, signal?)`. Lives in `adapters/driven/openviking/transport.ts`.
+An HTTP client class (`Transport`) that wraps native `fetch()` with auth headers (`X-API-Key`, `X-OpenViking-Account`, `X-OpenViking-User`, `X-OpenViking-Agent`), exponential backoff retry (5xx/network), configurable timeout, AbortSignal passthrough, and TokenBucket rate limiter. Abort/timeout errors during rate limiter wait are caught and converted to `ConnectionError` — the request method never throws raw `DOMException`. Single method `request<T>(methodLabel, path, opts?, signal?)`. Lives in `adapters/driven/openviking/transport.ts`.
 _Avoid_: http client, fetcher
 
 **CircuitBreaker**:
@@ -74,7 +74,7 @@ A pure function `toContent(raw, uri, level?)` that converts OV content endpoint 
 _Avoid_: content parser, response mapper
 
 **FsStoreAdapter**:
-A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` maps level to endpoint segment (`/api/v1/content/{read|abstract|overview}`) with `uri`, `offset`, `limit` query params. `write()` calls `POST /api/v1/content/write` with `wait: false` (async — OV processes embedding in background). Navigation methods (`list`, `tree`, `stat`) call `GET /api/v1/fs/{ls|tree|stat}`. Management methods (`mkdir`, `mv`) use POST with URI payload. `delete()` calls `DELETE /api/v1/fs?uri=` and auto-retries with `recursive=true` on recursive-required errors. `reindex()` calls `POST /api/v1/content/reindex {uri, mode}` with `mode` defaulting to `"vectors_only"`.
+A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` maps level to official OV content endpoints: `level=read` → `/api/v1/content/read?uri=X&offset=Y&limit=Z`, `level=abstract` → `/api/v1/content/abstract?uri=X`, `level=overview` → `/api/v1/content/overview?uri=X`. Abstract/overview endpoints only work on directories — calling them on a file returns 412 FAILED_PRECONDITION which propagates to the caller. `write()` calls `POST /api/v1/content/write` with `wait: false` (async — OV processes embedding in background). Navigation methods (`list`, `tree`, `stat`) call `GET /api/v1/fs/{ls|tree|stat}`. Management methods (`mkdir`, `mv`) use POST with URI payload. `delete()` calls `DELETE /api/v1/fs?uri=` and auto-retries with `recursive=true` on recursive-required errors. `reindex()` calls `POST /api/v1/content/reindex {uri, mode}` with `mode` defaulting to `"vectors_only"`.
 
 **FsMapper**:
 Pure functions in `adapters/driven/openviking/mappers/fs-mapper.ts`: `toFsEntry(raw: OVFsEntry)` extracts `uri`, `type` (from `isDir`), `size`, `modTime` and returns domain `FsEntry`; `toFsEntries(raw: OVFsEntry[])` maps arrays; `toWriteResult(raw: OVWriteResponse, expectedUri)` returns `success: true` (HTTP 2xx implies success).
@@ -151,7 +151,7 @@ _Avoid_: container, ioc
 
 **Lifecycle**:
 The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
-Single `init()` in `infrastructure/lifecycle.ts`. Registers 16 singletons: config, logger, adapter, knowledgeBase, fsStore, graphStore, sessionStore, resourceStore, profileManager, graphExpander (conditional), recallCurator, sessionService, recallService, searchService, fsStoreService, resourceService. Scorers `[relevanceScorer, temporalScorer]` wired in F4. GraphExpander injected when `expandGraph` is enabled. 22 lifecycle smoke tests.
+Single `init()` in `infrastructure/lifecycle.ts`. Registers 18 singletons: config, logger, adapter, knowledgeBase, fsStore, graphStore, sessionStore, resourceStore, skillStore, profileManager, graphExpander (conditional), recallCurator, sessionService, recallService, searchService, fsStoreService, resourceService, skillService. Scorers `[relevanceScorer, temporalScorer]` wired in F4. GraphExpander injected when `expandGraph` is enabled. 22 lifecycle smoke tests.
 _Avoid_: bootstrap lifecycle, module lifecycle
 
 ### Core Domain (future phases)
@@ -253,9 +253,9 @@ Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` 
 
 **Flow**: (1) Check `enabled` toggle → if false, return empty without calling KB. (2) Route to `kb.find()` or `kb.search()` based on `config.searchMode`, passing `prompt`, `topN`, `targetUri`. (3) Pass raw results through `curator.curate()`. (4) Build `formatted` string from curated items. (5) Return `RecallResult`.
 
-**Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
+**Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. Also catches `DOMException`/`AbortError`/`TimeoutError` as defense-in-depth for signal abort paths that bypass the transport error-conversion layer. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
-**RecallConfig** (11 fields): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `expandGraphDepth` (literal 1), `expandGraphMaxRatio` (number 0-1, default 0.2), `expandGraphMinSeedScore` (number 0-1, default 0.4), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `recallSearchTimeout` (number, default 5000), `autoRecall` (boolean, default true).
+**RecallConfig** (11 fields): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `expandGraphDepth` (literal 1) — fixo em 1 (apenas vizinhos diretos). Se depth variável for necessária, estender GraphExpander., `expandGraphMaxRatio` (number 0-1, default 0.2), `expandGraphMinSeedScore` (number 0-1, default 0.4), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `recallSearchTimeout` (number, default 5000), `autoRecall` (boolean, default true).
 Canonical interface in `domain/common/recall-config.ts`. Zod schema in `infrastructure/config/schema.ts` as `RecallConfigSchema` — inferred type exported as `RecallConfigSchemaType`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
 ProfileBehavior (6 fields) overrides RecallConfig via merge. Defined in `domain/common/profile-config.ts` as `Partial<Pick<RecallConfig, 6 overridable fields>>`.
@@ -325,13 +325,25 @@ _Avoid_: ov_delete with glob, delete with confirmation
 Pi tool for saving resources. Validates URI prefix `viking://resources/`, delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 6 unit tests. Thin alias of `ov_write` with prefix validation — does not use dedicated OV endpoint. Decline to consolidate into `ov_write` per grill decision: agent discoverability via search benefits from having a named resource tool.
 
 **ov_skill** *(implemented — `adapters/driver/pi-tools/ov-skill.ts`)*:
-Pi tool for saving skills. Validates URI prefix `viking://user/skills/` (corrected from `viking://skills/`), delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 4 unit tests. Future: may migrate to dedicated `POST /api/v1/skills` endpoint for MCP auto-detect support.
+Pi tool for saving skills. Uses dedicated OV skills API `POST /api/v1/skills` via `SkillStoreAdapter` + `SkillService`. Accepts SKILL.md content or structured data. Supports optional `wait` parameter. OV auto-detects MCP tools, SKILL.md format, and stores at `viking://agent/{agent_id}/skills/{name}`. TypeBox schema: `{ content: string, wait?: boolean }`. Returns JSON with `rootUri`, `uri`, `name`. 4 unit tests.
 
 **ResourceStore** *(port — `domain/ports/resource-store.ts`)*:
 Port interface for importing external resources into OpenViking. Single method `importUrl(url, options?, signal?)` → `Promise<ResourceImportResult>`. Options: `targetUri` (custom `viking://` path), `reason` (import motivation), `wait` (block until server processing completes). Return type `ResourceImportResult` carries `status`, `rootUri`, `sourcePath`, optional `errors[]`.
 
 **ResourceStoreAdapter** *(driven adapter — `adapters/driven/openviking/resource-store.ts`)*:
 Implements `ResourceStore` port. `importUrl()` calls `POST /api/v1/resources` with `{ path, to?, reason?, wait? }`. Response parsed via `toResourceImportResult()` in `mappers/resource-mapper.ts`. 11 unit tests.
+
+**SkillStore** *(port — `domain/ports/skill-store.ts`)*:
+Port interface for the OV skills API. Single method `addSkill(data: string | SkillData, options?, signal?)` → `POST /api/v1/skills`. Accepts inline SKILL.md content or structured `SkillData`. Options: `wait`, `timeout`. Returns `AddSkillResult` with `rootUri`, `uri`, `name`, `auxiliaryFiles`. Lives in `domain/ports/skill-store.ts`.
+
+**SkillStoreAdapter** *(driven adapter — `adapters/driven/openviking/skill-store.ts`)*:
+Implements `SkillStore` port. `addSkill()` sends `POST /api/v1/skills` with `{ data, wait?, timeout? }`. Response mapped via `toAddSkillResult()` in `mappers/skill-mapper.ts`.
+
+**SkillService** *(implemented — `domain/services/skill-service.ts`)*:
+Thin domain service wrapping `SkillStore` port. Single method `addSkill()`. Registered as singleton in DI.
+
+**ov_session** *(implemented — `adapters/driver/pi-tools/ov-session.ts`)*:
+Pi tool for querying OV session metadata. Uses `SessionService.getSession()` to return message count, commit count, memories extracted. Accepts optional `sessionId` (defaults to active session). TypeBox schema: `{ sessionId?: string }`.
 
 **ResourceService** *(implemented — `domain/services/resource-service.ts`)*:
 Thin domain service wrapping `ResourceStore` port. Single method `importUrl(url, options?, signal?)` delegates to store. 4 tests. Registered as singleton in DI.
@@ -349,7 +361,7 @@ Injected into `RecallCurator`. Expands recall results by traversing OV relations
 
 **Config fields** (in `RecallConfigSchema`):
 - `expandGraph` (boolean, default true) — enable expansion
-- `expandGraphDepth` (literal 1, default 1) — only direct neighbors in F8
+- `expandGraphDepth` (literal 1) — **fixo em 1** (apenas vizinhos diretos). F8.2 implementa depth=1. Estender se profundidade variável for necessária.
 - `expandGraphMaxRatio` (number 0-1, default 0.2) — max additional tokens as fraction of original budget
 - `expandGraphMinSeedScore` (number 0-1, default 0.4) — only expand from seeds above this score
 
@@ -409,14 +421,14 @@ An `initialized` flag ensures `init()` runs once per process.
 
 **Tool barrel** (`adapters/driver/pi-tools/tool-registry.ts`): `registerAllTools(pi, services, logger)` creates typed Pipelines with LoggingMiddleware for each tool and registers all 12 in one call.
 
-**F5 complete**: 13 tools (ov_search, ov_glob, ov_grep, ov_write, ov_read, ov_recall, ov_list, ov_tree, ov_stat, ov_delete, ov_resource, ov_skill, ov_import) + 9 commands (ov-recall, ov-status, ov-tree, ov-commit, ov-search, ov-delete, ov-profile, ov-start, ov-reindex) + OVWidget. Status bar pending.
+**F5 complete**: 14 tools (ov_search, ov_glob, ov_grep, ov_write, ov_read, ov_recall, ov_list, ov_tree, ov_stat, ov_delete, ov_resource, ov_skill, ov_import, ov_session) + 9 commands (ov-recall, ov-status, ov-tree, ov-commit, ov-search, ov-delete, ov-profile, ov-start, ov-reindex) + OVWidget. Status bar pending.
 
 ### F6 — Auto-Recall + Session Sync
 
 **F6 hooks** (in `index.ts`, no `application/` layer):
 4 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
 
-- **`before_agent_start`** → `RecallService.recall(prompt, sessionService.getActive())`. Returns custom message `{ customType: "memory_context", content: recallResult.formatted, display: false }`. GraphExpander results (F8+) merge into the same message with `[graph]` prefix. Circuit breaker OPEN → skip recall silently.
+- **`before_agent_start`** → `RecallService.recall(prompt, sessionService.getActive())`. Returns custom message `{ customType: "memory_context", content: recallResult.formatted, display: false }`. GraphExpander results (F8+) merge into the same message with `[graph]` prefix. Circuit breaker OPEN → skip recall silently. Wrapped in try/catch — the hook never throws any exception; unexpected errors produce a graceful fallback message.
 - **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Syncs `user` and `assistant` messages: TextParts from text blocks, ToolParts from toolCalls (assistant) + toolResult messages (tool output + status). Tool calls preserved structurally — not flattened to text.
 - **`session_shutdown`** → `SessionService.commit(activeSessionId)`. OV server extracts memories async (memory_diff.json).
 - **`session_start`** → health check via `HealthCheck.check()` + widget update.

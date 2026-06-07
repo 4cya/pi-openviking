@@ -20,17 +20,18 @@ Before writing ANY code, always do this in order:
 
 1. **Read OV docs** — REFERENCE.md lists exact URIs for each doc.
 
-   ⚠️ **OV v0.3.x: content levels work via dotfiles**
+   ⚠️ **OV v0.3.x: three content level endpoints**
 
    | Level | Works for | OV endpoint |
    |-------|-----------|-------------|
    | `level="read"` | Files + directories | `GET /api/v1/content/read?uri=X&offset=Y&limit=Z` |
-   | `level="abstract"` | **Directories only** | `GET /api/v1/content/read?uri=X/.abstract.md` |
-   | `level="overview"` | **Directories only** | `GET /api/v1/content/read?uri=X/.overview.md` |
+   | `level="abstract"` | **Directories only** | `GET /api/v1/content/abstract?uri=X` |
+   | `level="overview"` | **Directories only** | `GET /api/v1/content/overview?uri=X` |
 
-   OV v0.3.24 does NOT have `/api/v1/content/abstract` or `/api/v1/content/overview` endpoints.
-   Instead, L0 (abstract) and L1 (overview) are stored as dotfiles (`.abstract.md`, `.overview.md`)
-   alongside directories. For files, `level="abstract"`/`"overview"` return body empty gracefully.
+   OV v0.3.24 has three official content endpoints: `/api/v1/content/{read,abstract,overview}`.
+   The abstract/overview endpoints return 412 FAILED_PRECONDITION when called on a file
+   (must be a directory). The plugin's `FsStoreAdapter.read()` propagates this error
+   to the caller — it does NOT silently return empty body.
 
    **Preferred:** `ov_read level=read` with the known path (works everywhere).
    - API: `viking://resources/pi-openviking/docs-ov/api/{NN-name}.md`

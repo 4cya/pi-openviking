@@ -10,12 +10,12 @@ export function createOvReindexCommand(fsStoreService: FsStoreService) {
       if (prefix.startsWith("--mode ")) return [];
       if (prefix.includes("--mode")) {
         return [
-          { label: "vectors_only", description: "Rebuild vector embeddings only (default)" },
-          { label: "full", description: "Rebuild both scalar and vector indexes" },
+          { value: "vectors_only", label: "vectors_only", description: "Rebuild vector embeddings only (default)" },
+          { value: "full", label: "full", description: "Rebuild both scalar and vector indexes" },
         ];
       }
       return [
-        { label: "--mode", description: "Reindex mode: vectors_only (default) or full" },
+        { value: "--mode", label: "--mode", description: "Reindex mode: vectors_only (default) or full" },
       ];
     },
     handler: async (args: string, ctx: ExtensionCommandContext) => {

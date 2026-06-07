@@ -10,6 +10,7 @@ import type { FsStore } from "../../../domain/ports/fs-store";
 import type { GraphStore } from "../../../domain/ports/graph-store";
 import type { SessionStore } from "../../../domain/ports/session-store";
 import type { ResourceStore } from "../../../domain/ports/resource-store";
+import type { SkillStore } from "../../../domain/ports/skill-store";
 import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
 import type { Logger } from "../../../domain/ports/logger";
 import { Transport } from "./transport";
@@ -18,6 +19,7 @@ import { KnowledgeBaseAdapter } from "./knowledge-base";
 import { SessionStoreAdapter } from "./session-store";
 import { GraphStoreAdapter } from "./graph-store";
 import { ResourceStoreAdapter } from "./resource-store";
+import { SkillStoreAdapter } from "./skill-store";
 
 export interface OVAdapter {
   knowledgeBase: KnowledgeBase;
@@ -25,6 +27,7 @@ export interface OVAdapter {
   graphStore: GraphStore;
   sessionStore: SessionStore;
   resourceStore: ResourceStore;
+  skillStore: SkillStore;
   /** True when the circuit breaker is OPEN — fast fail for recall guard */
   readonly circuitBreakerOpen: boolean;
 }
@@ -38,6 +41,7 @@ export function createOVAdapter(config: OVAdapterConfig, logger?: Logger): OVAda
     graphStore: new GraphStoreAdapter(transport),
     sessionStore: new SessionStoreAdapter(transport, config.commitTimeout),
     resourceStore: new ResourceStoreAdapter(transport),
+    skillStore: new SkillStoreAdapter(transport),
     get circuitBreakerOpen() { return transport.isCircuitBreakerOpen(); },
   };
 }

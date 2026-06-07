@@ -14,14 +14,19 @@ import { createOvDeleteTool } from "./ov-delete";
 import { createOvResourceTool } from "./ov-resource";
 import { createOvSkillTool } from "./ov-skill";
 import { createOvImportTool } from "./ov-import";
+import { createOvSessionTool } from "./ov-session";
 import type { SearchResult } from "../../../domain/knowledge/model/search-result";
 import type { GlobResult, GrepResult } from "../../../domain/ports/knowledge-base";
 import type { Content, FsEntry } from "../../../domain/ports/fs-store";
 import type { RecallResult } from "../../../domain/recall/recall-service";
+import type { AddSkillResult } from "../../../domain/ports/skill-store";
 import type { SearchService } from "../../../domain/services/search-service";
 import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { RecallService } from "../../../domain/recall/recall-service";
 import type { ResourceService } from "../../../domain/services/resource-service";
+import type { SkillService } from "../../../domain/services/skill-service";
+import type { SessionService } from "../../../domain/services/session-service";
+import type { SessionInfo } from "../../../domain/ports/session-store";
 import type { Logger } from "../../../domain/ports/logger";
 
 export interface ToolServices {
@@ -29,6 +34,8 @@ export interface ToolServices {
   fsStoreService: FsStoreService;
   recallService: RecallService;
   resourceService: ResourceService;
+  skillService: SkillService;
+  sessionService: SessionService;
 }
 
 export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: Logger): void {
@@ -76,11 +83,15 @@ export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: L
   resourcePipeline.use(loggingMiddleware("resource", logger));
   pi.registerTool(createOvResourceTool(svcs.fsStoreService, resourcePipeline));
 
-  const skillPipeline = new Pipeline<unknown>();
+  const skillPipeline = new Pipeline<AddSkillResult>();
   skillPipeline.use(loggingMiddleware("skill", logger));
-  pi.registerTool(createOvSkillTool(svcs.fsStoreService, skillPipeline));
+  pi.registerTool(createOvSkillTool(svcs.skillService, skillPipeline));
 
   const importPipeline = new Pipeline<unknown>();
   importPipeline.use(loggingMiddleware("import", logger));
   pi.registerTool(createOvImportTool(svcs.resourceService, importPipeline));
+
+  const sessionPipeline = new Pipeline<SessionInfo>();
+  sessionPipeline.use(loggingMiddleware("session", logger));
+  pi.registerTool(createOvSessionTool(svcs.sessionService, sessionPipeline));
 }

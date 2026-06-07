@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createOvTreeCommand } from "./ov-tree-command";
-import type { FsStore } from "../../../domain/ports/fs-store";
+import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { Uri } from "../../../domain/common/uri";
 
 function mockCtx(): ExtensionCommandContext {
@@ -41,7 +41,7 @@ describe("ov-tree command", () => {
       { uri: makeUri("viking://docs/sub"), type: "directory" as const },
       { uri: makeUri("viking://docs/sub/b.md"), type: "file" as const },
     ]);
-    const cmd = createOvTreeCommand({ tree } as unknown as FsStore);
+    const cmd = createOvTreeCommand({ tree } as unknown as FsStoreService);
     const ctx = mockCtx();
 
     await cmd.handler("viking://docs", ctx);
@@ -55,7 +55,7 @@ describe("ov-tree command", () => {
 
   it("defaults URI to viking://", async () => {
     const tree = vi.fn().mockResolvedValue([]);
-    const cmd = createOvTreeCommand({ tree } as unknown as FsStore);
+    const cmd = createOvTreeCommand({ tree } as unknown as FsStoreService);
     const ctx = mockCtx();
 
     await cmd.handler("", ctx);
@@ -67,7 +67,7 @@ describe("ov-tree command", () => {
 
   it("shows (empty) for empty result", async () => {
     const tree = vi.fn().mockResolvedValue([]);
-    const cmd = createOvTreeCommand({ tree } as unknown as FsStore);
+    const cmd = createOvTreeCommand({ tree } as unknown as FsStoreService);
     const ctx = mockCtx();
 
     await cmd.handler("viking://empty", ctx);
@@ -77,7 +77,7 @@ describe("ov-tree command", () => {
 
   it("handles invalid URI", async () => {
     const tree = vi.fn();
-    const cmd = createOvTreeCommand({ tree } as unknown as FsStore);
+    const cmd = createOvTreeCommand({ tree } as unknown as FsStoreService);
     const ctx = mockCtx();
 
     await cmd.handler("not-a-uri", ctx);
@@ -88,7 +88,7 @@ describe("ov-tree command", () => {
 
   it("handles service error", async () => {
     const tree = vi.fn().mockRejectedValue(new Error("connection refused"));
-    const cmd = createOvTreeCommand({ tree } as unknown as FsStore);
+    const cmd = createOvTreeCommand({ tree } as unknown as FsStoreService);
     const ctx = mockCtx();
 
     await cmd.handler("viking://docs", ctx);

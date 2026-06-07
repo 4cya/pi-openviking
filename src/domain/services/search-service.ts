@@ -23,9 +23,9 @@ export class SearchService {
     const targetUri = params.targetUri ? new Uri(params.targetUri) : undefined;
 
     if (mode === "find") {
-      return this.kb.find({ query: params.query, limit: params.limit, targetUri }, signal);
+      return this.kb.find({ query: params.query, limit: params.limit, targetUri }, undefined, signal);
     }
-    return this.kb.search({ query: params.query, limit: params.limit, targetUri, sessionId: undefined }, signal);
+    return this.kb.search({ query: params.query, limit: params.limit, targetUri, sessionId: undefined }, undefined, signal);
   }
 
   async glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult> {

@@ -59,8 +59,8 @@ export class RecallService {
 
     try {
       const result = this.config.searchMode === "find"
-        ? await this.kb.find({ query: prompt, limit: this.config.topN, targetUri }, abortController.signal)
-        : await this.kb.search({ query: prompt, limit: this.config.topN, sessionId, targetUri }, abortController.signal);
+        ? await this.kb.find({ query: prompt, limit: this.config.topN, targetUri }, undefined, abortController.signal)
+        : await this.kb.search({ query: prompt, limit: this.config.topN, sessionId, targetUri }, undefined, abortController.signal);
 
       // Success clears cooldown
       this.cooldownTurns = 0;
@@ -73,8 +73,10 @@ export class RecallService {
         total: curated.items.length,
       };
     } catch (err) {
+      const isTimeout = abortController.signal.aborted;
+
+      // ConnectionError from transport (OV down, timeout, abort)
       if (err instanceof ConnectionError) {
-        const isTimeout = abortController.signal.aborted;
         this.logger.warn(
           isTimeout
             ? `OV search timed out after ${timeoutMs}ms, skipping recall`
@@ -86,6 +88,23 @@ export class RecallService {
         }
         return { items: [], tokens: 0, formatted: '', total: 0, timedOut: isTimeout };
       }
+
+      // DOMException (signal abort/timeout not caught by transport) — handle gracefully
+      if (
+        err instanceof DOMException ||
+        (err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError"))
+      ) {
+        this.logger.warn(
+          isTimeout
+            ? `OV search timed out after ${timeoutMs}ms (DOMException), skipping recall`
+            : `OV search aborted, skipping recall`,
+        );
+        if (isTimeout) {
+          this.cooldownTurns = 3;
+        }
+        return { items: [], tokens: 0, formatted: '', total: 0, timedOut: isTimeout };
+      }
+
       throw err;
     } finally {
       clearTimeout(timeoutId);

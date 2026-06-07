@@ -13,6 +13,14 @@ function createMockStore(overrides?: Partial<SessionStore>): SessionStore {
     getTaskStatus: vi.fn().mockResolvedValue({ taskId: "task_1", status: "completed" } as TaskStatus),
     listTasks: vi.fn().mockResolvedValue([]),
     sessionUsed: vi.fn().mockResolvedValue(undefined),
+    getSession: vi.fn().mockResolvedValue({
+      sessionId: "sess_1",
+      createdAt: "2026-01-01",
+      updatedAt: "2026-01-01",
+      messageCount: 5,
+      commitCount: 2,
+    }),
+    listSessions: vi.fn().mockResolvedValue([]),
     deleteSession: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };

@@ -331,7 +331,7 @@ describe("Circuit breaker integration", () => {
       commitTimeout: 120_000,
       maxRetries: 0,
       rateLimitPerSecond: 0,
-      circuitBreaker: { threshold: 1, resetTimeoutMs: 10_000 },
+      circuitBreaker: { threshold: 1, resetTimeoutMs: 10_000, maxResetTimeoutMs: 300_000 },
     });
 
     // First request fails → CB opens (threshold=1)
@@ -353,7 +353,7 @@ describe("Circuit breaker integration", () => {
       commitTimeout: 120_000,
       maxRetries: 0,
       rateLimitPerSecond: 0,
-      circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000 },
+      circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000, maxResetTimeoutMs: 300_000 },
     });
 
     const result = await t.request<{ status: string }>("test", "/api/v1/success");
@@ -371,7 +371,7 @@ describe("Circuit breaker integration", () => {
       commitTimeout: 120_000,
       maxRetries: 0,
       rateLimitPerSecond: 0,
-      circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000 },
+      circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000, maxResetTimeoutMs: 300_000 },
     });
 
     // One failure should not open breaker
@@ -396,7 +396,7 @@ describe("Circuit breaker integration", () => {
       commitTimeout: 120_000,
       maxRetries: 0,
       rateLimitPerSecond: 0,
-      circuitBreaker: { threshold: 1, resetTimeoutMs: 10_000 },
+      circuitBreaker: { threshold: 1, resetTimeoutMs: 10_000, maxResetTimeoutMs: 300_000 },
     });
 
     // Initially CLOSED

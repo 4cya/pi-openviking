@@ -18,7 +18,7 @@ The OpenClaw plugin uses `assemble()` (context engine hook) to reconstruct sessi
 
 ## Decision
 
-**Do not implement these endpoints.** Document them in the project audit (`docs/AUDITORIA_COMPLETA.md`) as deferred for future review.
+**Do not implement these endpoints.** Documentados como deferidos no código e neste ADR. Revisitar quando houver consumidor concreto.
 
 ## Rationale
 

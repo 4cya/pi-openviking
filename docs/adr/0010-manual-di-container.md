@@ -2,7 +2,7 @@
 
 Use a hand-rolled DI container (21 lines, `register(token, factory, singleton)` + `resolve<T>(token)`) instead of Awilix.
 
-**Context:** Fase 1–4 registers 10 singletons: config, logger, knowledgeBase, fsStore, graphStore, sessionStore (F1–F3), plus recallCurator, sessionService, recallService (F4). No circular dependencies exist and none are expected.
+**Context:** Current init() registers 18 singletons: config, logger, adapter, knowledgeBase, fsStore, graphStore, sessionStore, resourceStore, skillStore, profileManager, graphExpander (conditional), recallCurator, sessionService, recallService, searchService, fsStoreService, resourceService, skillService (F1–F7b). At ADR writing (F1–F4) there were 10. No circular dependencies exist and none are expected.
 
 **Considered Options:**
 

@@ -100,7 +100,7 @@ describe("RecallService", () => {
 
     const findCalls = (kb.find as ReturnType<typeof vi.fn>).mock.calls;
     expect(findCalls).toHaveLength(1);
-    const [arg, signal] = findCalls[0];
+    const [arg, , signal] = findCalls[0];
     expect(arg.query).toBe("test query");
     expect(arg.limit).toBe(3);
     expect(arg.targetUri.value).toBe("viking://proj");
@@ -178,7 +178,7 @@ describe("RecallService", () => {
     const signals: AbortSignal[] = [];
     const kb = makeKB();
     (kb.find as ReturnType<typeof vi.fn>).mockImplementation(
-      async (_query: unknown, signal?: AbortSignal) => {
+      async (_query: unknown, _opts: unknown, signal?: AbortSignal) => {
         signals.push(signal!);
         await new Promise<void>((_resolve, reject) => {
           if (signal?.aborted) {

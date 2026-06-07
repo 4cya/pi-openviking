@@ -101,22 +101,23 @@ npx vitest
 - **Host**: `http://localhost:1933`
 - **Headers**: `X-API-Key: dev`, `X-OpenViking-Account: default`, `X-OpenViking-User: <user>`, `X-OpenViking-Agent: pi`
 - **Prefix**: `/api/v1/`
-- **Health**: `GET /health` (returns `{"healthy":true,"version":"v0.3.24"}`)
+- **Health**: `GET /health` (returns `{"version":"v0.3.24"}` — no `healthy` field)
+**Version check**: `GET /health` returns OV version. Plugin's `HealthCheck` uses `GET /ready` (no auth required) for daemon health.
 - **Readiness**: `GET /ready` (returns checks: agfs, vectordb, api_key_manager, embedding)
 - **Part types**: `text`, `tool` (with `tool_id`, `tool_name`, `tool_input`, `tool_output`, `tool_status`), `context` (with `uri`, `context_type`, `abstract`)
 - **Message roles**: `user`, `assistant` only (no `toolResult`)
 
 ### ⚠️ OV v0.3.x Content Levels
 
-There are no `/api/v1/content/{abstract|overview}` endpoints. Instead:
+Three official content endpoints:
 
-| Level | How OV serves it | Works for |
-|-------|-----------------|-----------|
+| Level | OV endpoint | Works for |
+|-------|-------------|-----------|
 | `"read"` | `GET /api/v1/content/read?uri=X&offset=Y&limit=Z` | Files + directories |
-| `"abstract"` | `GET /api/v1/content/read?uri=X/.abstract.md` (dotfile) | Directories only |
-| `"overview"` | `GET /api/v1/content/read?uri=X/.overview.md` (dotfile) | Directories only |
+| `"abstract"` | `GET /api/v1/content/abstract?uri=X` | Directories only (returns 412 on files) |
+| `"overview"` | `GET /api/v1/content/overview?uri=X` | Directories only (returns 412 on files) |
 
-Files don't have `.abstract.md` / `.overview.md` — reading them returns 404 (adapter handles gracefully, returns empty body).
+Abstract/overview endpoints return 412 FAILED_PRECONDITION on files. FsStoreAdapter.read() propagates this error to caller — it does NOT silently return empty body.
 Use search API for file-level abstract/overview.
 
 ### ⚠️ OV Response Envelope

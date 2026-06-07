@@ -10,6 +10,7 @@ import type { KnowledgeBase } from "./domain/ports/knowledge-base";
 import type { ProfileManager } from "./domain/profile/service/ProfileManager";
 import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
+import { SkillService } from "./domain/services/skill-service";
 import { OVWidget } from "./adapters/driver/ov-widget";
 import { HealthCheck } from "./adapters/driven/openviking/health";
 import {
@@ -44,7 +45,8 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const healthCheck = new HealthCheck(config.ov.endpoint);
 
       // Register tools and commands (once per process)
-      registerAllTools(pi, { searchService, fsStoreService, recallService, resourceService }, logger);
+      const skillService = container.resolve<SkillService>("skillService");
+      registerAllTools(pi, { searchService, fsStoreService, recallService, resourceService, skillService, sessionService }, logger);
       registerAllCommands(pi, {
         recallService,
         sessionService,

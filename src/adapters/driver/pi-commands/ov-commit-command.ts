@@ -5,7 +5,7 @@ export function createOvCommitCommand(sessionService: SessionService, widgetUpda
   return {
     description: "Commit the current OV session. Usage: /ov-commit [--wait]",
     getArgumentCompletions: (_prefix: string) => [
-      { label: "--wait", description: "Wait for commit to complete before returning" },
+      { value: "--wait", label: "--wait", description: "Wait for commit to complete before returning" },
     ],
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       const active = sessionService.getActive();

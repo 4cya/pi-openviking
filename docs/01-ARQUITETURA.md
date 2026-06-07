@@ -11,10 +11,10 @@
 | Fase | Status | Artefatos |
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
-| **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 6 port interfaces ✅ · `infrastructure/event-bus/in-memory.ts` (InMemoryEventBus) ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
-| **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 4 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore) + adapter factory + DI wiring + smoke test. Ver `02-PLANO.md`. |
-| **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 16 singletons total no container. Ver `02-PLANO.md`. |
-| **F5 Tools + Commands** | ✅ Completo (F5.1–F5.5 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: FsStoreService (merged former WriteService + ReadService + FsService) + ov_write + ov_read. F5.3 ✅: ov_recall tool. F5.4 ✅: 9 slash commands. F5.5 ✅: Wiring (guard pattern + tool/command barrels) + OVWidget. 13 tools + 9 commands + widget operacionais. Pendente: status bar. Ver `02-PLANO.md`. |
+| **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 7 port interfaces ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
+| **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 6 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore, ResourceStore, SkillStore) + adapter factory + DI wiring + smoke test. |
+| **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 18 singletons total no container. |
+| **F5 Tools + Commands** | ✅ Completo (F5.1–F5.5 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: FsStoreService (merged former WriteService + ReadService + FsService) + ov_write + ov_read. F5.3 ✅: ov_recall tool. F5.4 ✅: 9 slash commands. F5.5 ✅: Wiring (guard pattern + tool/command barrels) + OVWidget. 14 tools + 9 commands + widget operacionais. Pendente: status bar. |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -45,6 +45,8 @@ flowchart TB
         PORT_FS["FsStore\nread / write / list / tree / stat\nmkdir / mv / delete / reindex"]
         PORT_GRAPH["GraphStore\nlink / unlink / graph"]
         PORT_SESSION["SessionStore\ncreate / send / commit / ..."]
+        PORT_RESOURCE["ResourceStore\nimportUrl"]
+        PORT_SKILL["SkillStore\naddSkill"]
         PORT_LOGGER["Logger\ndebug / info / warn / error"]
     end
 
@@ -63,17 +65,15 @@ flowchart TB
 
     subgraph App["⚙️ Aplicação"]
         direction TB
-        APP_SVC["Application Services\nsearch, write, session,\nrecall"]
+        APP_SVC["Application Services\nsearch, write, session,\nrecall, resource, skill"]
         APP_MW["Middleware Pipeline\nLogging (cache adiado → F3+)"]
     end
 
     subgraph Impl["🔌 Adaptadores (Driven)"]
         direction TB
-        OV_ADAPTER["OpenVikingAdapter\nImplementa KnowledgeBase\n+ FsStore + GraphStore\n+ SessionStore"]
+        OV_ADAPTER["OpenVikingAdapter\nImplementa KnowledgeBase\n+ FsStore + GraphStore\n+ SessionStore + ResourceStore\n+ SkillStore"]
         OV_TRANSPORT["Transport\nHTTP + Auth + Retry + RateLimit"]
-        CACHE_IMPL["CacheImpl\nInMemoryCache\n(Redis opcional)"]
         LOG_IMPL["FileLogger\nJSON lines + rotação"]
-        EVENT_IMPL["InMemoryEventBus\nImplementa EventBus port"]
     end
 
     subgraph Infra["🏗️ Infraestrutura"]
@@ -105,25 +105,23 @@ flowchart TB
     APP_SVC --> PORT_FS
     APP_SVC --> PORT_GRAPH
     APP_SVC --> PORT_SESSION
-    APP_SVC --> PORT_CACHE
+    APP_SVC --> PORT_RESOURCE
+    APP_SVC --> PORT_SKILL
     APP_SVC --> PORT_LOGGER
-    APP_SVC --> PORT_EVENTS
 
     OV_ADAPTER --> PORT_KB
     OV_ADAPTER --> PORT_FS
     OV_ADAPTER --> PORT_GRAPH
     OV_ADAPTER --> PORT_SESSION
+    OV_ADAPTER --> PORT_RESOURCE
+    OV_ADAPTER --> PORT_SKILL
     OV_ADAPTER --> OV_TRANSPORT
     OV_TRANSPORT -->|HTTP| OV
 
-    CACHE_IMPL --> PORT_CACHE
     LOG_IMPL --> PORT_LOGGER
-    EVENT_IMPL --> PORT_EVENTS
 
     DI --> OV_ADAPTER
-    DI --> CACHE_IMPL
     DI --> LOG_IMPL
-    DI --> EVENT_IMPL
     DI --> RECALL_SVC
     DI --> SESSION_SVC
     DI --> APP_SVC
@@ -131,12 +129,11 @@ flowchart TB
     CONFIG --> DI
 ```
 
-> **Nota sobre PiEventBridge:** não existe `pi-event-bridge.ts` como adaptador separado.
-> Pi emite eventos de infra (session_start, message_end) via `pi.on()` diretamente para
-> Application Services. O EventBus de domínio só transporta eventos de domínio
-> (MEMORY_SAVED, RELATION_LINKED, RECALL_EXECUTED, etc.) — ver ADR-011.
-> Ver [seção 4.4](#44-event-bus--domínio-puro) para detalhes.
+> **Nota sobre EventBus:** removido em F5 Review — dead code sem subscribers.
+> Eventos de infra (session_start, message_end) são tratados por `pi.on()` diretamente.
+> Não existe PiEventBridge separado. Cache de dados adiado para quando houver consumidor.
 >
+
 > **Nota sobre Widget:** OVWidget usa `ctx.ui.setWidget()` com info rica em 2 linhas:
 > status de conexão, recall toggle, sessão ativa, escopo, métricas do último recall.
 > Não há `status-bar.ts` separado — o widget é registrado em `index.ts` e atualizado
@@ -153,7 +150,7 @@ A ordem de criação dos artefatos de domínio segue dependências entre eles:
 | 1 | `domain/common/` — Uri (class), SessionId (class), ContentLevel, WriteMode, FindQuery + SearchRequest (interfaces), Part (discriminated union) | — |
 | 2 | `domain/errors/` — DomainError class + subtipos (NotFoundError, ConnectionError, etc.) | — |
 | 3 | `domain/{knowledge,recall,profile}/model/` — value objects + aggregates | common, errors |
-| 4 | `domain/ports/` — KnowledgeBase, FsStore, GraphStore, SessionStore, Logger | models (tipos de retorno) |
+| 4 | `domain/ports/` — KnowledgeBase, FsStore, GraphStore, SessionStore, Logger, ResourceStore, SkillStore | models (tipos de retorno) |
 | 5 | `domain/recall/curate.ts` — curate pipeline (pure function) | domain models |
 
 ProfileManager implementado em F7a. ProfileBehavior (6 campos) + AutoDetect em F7b.
@@ -237,7 +234,7 @@ Port única para ler, escrever, navegar e gerenciar o filesystem virtual do Open
 ContentStore foi fundida nesta port — OV trata content e fs como o mesmo sistema.
 
 Mapeamento OV:
-- Leitura: `GET /api/v1/content/{read|abstract|overview}?uri=&offset=&limit=`
+- Leitura: `GET /api/v1/content/{read|abstract|overview}?uri=X` (abstract/overview apenas diretórios)
 - Escrita: `POST /api/v1/content/write` (mode: replace|append|create, wait, timeout)
 - Navegação: `GET /api/v1/fs/ls`, `GET /api/v1/fs/tree`, `GET /api/v1/fs/stat`
 - Mutação: `POST /api/v1/fs/mkdir`, `POST /api/v1/fs/mv`, `DELETE /api/v1/fs`
@@ -259,14 +256,14 @@ interface FsStore {
 > **ReindexMode**: `"vectors_only" | "full"`. Default `"vectors_only"` rebuilds vector embeddings; `"full"` rebuilds both scalar and vector indexes. Maps to OV `POST /api/v1/content/reindex {uri, mode}`.
 
 > `read()` aceita `level` que mapeia para as camadas L0/L1/L2 do OV:
-> - `"abstract"` → L0. OV v0.3.x: `GET /api/v1/content/read?uri=URI/.abstract.md` (apenas diretórios)
-> - `"overview"` → L1. OV v0.3.x: `GET /api/v1/content/read?uri=URI/.overview.md` (apenas diretórios)
+> - `"abstract"` → L0. OV v0.3.24+: `GET /api/v1/content/abstract?uri=X` (diretórios apenas, retorna 412 em files)
+> - `"overview"` → L1. OV v0.3.24+: `GET /api/v1/content/overview?uri=X` (diretórios apenas, retorna 412 em files)
 > - `"read"` → L2 (conteúdo completo). OV: `GET /api/v1/content/read?uri=&offset=&limit=`
 >
-> OV v0.3.24 NÃO possui endpoints `/api/v1/content/abstract` ou `/api/v1/content/overview`.
-> Os níveis L0/L1 são acessíveis via dotfiles (`.abstract.md`, `.overview.md`) no filesystem.
-> Para arquivos individuais, abstract/overview só estão disponíveis via search API,
-> não via content API. O adapter retorna body vazio com level nestes casos.
+> Os endpoints `/api/v1/content/{abstract,overview}` existem e funcionam para diretórios.
+> Para arquivos individuais retornam 412 FAILED_PRECONDITION — erro propagado ao caller,
+> não silenciado. Use search API para abstract/overview de arquivos específicos.
+> `offset` e `limit` aplicam-se apenas ao nível `"read"`.
 >
 > `offset` (linha inicial, default 0) e `limit` (linhas, default -1) aplicam-se apenas ao nível `"read"`.
 >
@@ -344,28 +341,6 @@ interface Logger {
 
 > Logger é síncrono por design — não precisa de `AbortSignal`.
 
-### EventBus — eventos de domínio entre bounded contexts (ADR-011)
-
-```typescript
-type DomainEvent =
-  | { type: 'MEMORY_SAVED'; uri: string; source: string }
-  | { type: 'RELATION_LINKED'; source: string; target: string; predicate: string }
-  | { type: 'RECALL_EXECUTED'; itemsCount: number; durationMs: number }
-  | { type: 'BUDGET_EXCEEDED'; budget: number; attempted: number };
-
-interface EventBus {
-  publish(event: DomainEvent): void;
-  subscribe(type: string, handler: (event: DomainEvent) => void): () => void;
-}
-```
-
-> **Eventos excluídos (não são de domínio):**
-> - `PROFILE_CHANGED` — Profile é value object (substituído, não mutado). Mudanças de config são notificação de infra, não evento de domínio.
-> - `ERROR` — não é conceito de domínio. Erros são diagnóstico.
-> - `SESSION_STARTED`, `MESSAGE_PROCESSED` — infra. Tratados por `pi.on()` diretamente.
->   (Per ADR-011 e ADR-008 async init.)
-```
-
 ---
 
 ## 4. Design Patterns
@@ -422,7 +397,24 @@ Request → LoggingMiddleware → Handler → Response
 
 EventBus de domínio foi removido em F5 Review — dead code sem subscribers, sem publisher,
 e sem API de eventos no OV. Eventos de infra (session_start, message_end, etc.)
-são tratados diretamente por `pi.on()` em `index.ts`. Não existe PiEventBridge separado.
+são tratados diretamente por `pi.on()` em `index.ts`. Cache de dados adiado até existir consumidor concreto.
+
+### 4.5 Perfis de Comportamento (Profiles)
+
+Quatro built-in profiles: `default`, `web-dev`, `docs`, `learning`. Cada um carrega opcionalmente `ProfileBehavior` (6 campos: targetUri, topN, scoreThreshold, searchMode, expandGraph, autoRecall) que sobrescreve `RecallConfig`.
+
+Fluxo de resolução:
+1. `loadConfig()` carrega e valida config (defaults → env → file)
+2. `init()` cria `ProfileManager`, chama `resolve(activeProfile)`
+3. `mergeBehaviorIntoRecall()` deep-merges ProfileBehavior em RecallConfig
+4. Serviços recebem merged config — não sabem que profiles existem
+
+Comando `/ov-profile {show|list|apply|detect}` permite troca em runtime (F7b).
+`AutoDetect` mapeia padrões de diretório (minimatch) para profiles via regras em config.
+
+Arquivos: `domain/profile/service/ProfileManager.ts`, `domain/profile/service/auto-detect.ts`.
+Config: `profile-schema.ts` (ProfileSchema + ProfileBehaviorSchema).
+Domain interfaces: `domain/common/profile-config.ts`.
 
 ---
 
@@ -458,14 +450,12 @@ sequenceDiagram
     participant Pi as Pi Agent
     participant Index as index.ts
     participant Svc as SessionService
-    participant Bus as EventBus
     participant OV as OpenViking
 
     Pi->>Index: pi.on("message_end")
     Index->>Svc: sessionService.sendMessage(sessionId, parts)
     Svc->>OV: sendMessage(sessionId, parts)
     OV-->>Svc: 200
-    Svc->>Bus: publish(MEMORY_SAVED)
 ```
 
 ---
@@ -502,7 +492,7 @@ src/
 ├── application/               # (não utilizado — SearchService em domain/services/, Pipeline em domain/pipeline/)
 │
 ├── adapters/
-│   ├── driver/pi-tools/       # ✅ F5.1–F5.6: 13 tools registradas
+│   ├── driver/pi-tools/       # ✅ F5.1–F5.6: 14 tools registradas
 │   │   ├── ov-search.ts       # ✅ ov_search tool + TypeBox schema
 │   │   ├── ov-search.test.ts  # ✅ 3 unit tests
 │   │   ├── ov-glob.ts         # ✅ ov_glob tool
@@ -517,6 +507,10 @@ src/
 │   │   ├── ov-resource.test.ts # ✅ 6 unit tests
 │   │   ├── ov-skill.ts        # ✅ ov_skill tool (validates viking://skills/)
 │   │   ├── ov-skill.test.ts   # ✅ 4 unit tests
+│   │   ├── ov-import.ts       # ✅ ov_import tool (import external URLs)
+│   │   ├── ov-import.test.ts  # ✅ 6 unit tests
+│   │   ├── ov-session.ts      # ✅ ov_session tool (session metadata)
+│   │   ├── ov-session.test.ts # ✅ tests
 │   │   └── integration.test.ts # ✅ 8 integration tests (mock HTTP server)
 │   ├── driver/pi-commands/    # ✅ F5.4: 9 slash commands
 │   │   ├── ov-recall-command.ts  # ✅ /ov-recall on|off
@@ -533,10 +527,10 @@ src/
 │   │   ├── register-lifecycle-hooks.ts # ✅ registerLifecycleHooks() + handleSessionStart()
 │   │   ├── message-mapper.ts     # ✅ agentMessageToParts() — 9 tests
 │   │   └── message-mapper.test.ts # ✅ 9 tests (user/assistant/tool/empty/null/ImageContent)
-│   ├── driver/pi-tools/         # ✅ F5.1–F5.5: 13 tools + barrel
+│   ├── driver/pi-tools/         # ✅ F5.1–F5.6: 14 tools + barrel
 │   │   ├── tool-registry.ts     # ✅ registerAllTools() barrel
 │   └── driven/
-│       ├── openviking/        # ✅ F3: Transport + 4 adapters + 6 mappers + factory
+│       ├── openviking/        # ✅ F3: Transport + 6 adapters + 6 mappers + factory
 │       │   ├── circuit-breaker.ts # ✅ Pure state machine: CLOSED→OPEN→HALF_OPEN (8 tests)
 │       │   ├── circuit-breaker.test.ts # ✅ 8 reducer tests + 3 integration tests
 │       │   ├── health.ts          # ✅ HealthCheck adapter: /ready probe (bypasses CB)
@@ -553,7 +547,7 @@ src/
 │       │       ├── search-mapper.ts   # ✅ toSearchResult/toGlobResult/toGrepResult
 │       │       ├── session-mapper.ts  # ✅ toSessionId/toCommitResult/toTaskStatus + PartSerializer
 │       │       └── relation-mapper.ts # ✅ toLinkResult/toRelations
-│       ├── cache/             # (futuro F3+) InMemoryCache / RedisCache
+│       ├── cache/             # (futuro) InMemoryCache — sem consumidor ainda
 │       └── logger/
 │           ├── file-logger.ts # ✅ FileLogger (JSON lines + rotação)
 │           └── null-logger.ts # ✅ NullLogger (testes/silent mode)
@@ -564,11 +558,11 @@ src/
 │   │   ├── logger-schema.ts   # ✅ LoggerConfigSchema
 │   │   ├── cascade.ts         # ✅ Config Cascade: defaults → env → file → profile
 │   │   ├── loader.ts          # ✅ Leitor .pi/settings.json
-│   │   └── profile-schema.ts  # ✅ ProfileSchema (só name+description em F1)
+│   │   └── profile-schema.ts  # ✅ ProfileSchema + ProfileBehaviorSchema
 │   ├── di/
-│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 16 singletons)
-│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F7b (16 singletons)
-│   ├── lifecycle.test.ts      # ✅ 16 smoke tests (F1–F3 adapters + F4 services)
+│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 18 singletons)
+│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F7b (18 singletons)
+│   ├── lifecycle.test.ts      # ✅ 22 smoke tests (F1–F3 adapters + F4 services + F5)
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
 ├── _legacy/                   # (removido em F3 — 2026-05-27)
@@ -576,6 +570,7 @@ src/
                                # Guard initialized, bootstrap único,
                                # tools + commands registrados uma vez.
 ├── adapters/driver/ov-widget.ts  # ✅ OVWidget — 2-line status widget via setWidget()
+├── adapters/driver/pi-lifecycle/ # ✅ F6: register-lifecycle-hooks.ts + message-mapper.ts
 ```
 
 **Legenda:** ✅ existe agora | 🔧 F5 (em planejamento/implementação) | (futuro) ainda não implementado

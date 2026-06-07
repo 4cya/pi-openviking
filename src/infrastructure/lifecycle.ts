@@ -11,6 +11,7 @@ import { SearchService } from "../domain/services/search-service";
 import { FsStoreService } from "../domain/services/fs-store-service";
 import { ResourceService } from "../domain/services/resource-service";
 import { ProfileManager } from "../domain/profile/service/ProfileManager";
+import { SkillService } from "../domain/services/skill-service";
 import type { Logger } from "../domain/ports/logger";
 import type { PiOVConfig } from "../infrastructure/config/schema";
 
@@ -34,6 +35,7 @@ export async function init(cwd: string): Promise<{
   container.register("graphStore", () => adapter.graphStore, true);
   container.register("sessionStore", () => adapter.sessionStore, true);
   container.register("resourceStore", () => adapter.resourceStore, true);
+  container.register("skillStore", () => adapter.skillStore, true);
 
   // F7a — ProfileManager: create, resolve active profile, merge into recall config
   const profileManager = new ProfileManager(
@@ -87,6 +89,9 @@ export async function init(cwd: string): Promise<{
 
   const resourceService = new ResourceService(adapter.resourceStore);
   container.register("resourceService", () => resourceService, true);
+
+  const skillService = new SkillService(adapter.skillStore);
+  container.register("skillService", () => skillService, true);
 
   return { config, logger, container };
 }

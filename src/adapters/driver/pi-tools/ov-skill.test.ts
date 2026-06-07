@@ -1,22 +1,24 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createOvSkillTool } from "./ov-skill";
-import type { FsStoreService } from "../../../domain/services/fs-store-service";
-import type { WriteResult } from "../../../domain/ports/fs-store";
-import type { Uri } from "../../../domain/common/uri";
+import type { SkillService } from "../../../domain/services/skill-service";
+import type { AddSkillResult } from "../../../domain/ports/skill-store";
 import { Pipeline } from "../../../domain/pipeline/pipeline";
 
-function makeFsStoreService(overrides?: Partial<FsStoreService>): FsStoreService {
+function makeSkillService(overrides?: Partial<SkillService>): SkillService {
   return {
-    save: vi.fn().mockResolvedValue({ uri: { value: "viking://user/skills/test" } as Uri, success: true } as WriteResult),
-    mkdir: vi.fn().mockResolvedValue(undefined),
-    mv: vi.fn().mockResolvedValue(undefined),
+    addSkill: vi.fn().mockResolvedValue({
+      rootUri: "viking://agent/default/skills/test-skill",
+      uri: "viking://agent/default/skills/test-skill",
+      name: "test-skill",
+      auxiliaryFiles: 0,
+    } as AddSkillResult),
     ...overrides,
-  } as unknown as FsStoreService;
+  } as unknown as SkillService;
 }
 
 function makePipeline() {
-  return new Pipeline<unknown>();
+  return new Pipeline<AddSkillResult>();
 }
 
 function executeTool(tool: ToolDefinition, params: Record<string, unknown>) {
@@ -44,68 +46,102 @@ function getText(result: any): string {
 
 describe("ov_skill tool", () => {
   it("has correct name and schema", () => {
-    const tool = createOvSkillTool(makeFsStoreService(), makePipeline());
+    const tool = createOvSkillTool(makeSkillService(), makePipeline());
     expect(tool.name).toBe("ov_skill");
     expect(tool.parameters).toBeDefined();
   });
 
-  it("rejects URI not under viking://user/skills/", async () => {
-    const tool = createOvSkillTool(makeFsStoreService(), makePipeline());
-    const result = await executeTool(tool, {
-      uri: "viking://resources/test",
-      content: "skill content",
-    });
-    expect(getText(result)).toContain("must start with viking://user/skills/");
-  });
-
-  it("accepts URI under viking://user/skills/", async () => {
+  it("calls SkillService.addSkill with content", async () => {
     const calls: unknown[] = [];
-    const svc = makeFsStoreService({
-      save: vi.fn().mockImplementation(async (...args: unknown[]) => {
+    const svc = makeSkillService({
+      addSkill: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
-        return { uri: { value: "viking://user/skills/test.md" } as Uri, success: true };
+        return {
+          rootUri: "viking://agent/default/skills/my-skill",
+          uri: "viking://agent/default/skills/my-skill",
+          name: "my-skill",
+          auxiliaryFiles: 0,
+        } as AddSkillResult;
       }),
     });
     const tool = createOvSkillTool(svc, makePipeline());
 
     const result = await executeTool(tool, {
-      uri: "viking://user/skills/test.md",
-      content: "skill content",
+      content: "---\nname: my-skill\ndescription: Test\n---\n\nContent here",
     });
 
     expect(calls).toHaveLength(1);
-    const args = calls[0] as [string, string];
-    expect(args[0]).toBe("viking://user/skills/test.md");
-    expect(args[1]).toBe("skill content");
-    expect(getText(result)).toContain("success");
+    const args = calls[0] as [string, object];
+    expect(args[0]).toBe("---\nname: my-skill\ndescription: Test\n---\n\nContent here");
+    expect(getText(result)).toContain("my-skill");
+    expect(getText(result)).toContain("viking://agent/default/skills/my-skill");
   });
 
-  it("rejects legacy viking://skills/ prefix", async () => {
-    const svc = makeFsStoreService({
-      save: vi.fn().mockRejectedValue(new Error("OV unavailable")),
+  it("accepts structured SkillData with name and description", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSkillService({
+      addSkill: vi.fn().mockImplementation(async (...args: unknown[]) => {
+        calls.push(args);
+        return {
+          rootUri: "viking://agent/default/skills/my-structured-skill",
+          uri: "viking://agent/default/skills/my-structured-skill",
+          name: "my-structured-skill",
+          auxiliaryFiles: 0,
+        } as AddSkillResult;
+      }),
     });
     const tool = createOvSkillTool(svc, makePipeline());
 
     const result = await executeTool(tool, {
-      uri: "viking://skills/test.md",
-      content: "x",
+      content: "# Skill logic",
+      name: "my-structured-skill",
+      description: "A structured skill for testing",
+      allowedTools: ["ov_search", "ov_read"],
+      tags: ["test", "structured"],
     });
 
-    expect(getText(result)).toContain("must start with viking://user/skills/");
+    expect(calls).toHaveLength(1);
+    const [data] = calls[0] as [Record<string, unknown>, object];
+    expect(data).toMatchObject({
+      name: "my-structured-skill",
+      description: "A structured skill for testing",
+      content: "# Skill logic",
+      allowedTools: ["ov_search", "ov_read"],
+      tags: ["test", "structured"],
+    });
+    expect(getText(result)).toContain("my-structured-skill");
+  });
+
+  it("passes wait option when provided", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSkillService({
+      addSkill: vi.fn().mockImplementation(async (...args: unknown[]) => {
+        calls.push(args);
+        return { rootUri: "", uri: "", name: "", auxiliaryFiles: 0 };
+      }),
+    });
+    const tool = createOvSkillTool(svc, makePipeline());
+
+    await executeTool(tool, {
+      content: "# test",
+      wait: true,
+    });
+
+    const [, options] = calls[0] as [string, { wait?: boolean }];
+    expect(options?.wait).toBe(true);
   });
 
   it("returns error message on failure", async () => {
-    const svc = makeFsStoreService({
-      save: vi.fn().mockRejectedValue(new Error("OV unavailable")),
+    const svc = makeSkillService({
+      addSkill: vi.fn().mockRejectedValue(new Error("OV unavailable")),
     });
     const tool = createOvSkillTool(svc, makePipeline());
 
     const result = await executeTool(tool, {
-      uri: "viking://user/skills/test.md",
-      content: "x",
+      content: "# test",
     });
 
-    expect(getText(result)).toContain("failed");
+    expect(getText(result)).toContain("Skill save failed");
     expect(getText(result)).toContain("OV unavailable");
   });
 });

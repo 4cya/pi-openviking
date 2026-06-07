@@ -34,7 +34,7 @@ describe("FsStoreAdapter.read", () => {
     expect(result.level).toBe("read");
   });
 
-  it("calls /api/v1/content/read with .abstract.md for level=abstract", async () => {
+  it("calls /api/v1/content/abstract for level=abstract", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue(
       "Hexagonal architecture overview",
@@ -44,15 +44,15 @@ describe("FsStoreAdapter.read", () => {
     const result = await fs.read(dirUri, "abstract");
 
     const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(path).toContain("/api/v1/content/read");
-    expect(path).toContain(".abstract.md");
+    expect(path).toContain("/api/v1/content/abstract");
+    expect(path).toContain("uri=");
     expect(path).not.toContain("offset=");
     expect(path).not.toContain("limit=");
     expect(result.body).toBe("Hexagonal architecture overview");
     expect(result.level).toBe("abstract");
   });
 
-  it("calls /api/v1/content/read with .overview.md for level=overview", async () => {
+  it("calls /api/v1/content/overview for level=overview", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue(
       "File: architecture.md",
@@ -62,8 +62,8 @@ describe("FsStoreAdapter.read", () => {
     const result = await fs.read(dirUri, "overview");
 
     const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(path).toContain("/api/v1/content/read");
-    expect(path).toContain(".overview.md");
+    expect(path).toContain("/api/v1/content/overview");
+    expect(path).toContain("uri=");
     expect(path).not.toContain("offset=");
     expect(path).not.toContain("limit=");
     expect(result.body).toBe("File: architecture.md");
@@ -88,18 +88,16 @@ describe("FsStoreAdapter.read", () => {
     expect(result.level).toBeUndefined();
   });
 
-  it("handles 404 gracefully for abstract/overview on files", async () => {
+  it("propagates 412/ValidationError for abstract/overview on files", async () => {
     const transport = mockTransport();
-    const { NotFoundError } = await import("../../../domain/errors/not-found-error");
     (transport.request as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new NotFoundError("05-sessions.md/.abstract.md not found"),
+      new ValidationError(
+        "[FsStore.read] Request failed (412) — is not a directory",
+      ),
     );
 
     const fs = new FsStoreAdapter(transport);
-    const result = await fs.read(uri, "abstract");
-
-    expect(result.body).toBe("");
-    expect(result.level).toBe("abstract");
+    await expect(fs.read(uri, "abstract")).rejects.toThrow(ValidationError);
   });
 
   it("appends uri query param with encoded value for read level", async () => {
@@ -144,8 +142,7 @@ describe("FsStoreAdapter.read", () => {
     await fs.read(dirUri, "abstract", 10, 20);
 
     const [, path] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(path).toContain("/api/v1/content/read");
-    expect(path).toContain(".abstract.md");
+    expect(path).toContain("/api/v1/content/abstract");
     expect(path).not.toContain("offset=");
     expect(path).not.toContain("limit=");
   });

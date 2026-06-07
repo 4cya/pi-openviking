@@ -1,5 +1,6 @@
 import type { SessionId } from "../common/session-id";
-import type { SessionStore, CommitResult, CommitOptions, TaskStatus } from "../ports/session-store";
+import type { SessionStore, CommitResult, CommitOptions, TaskStatus, SessionInfo } from "../ports/session-store";
+import type { Uri } from "../common/uri";
 import type { Part } from "../common/part";
 
 interface SessionServiceConfig {
@@ -27,6 +28,18 @@ export class SessionService {
 
   async sendMessage(sessionId: SessionId, role: string, content: Part[]): Promise<void> {
     return this.store.sendMessage(sessionId, role, content);
+  }
+
+  async sendMessages(sessionId: SessionId, messages: { role: string; content: Part[] }[]): Promise<void> {
+    return this.store.sendMessages(sessionId, messages);
+  }
+
+  async getSession(sessionId: SessionId): Promise<SessionInfo> {
+    return this.store.getSession(sessionId);
+  }
+
+  async sessionUsed(sessionId: SessionId, contexts: Uri[]): Promise<void> {
+    return this.store.sessionUsed(sessionId, contexts);
   }
 
   async commit(sessionId: SessionId, options?: CommitOptions): Promise<CommitResult> {
