@@ -8,6 +8,7 @@ import { Uri } from "../../../domain/common/uri";
 import { OVWidget } from "../ov-widget";
 import { HealthCheck } from "../../driven/openviking/health";
 import { agentMessageToParts } from "./message-mapper";
+import { buildTurnParts } from "./build-turn-parts";
 
 // ── Shared bag of services consumed by lifecycle hooks and per-session handler ──
 
@@ -27,24 +28,44 @@ export interface LifecycleServices {
 export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices): void {
   const { logger, sessionService, recallService, adapter, widget } = svcs;
 
-  // message_end: sync user/assistant messages to OV session
-  // OV only accepts "user" and "assistant" roles — skip toolResult
+  // message_end: sync user messages to OV session immediately
+  // Assistant messages + tool results are merged at turn_end
   pi.on("message_end", async (event) => {
-    if (event.message.role === "toolResult") return;
+    if (event.message.role !== "user") return;
 
     const parts = agentMessageToParts(event.message);
     if (parts.length === 0) return;
 
     const active = sessionService.getActive();
     if (!active) {
-      logger?.debug("message_end: no active session, skipping sync");
+      logger?.debug("message_end: no active session, skipping user sync");
       return;
     }
 
     try {
-      await sessionService.sendMessage(active, event.message.role, parts);
+      await sessionService.sendMessage(active, "user", parts);
     } catch (err) {
-      logger?.warn("message_end: failed to send message", { error: (err as Error).message });
+      logger?.warn("message_end: failed to send user message", { error: (err as Error).message });
+    }
+  });
+
+  // turn_end: sync assistant message + tool results as one structured message
+  pi.on("turn_end", async (event) => {
+    const active = sessionService.getActive();
+    if (!active) {
+      logger?.debug("turn_end: no active session, skipping");
+      return;
+    }
+
+    const assistantParts = agentMessageToParts(event.message);
+    if (assistantParts.length === 0) return;
+
+    const merged = buildTurnParts(assistantParts, event.toolResults);
+
+    try {
+      await sessionService.sendMessage(active, "assistant", merged);
+    } catch (err) {
+      logger?.warn("turn_end: failed to send message", { error: (err as Error).message });
     }
   });
 

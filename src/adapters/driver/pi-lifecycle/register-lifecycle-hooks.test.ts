@@ -43,13 +43,14 @@ type ShutdownHandler = (event: any) => Promise<any> | any;
 // ── registerLifecycleHooks ──────────────────────────────────────────────────
 
 describe("registerLifecycleHooks", () => {
-  it("registers message_end, session_shutdown, before_agent_start hooks", () => {
+  it("registers message_end, turn_end, session_shutdown, before_agent_start hooks", () => {
     const { pi, handlers } = createMockPi();
     const svcs = createMockServices();
 
     registerLifecycleHooks(pi, svcs);
 
     expect(handlers["message_end"]).toBeDefined();
+    expect(handlers["turn_end"]).toBeDefined();
     expect(handlers["session_shutdown"]).toBeDefined();
     expect(handlers["before_agent_start"]).toBeDefined();
   });
@@ -75,7 +76,7 @@ describe("registerLifecycleHooks", () => {
       expect(sendMessage.mock.calls[0][1]).toBe("user");
     });
 
-    it("sends assistant message to OV session", async () => {
+    it("does NOT send assistant message on message_end (deferred to turn_end)", async () => {
       const { pi, handlers } = createMockPi();
       const sendMessage = vi.fn().mockResolvedValue(undefined);
       const svcs = createMockServices({
@@ -89,11 +90,12 @@ describe("registerLifecycleHooks", () => {
         message: { role: "assistant", content: [{ type: "text", text: "response" }], timestamp: 2 },
       });
 
-      expect(sendMessage).toHaveBeenCalledTimes(1);
-      expect(sendMessage.mock.calls[0][1]).toBe("assistant");
+      // Assistant messages are no longer sent on message_end
+      // They are merged with tool results and sent via turn_end
+      expect(sendMessage).not.toHaveBeenCalled();
     });
 
-    it("skips toolResult messages (OV only accepts user/assistant)", async () => {
+    it("skips toolResult messages on message_end (handled via turn_end)", async () => {
       const { pi, handlers } = createMockPi();
       const sendMessage = vi.fn().mockResolvedValue(undefined);
       const svcs = createMockServices({
@@ -147,6 +149,135 @@ describe("registerLifecycleHooks", () => {
 
       await handler({
         message: { role: "user", content: "hello", timestamp: 1 },
+      });
+
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("turn_end", () => {
+    it("sends merged assistant parts + tool results to OV session", async () => {
+      const { pi, handlers } = createMockPi();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      const getActive = vi.fn().mockReturnValue("session-1");
+      const svcs = createMockServices({
+        sessionService: { getActive, sendMessage } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["turn_end"] as MsgHandler;
+
+      await handler({
+        type: "turn_end",
+        turnIndex: 1,
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Let me check:" },
+            { type: "toolCall", id: "call_1", name: "ov_search", arguments: { query: "test" } },
+          ],
+        },
+        toolResults: [
+          {
+            role: "toolResult",
+            toolCallId: "call_1",
+            toolName: "ov_search",
+            content: [{ type: "text", text: '[{ "result": "ok" }]' }],
+            isError: false,
+            timestamp: 3,
+          },
+        ],
+      });
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(sendMessage.mock.calls[0][1]).toBe("assistant");
+      const sentParts = sendMessage.mock.calls[0][2];
+      expect(sentParts).toHaveLength(2);
+      // text part preserved
+      expect(sentParts[0].type).toBe("text");
+      expect(sentParts[0].text).toBe("Let me check:");
+      // tool part now has completed status + output
+      expect(sentParts[1].type).toBe("tool");
+      expect(sentParts[1].toolId).toBe("call_1");
+      expect(sentParts[1].toolStatus).toBe("completed");
+      expect(sentParts[1].toolOutput).toBe('[{ "result": "ok" }]');
+    });
+
+    it("sends text-only assistant message when no tool calls", async () => {
+      const { pi, handlers } = createMockPi();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        sessionService: { getActive: vi.fn().mockReturnValue("session-1"), sendMessage } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["turn_end"] as MsgHandler;
+
+      await handler({
+        type: "turn_end",
+        turnIndex: 1,
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Just text response" }],
+        },
+        toolResults: [],
+      });
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(sendMessage.mock.calls[0][2]).toHaveLength(1);
+      expect(sendMessage.mock.calls[0][2][0].type).toBe("text");
+      expect(sendMessage.mock.calls[0][2][0].text).toBe("Just text response");
+    });
+
+    it("sets toolStatus to error when tool result isError", async () => {
+      const { pi, handlers } = createMockPi();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        sessionService: { getActive: vi.fn().mockReturnValue("session-1"), sendMessage } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["turn_end"] as MsgHandler;
+
+      await handler({
+        type: "turn_end",
+        turnIndex: 1,
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "call_err", name: "bash", arguments: { command: "rm -rf" } }],
+        },
+        toolResults: [
+          {
+            role: "toolResult",
+            toolCallId: "call_err",
+            toolName: "bash",
+            content: [{ type: "text", text: "Command failed" }],
+            isError: true,
+            timestamp: 3,
+          },
+        ],
+      });
+
+      const sentParts = sendMessage.mock.calls[0][2];
+      expect(sentParts[0].toolStatus).toBe("error");
+      expect(sentParts[0].toolOutput).toBe("Command failed");
+    });
+
+    it("skips when no active session", async () => {
+      const { pi, handlers } = createMockPi();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        sessionService: { getActive: vi.fn().mockReturnValue(null), sendMessage } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["turn_end"] as MsgHandler;
+
+      await handler({
+        type: "turn_end",
+        turnIndex: 1,
+        message: { role: "assistant", content: [{ type: "text", text: "hello" }] },
+        toolResults: [],
       });
 
       expect(sendMessage).not.toHaveBeenCalled();
