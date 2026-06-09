@@ -25,6 +25,7 @@ export const OVAdapterConfigSchema = z.object({
   commitTimeout: z.number().positive().default(120_000),
   maxRetries: z.number().int().min(0).default(3),
   rateLimitPerSecond: z.number().min(0).default(0),
+  autoCommitIntervalMs: z.number().min(0).default(300_000),
   circuitBreaker: CircuitBreakerConfigSchema.optional(),
 });
 

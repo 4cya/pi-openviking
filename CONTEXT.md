@@ -73,6 +73,29 @@ _Avoid_: error translator, http error handler
 A pure function `toContent(raw, uri, level?)` that converts OV content endpoint JSON into domain `Content` (typed `Uri` object + `body` string + optional `level`). Handles all three levels (read/abstract/overview). Extracts `body` from response, falls back to empty string on null. Lives in `adapters/driven/openviking/mappers/content-mapper.ts`.
 _Avoid_: content parser, response mapper
 
+**SessionMapStore** (infrastructure adapter — `adapters/driven/session-map/session-map-store.ts`):
+A file-based adapter that persists the Pi↔OV session mapping across restarts.
+Writes `openviking-session-map.json` to the data directory. Exposes port interface
+`SessionMapStore` in `domain/ports/session-map-store.ts`: `load(): Promise<Record<string, SessionMeta>>`,
+`save(map: Record<string, SessionMeta>): Promise<void>`. Per-session metadata includes
+`ovSessionId`, `syncedMessageKeys`, `lastCommitTime`, `commitInFlight`.
+_Avoid_: session map file, session persistence
+
+**AutoCommit** (infrastructure — lifecycle module):
+A `setInterval`-based timer that periodically checks all active session mappings for
+uncommitted messages and starts background commits. Lives in `register-lifecycle-hooks.ts`,
+not as a standalone class — the timer coordination is an infra side effect.
+Polls `GET /api/v1/tasks/{id}` to wait for commit completion. Started on plugin init,
+stopped on `session_shutdown`. Polling logic extracted as pure function `pollCommit()`
+for testability.
+_Avoid_: auto-commit timer, commit scheduler
+
+**RepoContext** (infrastructure — infra module):
+Fetches `viking://resources/` via `GET /api/v1/fs/ls` on `session_start`, caches with
+TTL, and injects indexed repo list + tool guidance into the system prompt via
+`before_agent_start`'s `systemPrompt` field. No output when no repos indexed.
+_Avoid_: repo lister, context service
+
 **FsStoreAdapter**:
 A full implementation of the `FsStore` port in `adapters/driven/openviking/fs-store.ts`. `read()` maps level to official OV content endpoints: `level=read` → `/api/v1/content/read?uri=X&offset=Y&limit=Z`, `level=abstract` → `/api/v1/content/abstract?uri=X`, `level=overview` → `/api/v1/content/overview?uri=X`. Abstract/overview endpoints only work on directories — calling them on a file returns 412 FAILED_PRECONDITION which propagates to the caller. `write()` calls `POST /api/v1/content/write` with `wait: false` (async — OV processes embedding in background). Navigation methods (`list`, `tree`, `stat`) call `GET /api/v1/fs/{ls|tree|stat}`. Management methods (`mkdir`, `mv`) use POST with URI payload. `delete()` calls `DELETE /api/v1/fs?uri=` and auto-retries with `recursive=true` on recursive-required errors. `reindex()` calls `POST /api/v1/content/reindex {uri, mode}` with `mode` defaulting to `"vectors_only"`.
 
@@ -426,12 +449,13 @@ An `initialized` flag ensures `init()` runs once per process.
 ### F6 — Auto-Recall + Session Sync
 
 **F6 hooks** (in `index.ts`, no `application/` layer):
-4 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
+5 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
 
-- **`before_agent_start`** → `RecallService.recall(prompt, sessionService.getActive())`. Returns custom message `{ customType: "memory_context", content: recallResult.formatted, display: false }`. GraphExpander results (F8+) merge into the same message with `[graph]` prefix. Circuit breaker OPEN → skip recall silently. Wrapped in try/catch — the hook never throws any exception; unexpected errors produce a graceful fallback message.
-- **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Syncs `user` and `assistant` messages: TextParts from text blocks, ToolParts from toolCalls (assistant) + toolResult messages (tool output + status). Tool calls preserved structurally — not flattened to text.
+- **`context`** → `RecallService.recall(prompt, sessionService.getActive())`. Injects as custom message `{ customType: "memory_context", display: false }` with `<relevant-memories>` XML block appended after the user message. Fires before each LLM call. Cache by query hash prevents redundant OV traffic on subsequent calls in same turn. Circuit breaker OPEN or recall disabled → skip silently (no message injection). Cache invalidated on new user message. See ADR-019.
+- **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Syncs `user` messages only (assistant goes via `turn_end`). Tool calls preserved structurally — not flattened to text.
 - **`session_shutdown`** → `SessionService.commit(activeSessionId)`. OV server extracts memories async (memory_diff.json).
 - **`session_start`** → health check via `HealthCheck.check()` + widget update.
+- **`before_agent_start`** → `RepoContext.getSystemPromptSnippet()`. Injects resource index into `systemPrompt` with TTL cache. No output when no repos indexed.
 
 **MessageMapper** (`adapters/driver/pi-lifecycle/message-mapper.ts`):
 Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `AgentMessage` to domain `Part[]`: assistant content blocks → TextPart (text) + ToolPart (toolCall, toolStatus="pending"); toolResult messages → ToolPart (toolOutput, toolStatus="success"|"error"); user text → TextPart. Role `"user"` | `"assistant"` | `"toolResult"` supported.
@@ -440,7 +464,8 @@ Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `Age
 
 - **"Profile"** is overloaded three ways: (1) **Profile** — a named config preset in the Foundation layer; (2) **OV cProfile** — the server's own profiling mode; (3) **Memory Profile** — extracted user preferences from session memory. Use **Config Profile** for the Foundation concept, **OV cProfile** for the server concept, and **Memory Profile** for extracted preferences.
 - **"ProfileBehavior"** is a subset of Profile that overrides `RecallConfig`. Not to be confused with **Memory Profile** (OV's memory category) or **Profile** (the named config itself).
-- **"Auto-Recall"** refers to the F6 hook that calls `RecallService.recall()` automatically on `before_agent_start`. Not to be confused with **RecallService** (the domain service class, born in F4) or **RecallCurator** (the curation wrapper).
+- **"Auto-Recall"** refers to the F6 `context` hook that calls `RecallService.recall()` automatically before each LLM call. Not to be confused with **RecallService** (the domain service class, born in F4) or **RecallCurator** (the curation wrapper).
+- **"context" hook** in this codebase means the Pi `context` lifecycle event (fires before each LLM call). Not to be confused with **CONTEXT.md** (this glossary file). Prefer "lifecycle context hook" when ambiguity arises.
 - **Uri** and **SessionId** live in a shared kernel (`domain/common/`), not inside any single bounded context. Every context imports from `common/`; no context imports from another context.
 - **"Logger"** can refer either to the **Logger Interface** in `domain/ports/` or the **File Logger** implementation in `adapters/driven/`. Prefer the qualified name.
 - **"Config"** without qualification refers to the plugin's configuration managed by the **Config Schema**. Not to be confused with Pi's own settings (`.pi/settings.json`) or OV's server configuration.

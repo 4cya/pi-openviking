@@ -171,6 +171,27 @@ describe("CircuitBreaker config", () => {
   });
 });
 
+describe("OV adapter config", () => {
+  it("autoCommitIntervalMs defaults to 300000", () => {
+    const config = ConfigSchema.parse({});
+    expect(config.ov.autoCommitIntervalMs).toBe(300_000);
+  });
+
+  it("autoCommitIntervalMs can be overridden", () => {
+    const config = ConfigSchema.parse({ ov: { autoCommitIntervalMs: 60000 } });
+    expect(config.ov.autoCommitIntervalMs).toBe(60_000);
+  });
+
+  it("autoCommitIntervalMs 0 disables auto-commit", () => {
+    const config = ConfigSchema.parse({ ov: { autoCommitIntervalMs: 0 } });
+    expect(config.ov.autoCommitIntervalMs).toBe(0);
+  });
+
+  it("autoCommitIntervalMs rejects negative", () => {
+    expect(() => ConfigSchema.parse({ ov: { autoCommitIntervalMs: -1 } })).toThrow();
+  });
+});
+
 describe("No OV-specific fields", () => {
   it("extra fields are stripped by default", () => {
     const config = ConfigSchema.parse({

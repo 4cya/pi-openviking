@@ -27,7 +27,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
     // One-time initialization (guard prevents re-init on fork/resume/reload)
     if (!initialized) {
       const result = await init(ctx.cwd);
-      const { config, logger, container } = result;
+      const { config, logger, container, repoContext } = result;
 
       // Create shared widget instance (Driver adapter, not DI-registered)
       const widget = new OVWidget();
@@ -69,6 +69,8 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         widget,
         healthCheck,
         profileManager,
+        repoContext,
+        autoCommitIntervalMs: config.ov.autoCommitIntervalMs,
         autoDetectRules: config.profile.autoDetectRules,
       };
       registerLifecycleHooks(pi, lifecycleServices);

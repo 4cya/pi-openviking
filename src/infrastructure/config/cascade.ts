@@ -23,6 +23,7 @@ export function loadConfig(cwd: string): PiOVConfig {
     OV_RATE_LIMIT:                 { path: "ov.rateLimitPerSecond", parse: Number },
     OV_CIRCUIT_BREAKER_THRESHOLD: { path: "ov.circuitBreaker.threshold", parse: Number },
     OV_CIRCUIT_BREAKER_RESET_TIMEOUT: { path: "ov.circuitBreaker.resetTimeoutMs", parse: Number },
+    OV_AUTO_COMMIT_INTERVAL: { path: "ov.autoCommitIntervalMs", parse: Number },
   };
 
   for (const [envKey, { path, parse }] of Object.entries(ENV_TO_PATH)) {

@@ -116,6 +116,7 @@ function makeTransport(opts?: Partial<{
     commitTimeout: 120_000,
     maxRetries: opts?.maxRetries ?? 2,
     rateLimitPerSecond: 0,
+    autoCommitIntervalMs: 300_000,
   });
 }
 
@@ -146,6 +147,7 @@ describe("Transport", () => {
       commitTimeout: 120_000,
       maxRetries: 2,
       rateLimitPerSecond: 0,
+      autoCommitIntervalMs: 300_000,
     });
     await t.request("test", "/api/v1/success");
     expect(lastRequest.headers["x-openviking-agent"]).toBe("my-agent");
@@ -283,6 +285,7 @@ describe("Transport", () => {
       commitTimeout: 120_000,
       maxRetries: 0,
       rateLimitPerSecond: 10, // 100ms between tokens; starts with 10 tokens
+      autoCommitIntervalMs: 300_000,
     });
     // First 10 requests consume initial tokens (no delay)
     for (let i = 0; i < 10; i++) {
@@ -306,6 +309,7 @@ describe("Transport", () => {
       commitTimeout: 120_000,
       maxRetries: 0,
       rateLimitPerSecond: 5, // 200ms between tokens; starts with 5 tokens
+      autoCommitIntervalMs: 300_000,
     });
     // Use up the first 5 tokens
     for (let i = 0; i < 5; i++) {
@@ -332,6 +336,7 @@ describe("Circuit breaker integration", () => {
       maxRetries: 0,
       rateLimitPerSecond: 0,
       circuitBreaker: { threshold: 1, resetTimeoutMs: 10_000, maxResetTimeoutMs: 300_000 },
+      autoCommitIntervalMs: 300_000,
     });
 
     // First request fails → CB opens (threshold=1)
@@ -352,6 +357,7 @@ describe("Circuit breaker integration", () => {
       timeout: 5000,
       commitTimeout: 120_000,
       maxRetries: 0,
+      autoCommitIntervalMs: 300_000,
       rateLimitPerSecond: 0,
       circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000, maxResetTimeoutMs: 300_000 },
     });
@@ -369,6 +375,7 @@ describe("Circuit breaker integration", () => {
     agentId: "pi",
       timeout: 5000,
       commitTimeout: 120_000,
+      autoCommitIntervalMs: 300_000,
       maxRetries: 0,
       rateLimitPerSecond: 0,
       circuitBreaker: { threshold: 3, resetTimeoutMs: 10_000, maxResetTimeoutMs: 300_000 },
@@ -393,6 +400,7 @@ describe("Circuit breaker integration", () => {
       user: "test-user",
     agentId: "pi",
       timeout: 5000,
+      autoCommitIntervalMs: 300_000,
       commitTimeout: 120_000,
       maxRetries: 0,
       rateLimitPerSecond: 0,
@@ -414,6 +422,7 @@ describe("Circuit breaker integration", () => {
       account: "test-account",
       user: "test-user",
     agentId: "pi",
+      autoCommitIntervalMs: 300_000,
       timeout: 5000,
       commitTimeout: 120_000,
       maxRetries: 0,
@@ -429,6 +438,7 @@ describe("Circuit breaker integration", () => {
       apiKey: "test-key",
       account: "test-account",
       user: "test-user",
+      autoCommitIntervalMs: 300_000,
     agentId: "pi",
       timeout: 5000,
       commitTimeout: 120_000,
@@ -450,6 +460,7 @@ describe("Circuit breaker integration", () => {
       endpoint: `http://127.0.0.1:${port}`,
       apiKey: "test-key",
       account: "test-account",
+      autoCommitIntervalMs: 300_000,
       user: "test-user",
     agentId: "pi",
       timeout: 5000,

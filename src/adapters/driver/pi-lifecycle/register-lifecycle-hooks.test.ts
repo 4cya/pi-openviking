@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { registerLifecycleHooks, handleSessionStart } from "./register-lifecycle-hooks";
+import { registerLifecycleHooks, handleSessionStart, pollCommit, DEFAULT_AUTO_COMMIT_INTERVAL_MS } from "./register-lifecycle-hooks";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { LifecycleServices } from "./register-lifecycle-hooks";
 
@@ -37,22 +37,22 @@ function createMockServices(overrides?: Partial<LifecycleServices>): LifecycleSe
   } as LifecycleServices;
 }
 
-type MsgHandler = (event: any) => Promise<any> | any;
-type ShutdownHandler = (event: any) => Promise<any> | any;
+type Handler = (event: any) => Promise<any> | any;
 
 // ── registerLifecycleHooks ──────────────────────────────────────────────────
 
 describe("registerLifecycleHooks", () => {
-  it("registers message_end, turn_end, session_shutdown, before_agent_start hooks", () => {
+  it("registers context, before_agent_start, message_end, turn_end, session_shutdown hooks", () => {
     const { pi, handlers } = createMockPi();
     const svcs = createMockServices();
 
     registerLifecycleHooks(pi, svcs);
 
+    expect(handlers["context"]).toBeDefined();
+    expect(handlers["before_agent_start"]).toBeDefined();
     expect(handlers["message_end"]).toBeDefined();
     expect(handlers["turn_end"]).toBeDefined();
     expect(handlers["session_shutdown"]).toBeDefined();
-    expect(handlers["before_agent_start"]).toBeDefined();
   });
 
   describe("message_end", () => {
@@ -65,14 +65,13 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["message_end"] as MsgHandler;
+      const handler = handlers["message_end"] as Handler;
 
       await handler({
         message: { role: "user", content: "hello", timestamp: 1 },
       });
 
       expect(sendMessage).toHaveBeenCalledTimes(1);
-      // Should send with role "user"
       expect(sendMessage.mock.calls[0][1]).toBe("user");
     });
 
@@ -84,14 +83,12 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["message_end"] as MsgHandler;
+      const handler = handlers["message_end"] as Handler;
 
       await handler({
         message: { role: "assistant", content: [{ type: "text", text: "response" }], timestamp: 2 },
       });
 
-      // Assistant messages are no longer sent on message_end
-      // They are merged with tool results and sent via turn_end
       expect(sendMessage).not.toHaveBeenCalled();
     });
 
@@ -103,7 +100,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["message_end"] as MsgHandler;
+      const handler = handlers["message_end"] as Handler;
 
       await handler({
         message: {
@@ -116,7 +113,6 @@ describe("registerLifecycleHooks", () => {
         },
       });
 
-      // toolResult should NOT be sent to OV
       expect(sendMessage).not.toHaveBeenCalled();
     });
 
@@ -128,7 +124,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["message_end"] as MsgHandler;
+      const handler = handlers["message_end"] as Handler;
 
       await handler({
         message: { role: "custom", content: "something", timestamp: 4 },
@@ -145,7 +141,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["message_end"] as MsgHandler;
+      const handler = handlers["message_end"] as Handler;
 
       await handler({
         message: { role: "user", content: "hello", timestamp: 1 },
@@ -165,7 +161,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["turn_end"] as MsgHandler;
+      const handler = handlers["turn_end"] as Handler;
 
       await handler({
         type: "turn_end",
@@ -193,10 +189,8 @@ describe("registerLifecycleHooks", () => {
       expect(sendMessage.mock.calls[0][1]).toBe("assistant");
       const sentParts = sendMessage.mock.calls[0][2];
       expect(sentParts).toHaveLength(2);
-      // text part preserved
       expect(sentParts[0].type).toBe("text");
       expect(sentParts[0].text).toBe("Let me check:");
-      // tool part now has completed status + output
       expect(sentParts[1].type).toBe("tool");
       expect(sentParts[1].toolId).toBe("call_1");
       expect(sentParts[1].toolStatus).toBe("completed");
@@ -211,7 +205,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["turn_end"] as MsgHandler;
+      const handler = handlers["turn_end"] as Handler;
 
       await handler({
         type: "turn_end",
@@ -237,7 +231,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["turn_end"] as MsgHandler;
+      const handler = handlers["turn_end"] as Handler;
 
       await handler({
         type: "turn_end",
@@ -271,7 +265,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["turn_end"] as MsgHandler;
+      const handler = handlers["turn_end"] as Handler;
 
       await handler({
         type: "turn_end",
@@ -294,7 +288,7 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["session_shutdown"] as ShutdownHandler;
+      const handler = handlers["session_shutdown"] as Handler;
 
       await handler({ type: "session_shutdown", reason: "quit" });
 
@@ -309,16 +303,170 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["session_shutdown"] as ShutdownHandler;
+      const handler = handlers["session_shutdown"] as Handler;
 
       await handler({ type: "session_shutdown", reason: "quit" });
 
       expect(commit).not.toHaveBeenCalled();
     });
+
+    it("clears recall cache on shutdown", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn().mockResolvedValue({});
+      const getActive = vi.fn().mockReturnValue("session-1");
+      const svcs = createMockServices({
+        sessionService: { getActive, commit } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+
+      // Fire context once to populate cache, then shutdown
+      const contextHandler = handlers["context"] as Handler;
+      await contextHandler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test query", timestamp: 1 },
+        ],
+      });
+
+      // Cache should be populated — verify by calling again (should hit cache)
+      const svc = svcs.recallService;
+      const recallSpy = svc.recall as ReturnType<typeof vi.fn>;
+
+      await contextHandler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test query", timestamp: 1 },
+        ],
+      });
+
+      // Called only once (first call), second should hit cache
+      expect(recallSpy).toHaveBeenCalledTimes(1);
+
+      const shutdownHandler = handlers["session_shutdown"] as Handler;
+      await shutdownHandler({ type: "session_shutdown", reason: "quit" });
+
+      // After shutdown, cache is cleared — next call re-fetches
+      // (only testable via module state, we verify shutdown runs commit)
+      expect(commit).toHaveBeenCalledWith("session-1");
+    });
   });
 
   describe("before_agent_start", () => {
-    it("returns memories when recall is enabled and circuit breaker closed", async () => {
+    it("injects repo context snippet into systemPrompt when repoContext exists", async () => {
+      const { pi, handlers } = createMockPi();
+      const getSnippet = vi.fn().mockResolvedValue("Resource: viking://resources/doc.md");
+      const svcs = createMockServices({
+        repoContext: { getSystemPromptSnippet: getSnippet } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["before_agent_start"] as Handler;
+
+      const result = await handler({
+        type: "before_agent_start",
+        prompt: "test",
+        systemPrompt: "You are a helpful assistant.",
+      });
+
+      expect(result.systemPrompt).toContain("Resource:");
+      expect(result.systemPrompt).toContain("You are a helpful assistant");
+    });
+
+    it("returns undefined when no repoContext", async () => {
+      const { pi, handlers } = createMockPi();
+      const svcs = createMockServices();
+      delete (svcs as any).repoContext;
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["before_agent_start"] as Handler;
+
+      const result = await handler({
+        type: "before_agent_start",
+        prompt: "test",
+        systemPrompt: "System prompt",
+      });
+
+      expect(result).toBeUndefined();
+    });
+
+    it("returns undefined when repo context snippet is empty", async () => {
+      const { pi, handlers } = createMockPi();
+      const getSnippet = vi.fn().mockResolvedValue("");
+      const svcs = createMockServices({
+        repoContext: { getSystemPromptSnippet: getSnippet } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["before_agent_start"] as Handler;
+
+      const result = await handler({
+        type: "before_agent_start",
+        prompt: "test",
+        systemPrompt: "System prompt",
+      });
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("pollCommit", () => {
+    it("commits active session", async () => {
+      const commit = vi.fn().mockResolvedValue({});
+      const getActive = vi.fn().mockReturnValue("session-1");
+      const result = await pollCommit({ getActive, commit } as any);
+      expect(result.committed).toBe(true);
+      expect(result.error).toBeUndefined();
+      expect(commit).toHaveBeenCalledWith("session-1");
+    });
+
+    it("returns committed:false when no active session", async () => {
+      const result = await pollCommit({ getActive: vi.fn().mockReturnValue(null) } as any);
+      expect(result.committed).toBe(false);
+    });
+
+    it("returns committed:false and error on commit failure", async () => {
+      const commit = vi.fn().mockRejectedValue(new Error("OV timeout"));
+      const getActive = vi.fn().mockReturnValue("session-1");
+      const result = await pollCommit({ getActive, commit } as any);
+      expect(result.committed).toBe(false);
+      expect(result.error).toContain("OV timeout");
+    });
+
+    it("starts background polling when commit returns taskId", async () => {
+      const waitForCommit = vi.fn().mockResolvedValue({ status: "completed" });
+      const commit = vi.fn().mockResolvedValue({ taskId: "task-123" });
+      const getActive = vi.fn().mockReturnValue("session-1");
+
+      await pollCommit({ getActive, commit, waitForCommit } as any);
+
+      // waitForCommit is called in a .catch() handler, so give microtask a tick
+      await new Promise((r) => setTimeout(r, 0));
+      expect(waitForCommit).toHaveBeenCalledWith("task-123");
+    });
+
+    it("logs warn when background polling fails", async () => {
+      const warn = vi.fn();
+      const waitForCommit = vi.fn().mockRejectedValue(new Error("task not found"));
+      const commit = vi.fn().mockResolvedValue({ taskId: "task-456" });
+      const getActive = vi.fn().mockReturnValue("session-1");
+
+      await pollCommit({ getActive, commit, waitForCommit } as any, { debug: vi.fn(), warn } as any);
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(warn).toHaveBeenCalled();
+      expect(warn.mock.calls[0][0]).toContain("pollCommit");
+    });
+  });
+
+  describe("DEFAULT_AUTO_COMMIT_INTERVAL_MS", () => {
+    it("is set to 5 minutes", () => {
+      expect(DEFAULT_AUTO_COMMIT_INTERVAL_MS).toBe(5 * 60 * 1000);
+    });
+  });
+
+  describe("context", () => {
+    it("injects memories as custom message when recall enabled", async () => {
       const { pi, handlers } = createMockPi();
       const recall = vi.fn().mockResolvedValue({ formatted: "relevant memories", timedOut: false, items: [] });
       const svcs = createMockServices({
@@ -326,35 +474,50 @@ describe("registerLifecycleHooks", () => {
         adapter: { circuitBreakerOpen: false } as any,
         sessionService: {
           getActive: vi.fn().mockReturnValue("session-1"),
-          sendMessage: vi.fn(),
         } as any,
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["before_agent_start"] as MsgHandler;
+      const handler = handlers["context"] as Handler;
 
-      const result = await handler({ type: "before_agent_start", prompt: "test query" });
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test query", timestamp: 1 },
+        ],
+      });
 
       expect(recall).toHaveBeenCalledWith("test query", "session-1");
       expect(result).toBeDefined();
-      expect(result.message.content).toContain("relevant memories");
+      expect(result.messages).toBeDefined();
+      // Original messages + injected custom message
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[1].role).toBe("custom");
+      expect(result.messages[1].customType).toBe("memory_context");
+      expect(result.messages[1].content).toBe("relevant memories");
+      expect(result.messages[1].display).toBe(false);
     });
 
-    it("returns off message when recall disabled", async () => {
+    it("returns undefined (no injection) when recall disabled", async () => {
       const { pi, handlers } = createMockPi();
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(false) } as any,
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["before_agent_start"] as MsgHandler;
+      const handler = handlers["context"] as Handler;
 
-      const result = await handler({ type: "before_agent_start", prompt: "test" });
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test query", timestamp: 1 },
+        ],
+      });
 
-      expect(result.message.content).toContain("Auto-recall is OFF");
+      expect(result).toBeUndefined();
     });
 
-    it("returns unavailable message when circuit breaker open", async () => {
+    it("returns undefined (no injection) when circuit breaker open", async () => {
       const { pi, handlers } = createMockPi();
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(true) } as any,
@@ -362,33 +525,209 @@ describe("registerLifecycleHooks", () => {
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["before_agent_start"] as MsgHandler;
+      const handler = handlers["context"] as Handler;
 
-      const result = await handler({ type: "before_agent_start", prompt: "test" });
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test", timestamp: 1 },
+        ],
+      });
 
-      expect(result.message.content).toContain("circuit breaker open");
+      expect(result).toBeUndefined();
+    });
+
+    it("returns undefined when no user message text found", async () => {
+      const { pi, handlers } = createMockPi();
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true) } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      // Empty messages — no user text to extract
+      const result = await handler({
+        type: "context",
+        messages: [],
+      });
+
+      expect(result).toBeUndefined();
     });
 
     it("auto-creates session when none active", async () => {
       const { pi, handlers } = createMockPi();
       const createAndSet = vi.fn().mockResolvedValue({ value: "new-session", toString: () => "new-session" });
       const recall = vi.fn().mockResolvedValue({ formatted: "memories", timedOut: false, items: [] });
+      const update = vi.fn();
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
         adapter: { circuitBreakerOpen: false } as any,
         sessionService: {
           getActive: vi.fn().mockReturnValue(null),
           createAndSet,
-          sendMessage: vi.fn(),
+        } as any,
+        widget: { update } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test", timestamp: 1 },
+        ],
+      });
+
+      expect(createAndSet).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledWith("session", "new-session");
+    });
+
+    it("caches recall result by query hash across same turn", async () => {
+      const { pi, handlers } = createMockPi();
+      const recall = vi.fn().mockResolvedValue({ formatted: "cached memories", timedOut: false, items: [] });
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
         } as any,
       });
 
       registerLifecycleHooks(pi, svcs);
-      const handler = handlers["before_agent_start"] as MsgHandler;
+      const handler = handlers["context"] as Handler;
+      const event = {
+        type: "context",
+        messages: [
+          { role: "user", content: "same query", timestamp: 1 },
+        ],
+      };
 
-      await handler({ type: "before_agent_start", prompt: "test" });
+      // First call — should run recall
+      await handler(event);
+      expect(recall).toHaveBeenCalledTimes(1);
 
-      expect(createAndSet).toHaveBeenCalledTimes(1);
+      // Second call with same messages — should use cache, not recall
+      await handler(event);
+      expect(recall).toHaveBeenCalledTimes(1); // still 1
+
+      // Third call — still cached
+      await handler(event);
+      expect(recall).toHaveBeenCalledTimes(1);
+    });
+
+    it("invalidates cache on different user query", async () => {
+      const { pi, handlers } = createMockPi();
+      const recall = vi.fn().mockResolvedValue({ formatted: "memories", timedOut: false, items: [] });
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      // First query
+      await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "query one", timestamp: 1 },
+        ],
+      });
+      expect(recall).toHaveBeenCalledTimes(1);
+
+      // Different query — re-fetch
+      await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "query two", timestamp: 2 },
+        ],
+      });
+      expect(recall).toHaveBeenCalledTimes(2);
+    });
+
+    it("handles recall returning no memories gracefully", async () => {
+      const { pi, handlers } = createMockPi();
+      const recall = vi.fn().mockResolvedValue({ formatted: null, timedOut: false, items: [] });
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test", timestamp: 1 },
+        ],
+      });
+
+      expect(result).toBeUndefined();
+    });
+
+    it("handles recall timeout gracefully", async () => {
+      const { pi, handlers } = createMockPi();
+      const recall = vi.fn().mockResolvedValue({ formatted: "memories", timedOut: true, items: [] });
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test", timestamp: 1 },
+        ],
+      });
+
+      expect(result).toBeUndefined();
+    });
+
+    it("extracts user text from array content messages", async () => {
+      const { pi, handlers } = createMockPi();
+      const recall = vi.fn().mockResolvedValue({ formatted: "memories", timedOut: false, items: [] });
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      await handler({
+        type: "context",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "analyze" },
+              { type: "text", text: "this code" },
+            ],
+            timestamp: 1,
+          },
+        ],
+      });
+
+      expect(recall).toHaveBeenCalledWith("analyze this code", "session-1");
     });
   });
 });

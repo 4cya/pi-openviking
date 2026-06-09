@@ -70,6 +70,7 @@ beforeAll(async () => {
     commitTimeout: 120_000,
     maxRetries: 0,
     rateLimitPerSecond: 0,
+    autoCommitIntervalMs: 300_000,
   });
 });
 

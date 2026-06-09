@@ -11,10 +11,11 @@
 | Fase | Status | Artefatos |
 |------|--------|-----------|
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
-| **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 7 port interfaces ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
+| **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 8 port interfaces ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 6 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore, ResourceStore, SkillStore) + adapter factory + DI wiring + smoke test. |
 | **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 18 singletons total no container. |
 | **F5 Tools + Commands** | ✅ Completo (F5.1–F5.5 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: FsStoreService (merged former WriteService + ReadService + FsService) + ov_write + ov_read. F5.3 ✅: ov_recall tool. F5.4 ✅: 9 slash commands. F5.5 ✅: Wiring (guard pattern + tool/command barrels) + OVWidget. 14 tools + 9 commands + widget operacionais. Pendente: status bar. |
+| **F6 Context Hook + Infra** | ✅ Completo | ADR-019: `context` hook replace `before_agent_start` p/ recall ✅ · Cache por query hash ✅ · SessionMapStore (port + FileSessionMapStore) ✅ · RepoContext (TTL cache + system prompt) ✅ · AutoCommit (`pollCommit()` + setInterval) ✅ · `autoCommitIntervalMs` config ✅ |
 
 > Este documento descreve a **arquitetura alvo**. Componentes marcados como (futuro) ainda não existem.
 > Para o estado atual do código, consulte a seção [6. Estrutura de Diretórios](#6-estrutura-de-diretórios).
@@ -47,6 +48,7 @@ flowchart TB
         PORT_SESSION["SessionStore\ncreate / send / commit / ..."]
         PORT_RESOURCE["ResourceStore\nimportUrl"]
         PORT_SKILL["SkillStore\naddSkill"]
+        PORT_MAP["SessionMapStore\nload / save"]
         PORT_LOGGER["Logger\ndebug / info / warn / error"]
     end
 
@@ -73,6 +75,7 @@ flowchart TB
         direction TB
         OV_ADAPTER["OpenVikingAdapter\nImplementa KnowledgeBase\n+ FsStore + GraphStore\n+ SessionStore + ResourceStore\n+ SkillStore"]
         OV_TRANSPORT["Transport\nHTTP + Auth + Retry + RateLimit"]
+        FILE_SESSION_MAP["FileSessionMapStore\nJSON file (atomic write)"]
         LOG_IMPL["FileLogger\nJSON lines + rotação"]
     end
 
@@ -80,6 +83,8 @@ flowchart TB
         direction TB
         DI["DI Container\nManual (21 linhas)"]
         CONFIG["Config Cascade\ndefaults → env → file → profile"]
+        REPO_CTX["RepoContext\nTTL cache + system prompt"]
+        AUTOCOMMIT["AutoCommit\nsetInterval + pollCommit()"]
         LIFECYCLE["Lifecycle\ninit() / shutdown()"]
     end
 
@@ -107,6 +112,9 @@ flowchart TB
     APP_SVC --> PORT_SESSION
     APP_SVC --> PORT_RESOURCE
     APP_SVC --> PORT_SKILL
+    APP_SVC --> PORT_MAP
+
+    SESSION_SVC --> PORT_MAP
     APP_SVC --> PORT_LOGGER
 
     OV_ADAPTER --> PORT_KB
@@ -486,7 +494,9 @@ src/
 │   │   ├── knowledge-base.ts  # ✅ KnowledgeBase + GlobResult, GrepOptions, GrepResult
 │   │   ├── fs-store.ts        # ✅ FsStore + Content, WriteResult, FsEntry
 │   │   ├── graph-store.ts     # ✅ GraphStore + LinkResult
-│   │   └── session-store.ts   # ✅ SessionStore + CommitResult, TaskStatus
+│   │   ├── session-store.ts   # ✅ SessionStore + CommitResult, TaskStatus
+│   ├── session-map-store.ts # ✅ SessionMapStore + SessionMeta
+│   └── skill-store.ts       # ✅ SkillStore + AddSkillResult
 │   └── errors/                # ✅ DomainError, NotFoundError, ConnectionError, ValidationError
 │
 ├── application/               # (não utilizado — SearchService em domain/services/, Pipeline em domain/pipeline/)

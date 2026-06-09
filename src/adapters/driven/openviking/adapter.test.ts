@@ -12,6 +12,7 @@ const TEST_CONFIG: OVAdapterConfig = {
   commitTimeout: 120_000,
   maxRetries: 2,
   rateLimitPerSecond: 0,
+  autoCommitIntervalMs: 300_000,
 };
 
 describe("createOVAdapter", () => {

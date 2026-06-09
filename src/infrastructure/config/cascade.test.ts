@@ -119,6 +119,12 @@ describe("loadConfig", () => {
     expect(result.recall.expandGraph).toBe(true);
   });
 
+  it("env OV_AUTO_COMMIT_INTERVAL overrides ov.autoCommitIntervalMs", () => {
+    process.env.OV_AUTO_COMMIT_INTERVAL = "60000";
+    const result = loadConfig("/tmp/nonexistent-cascade-test");
+    expect(result.ov.autoCommitIntervalMs).toBe(60000);
+  });
+
   it("settings.json can override recall fields", () => {
     withTempDir((dir) => {
       const piDir = join(dir, ".pi");

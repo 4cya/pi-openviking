@@ -12,6 +12,7 @@ import { FsStoreService } from "../domain/services/fs-store-service";
 import { ResourceService } from "../domain/services/resource-service";
 import { ProfileManager } from "../domain/profile/service/ProfileManager";
 import { SkillService } from "../domain/services/skill-service";
+import { RepoContext } from "./repo-context";
 import type { Logger } from "../domain/ports/logger";
 import type { PiOVConfig } from "../infrastructure/config/schema";
 
@@ -19,6 +20,7 @@ export async function init(cwd: string): Promise<{
   config: PiOVConfig;
   logger: Logger;
   container: DIContainer;
+  repoContext: RepoContext;
 }> {
   const config = loadConfig(cwd);
   const logger = new FileLogger(config.logger);
@@ -93,7 +95,11 @@ export async function init(cwd: string): Promise<{
   const skillService = new SkillService(adapter.skillStore);
   container.register("skillService", () => skillService, true);
 
-  return { config, logger, container };
+  // RepoContext: lists viking://resources/ with TTL cache for system prompt injection
+  const repoContext = new RepoContext(adapter.fsStore, logger);
+  container.register("repoContext", () => repoContext, true);
+
+  return { config, logger, container, repoContext };
 }
 
 export function shutdown(): void {
