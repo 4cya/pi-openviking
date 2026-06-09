@@ -109,7 +109,7 @@ describe("buildTurnParts", () => {
     expect(result).toEqual([textPart("Just text")]);
   });
 
-  it("truncates tool output exceeding max chars", () => {
+  it("truncates tool output exceeding max chars and sets toolOutputTruncated", () => {
     const long = "x".repeat(toolOutputMaxChars + 100);
     const parts: Part[] = [pendingTool("call_trunc", "bash")];
 
@@ -121,9 +121,10 @@ describe("buildTurnParts", () => {
     expect(tp.toolOutput.length).toBeLessThan(long.length);
     expect(tp.toolOutput).toContain("[truncated");
     expect(tp.toolOutput).toContain("100 more chars");
+    expect(tp.toolOutputTruncated).toBe(true);
   });
 
-  it("does not truncate output within limit", () => {
+  it("does not truncate output within limit and leaves toolOutputTruncated false", () => {
     const short = "short output";
     const parts: Part[] = [pendingTool("call_short", "bash")];
 
@@ -131,7 +132,9 @@ describe("buildTurnParts", () => {
       resultInput({ toolCallId: "call_short", content: short }),
     ]);
 
-    expect((result[0] as ToolPart).toolOutput).toBe("short output");
+    const tp = result[0] as ToolPart;
+    expect(tp.toolOutput).toBe("short output");
+    expect(tp.toolOutputTruncated).toBe(false);
   });
 
   it("ignores tool result with no matching toolCallId", () => {

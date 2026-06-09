@@ -45,7 +45,9 @@ export function buildTurnParts(
     if (idx === -1) continue;
 
     const tp = parts[idx] as ToolPart;
-    tp.toolOutput = truncateToolOutput(extractContentText(tr.content));
+    const raw = extractContentText(tr.content);
+    tp.toolOutput = truncateToolOutput(raw);
+    tp.toolOutputTruncated = tp.toolOutput !== raw;
     tp.toolStatus = tr.isError ? "error" : "completed";
   }
 
