@@ -66,11 +66,11 @@ An adapter (`adapters/driven/openviking/health.ts`) that probes OV availability 
 _Avoid_: health probe, ping, liveness
 
 **ErrorMapper**:
-A pure function `toDomainError(httpStatus, body, methodLabel)` that translates OV HTTP errors into typed `DomainError` subtypes: 401/403 → `ConnectionError`, 404 → `NotFoundError`, 409/422 → `ValidationError`, 5xx → `ConnectionError`. Lives in `adapters/driven/openviking/mappers/error-mapper.ts`.
+A pure function `toDomainError(httpStatus, body, methodLabel)` that translates OV HTTP errors into typed `DomainError` subtypes: 401/403 → `ConnectionError`, 404 → `NotFoundError`, 409/422 → `ValidationError`, 5xx → `ConnectionError`. Lives in `adapters/driven/openviking/mappers/ov-mappers.ts`.
 _Avoid_: error translator, http error handler
 
 **ContentMapper**:
-A pure function `toContent(raw, uri, level?)` that converts OV content endpoint JSON into domain `Content` (typed `Uri` object + `body` string + optional `level`). Handles all three levels (read/abstract/overview). Extracts `body` from response, falls back to empty string on null. Lives in `adapters/driven/openviking/mappers/content-mapper.ts`.
+A pure function `toContent(raw, uri, level?)` that converts OV content endpoint JSON into domain `Content` (typed `Uri` object + `body` string + optional `level`). Handles all three levels (read/abstract/overview). Extracts `body` from response, falls back to empty string on null. Lives in `adapters/driven/openviking/mappers/ov-mappers.ts`.
 _Avoid_: content parser, response mapper
 
 **SessionMapStore** (infrastructure adapter — `adapters/driven/session-map/session-map-store.ts`):

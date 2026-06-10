@@ -4,7 +4,7 @@
  * See OV 03-filesystem.md.
  */
 import type { Transport } from "./transport";
-import { toContent } from "./mappers/content-mapper";
+import { toContent } from "./mappers/ov-mappers";
 import { toWriteResult, toFsEntries, toFsEntry } from "./mappers/fs-mapper";
 import type { Uri } from "../../../domain/common/uri";
 import type { ContentLevel } from "../../../domain/common/content-level";

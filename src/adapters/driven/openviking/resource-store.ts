@@ -4,7 +4,7 @@
  * See OV 02-resources.md.
  */
 import type { Transport } from "./transport";
-import { toResourceImportResult } from "./mappers/resource-mapper";
+import { toResourceImportResult } from "./mappers/ov-mappers";
 import type { ResourceStore, ResourceImportResult, ImportOptions } from "../../../domain/ports/resource-store";
 import type { OVResourceImportResponse } from "./types/ov-resource";
 

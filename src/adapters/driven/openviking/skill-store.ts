@@ -4,7 +4,7 @@
  * See OV 04-skills.md.
  */
 import type { Transport } from "./transport";
-import { toAddSkillResult } from "./mappers/skill-mapper";
+import { toAddSkillResult } from "./mappers/ov-mappers";
 import type { SkillStore, AddSkillResult, SkillData, AddSkillOptions } from "../../../domain/ports/skill-store";
 import type { OVAddSkillResponse } from "./types/ov-skills";
 

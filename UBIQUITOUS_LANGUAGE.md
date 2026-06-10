@@ -67,9 +67,9 @@
 | Term | Definition | Aliases to avoid |
 | ---- | ---------- | ---------------- |
 | **DomainError** | Base class extending `Error`. All domain-layer errors inherit from it. Sets `this.name = this.constructor.name` automatically. Lives in `domain/errors/domain-error.ts` | generic Error |
-| **NotFoundError** | Extends `DomainError`. Represents a resource that does not exist. Lives in `domain/errors/not-found-error.ts` | 404, missing |
-| **ConnectionError** | Extends `DomainError`. Represents a failure to connect to a remote service (e.g. OV unreachable). Lives in `domain/errors/connection-error.ts` | network error, timeout |
-| **ValidationError** | Extends `DomainError`. Carries optional `details: Record<string, unknown>` for structured error info. Lives in `domain/errors/validation-error.ts` | invalid input, bad request |
+| **NotFoundError** | Extends `DomainError`. Represents a resource that does not exist. Lives in `domain/errors/domain-error.ts` | 404, missing |
+| **ConnectionError** | Extends `DomainError`. Represents a failure to connect to a remote service (e.g. OV unreachable). Lives in `domain/errors/domain-error.ts` | network error, timeout |
+| **ValidationError** | Extends `DomainError`. Carries optional `details: Record<string, unknown>` for structured error info. Lives in `domain/errors/domain-error.ts` | invalid input, bad request |
 
 ## Domain Models
 
