@@ -10,7 +10,7 @@ import type { Uri } from "../../../domain/common/uri";
 import type { ContentLevel } from "../../../domain/common/content-level";
 import type { WriteMode } from "../../../domain/common/write-mode";
 import type { Content, FsStore, FsEntry, WriteResult, ReindexMode } from "../../../domain/ports/fs-store";
-import { ValidationError } from "../../../domain/errors/validation-error";
+import { ValidationError } from "../../../domain/errors/domain-error";
 import type { OVWriteResponse, OVFsEntry } from "./types/ov-fs";
 import type { OVContentReadResponse } from "./types/ov-common";
 

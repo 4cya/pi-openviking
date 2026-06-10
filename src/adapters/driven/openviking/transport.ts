@@ -1,7 +1,6 @@
 import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
 import { toDomainError } from "./mappers/error-mapper";
-import { ConnectionError } from "../../../domain/errors/connection-error";
-import { DomainError } from "../../../domain/errors/domain-error";
+import { ConnectionError, DomainError } from "../../../domain/errors/domain-error";
 import type { Logger } from "../../../domain/ports/logger";
 import {
   createCircuitBreaker,

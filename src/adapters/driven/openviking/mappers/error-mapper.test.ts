@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { toDomainError } from "./error-mapper";
-import { ConnectionError } from "../../../../domain/errors/connection-error";
-import { NotFoundError } from "../../../../domain/errors/not-found-error";
-import { ValidationError } from "../../../../domain/errors/validation-error";
+import { ConnectionError, NotFoundError, ValidationError } from "../../../../domain/errors/domain-error";
 
 describe("toDomainError", () => {
   const label = "KnowledgeBase.find";

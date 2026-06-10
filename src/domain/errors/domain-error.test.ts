@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DomainError } from "./domain-error";
-import { NotFoundError } from "./not-found-error";
-import { ConnectionError } from "./connection-error";
-import { ValidationError } from "./validation-error";
+import { DomainError, NotFoundError, ConnectionError, ValidationError } from "./domain-error";
 
 describe("DomainError", () => {
   it("extends Error", () => {

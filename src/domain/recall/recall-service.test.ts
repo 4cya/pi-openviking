@@ -6,8 +6,7 @@ import type { RecallConfig } from "../common/recall-config";
 import type { Logger } from "../ports/logger";
 import type { SearchResult } from "../knowledge/model/search-result";
 import { Uri } from "../common/uri";
-import { ConnectionError } from "../errors/connection-error";
-import { ValidationError } from "../errors/validation-error";
+import { ConnectionError, ValidationError } from "../errors/domain-error";
 
 function makeConfig(overrides?: Partial<RecallConfig>): RecallConfig {
   return {

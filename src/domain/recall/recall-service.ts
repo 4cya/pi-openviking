@@ -3,7 +3,7 @@ import type { RecallCurator } from "./recall-curator";
 import type { CuratedItem, CuratedResult } from "./curate";
 import type { RecallConfig } from "../common/recall-config";
 import type { Logger } from "../ports/logger";
-import { ConnectionError } from "../errors/connection-error";
+import { ConnectionError } from "../errors/domain-error";
 import { Uri } from "../common/uri";
 import type { SessionId } from "../common/session-id";
 import { setTimeout, clearTimeout } from "node:timers";

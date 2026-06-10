@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { FsStoreAdapter } from "./fs-store";
 import { Uri } from "../../../domain/common/uri";
-import { ValidationError } from "../../../domain/errors/validation-error";
+import { ValidationError } from "../../../domain/errors/domain-error";
 import type { Transport } from "./transport";
 
 function mockTransport(): Transport {
@@ -149,7 +149,7 @@ describe("FsStoreAdapter.read", () => {
 
   it("propagates non-404 errors for abstract/overview", async () => {
     const transport = mockTransport();
-    const { ConnectionError } = await import("../../../domain/errors/connection-error");
+    const { ConnectionError } = await import("../../../domain/errors/domain-error");
     (transport.request as ReturnType<typeof vi.fn>).mockRejectedValue(
       new ConnectionError("OV unreachable"),
     );

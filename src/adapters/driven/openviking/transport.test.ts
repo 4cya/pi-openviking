@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "http";
 import type { AddressInfo } from "net";
 import { Transport } from "./transport";
-import { NotFoundError } from "../../../domain/errors/not-found-error";
-import { ConnectionError } from "../../../domain/errors/connection-error";
-import { ValidationError } from "../../../domain/errors/validation-error";
+import { NotFoundError, ConnectionError, ValidationError } from "../../../domain/errors/domain-error";
 
 let server: http.Server;
 let port: number;

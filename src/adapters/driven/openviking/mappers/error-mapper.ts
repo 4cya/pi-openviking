@@ -3,10 +3,7 @@
  *
  * See OV 01-overview.md (error response format).
  */
-import { ConnectionError } from "../../../../domain/errors/connection-error";
-import { NotFoundError } from "../../../../domain/errors/not-found-error";
-import { ValidationError } from "../../../../domain/errors/validation-error";
-import { DomainError } from "../../../../domain/errors/domain-error";
+import { ConnectionError, NotFoundError, ValidationError, DomainError } from "../../../../domain/errors/domain-error";
 import type { OVErrorBody } from "../types/ov-common";
 
 function extractMessage(body: OVErrorBody | Record<string, unknown> | null | undefined): string {
