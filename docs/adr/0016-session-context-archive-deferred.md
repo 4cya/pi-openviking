@@ -40,7 +40,7 @@ If any of these conditions arise, revisit:
 
 ## Consequences
 
-- SessionStore port stays at current 8 methods — no new interfaces
+- SessionStore port stayed at 8 methods when written; later expanded to 10 (`getSession`, `listSessions` added for session info tooling). The three deferred endpoints (context/archive/extract) remain unimplemented.
 - No new endpoints exposed via tools or commands
 - No test burden for speculative code
 - OV API coverage documented in audit as "deferred"

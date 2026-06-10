@@ -30,6 +30,8 @@ Pi is stateless between sessions. pi-openviking gives it persistent memory:
 | `ov_delete` | Delete a resource at a `viking://` URI (no confirmation). |
 | `ov_resource` | Save a resource document (`viking://resources/...`). |
 | `ov_skill` | Save a skill definition (`viking://skills/...`). |
+| `ov_import` | Import an external URL as an OV resource (HTML, PDF, Markdown, etc.). |
+| `ov_session` | Query OV session metadata (message count, commit count, memories). |
 
 ## Commands (user-facing)
 
@@ -47,7 +49,7 @@ Pi is stateless between sessions. pi-openviking gives it persistent memory:
 
 ## Auto-recall
 
-Before each agent turn, the plugin runs a guard chain:
+Before each LLM call (via the `context` lifecycle hook), the plugin runs a guard chain:
 
 1. **Toggle** — if auto-recall is off (`/ov-recall off`), skip.
 2. **Circuit breaker** — if OV is unreachable, skip.
@@ -61,7 +63,7 @@ Before each agent turn, the plugin runs a guard chain:
 | Profile | topN | Threshold | Use case |
 |---------|------|-----------|----------|
 | `default` | 3 | 0.5 | General purpose |
-| `web-dev` | 3 | 0.5 | Focused project context |
+| `web-dev` | 3 | 0.5 | Focused project context (no graph expansion) |
 | `docs` | 5 | 0.3 | Broad documentation search |
 | `learning` | 8 | 0.2 | Maximum capture |
 

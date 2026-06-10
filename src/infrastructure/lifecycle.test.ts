@@ -221,7 +221,7 @@ describe("init", () => {
   it("merged recall config reflects profile behavior override", async () => {
     const { container } = await init(tmpDir);
     const config = container.resolve<import("./config/schema").PiOVConfig>("config");
-    // Default profile sets topN=3, but RecallConfig default is topN=5
+    // Default profile sets topN=3, but RecallConfig default is topN=8
     // So merged config should have topN=3 from profile
     expect(config.recall.topN).toBe(3);
     expect(config.recall.scoreThreshold).toBe(0.5);

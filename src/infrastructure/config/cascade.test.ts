@@ -141,7 +141,7 @@ describe("loadConfig", () => {
 describe("mergeBehaviorIntoRecall", () => {
   const base = {
     targetUri: undefined,
-    topN: 5,
+    topN: 8,
     scoreThreshold: 0.5,
     maxTokens: 4000,
     expandGraph: false as const,
@@ -149,7 +149,7 @@ describe("mergeBehaviorIntoRecall", () => {
     expandGraphMaxRatio: 0.2,
     expandGraphMinSeedScore: 0.4,
     searchMode: "search" as const,
-    recallSearchTimeout: 5000,
+    recallSearchTimeout: 10000,
     autoRecall: true as const,
   };
 
@@ -189,20 +189,20 @@ describe("mergeBehaviorIntoRecall", () => {
   it("autoRecall=false overrides base true", () => {
     const merged = mergeBehaviorIntoRecall(base, { autoRecall: false });
     expect(merged.autoRecall).toBe(false);
-    expect(merged.topN).toBe(5); // unchanged
+    expect(merged.topN).toBe(8); // unchanged
   });
 
   it("does not mutate the base object", () => {
     const baseClone = { ...base };
     mergeBehaviorIntoRecall(base, { topN: 99 });
-    expect(base.topN).toBe(5); // original unchanged
+    expect(base.topN).toBe(8); // original unchanged
   });
 
   it("fields not in behavior keep base values", () => {
     const merged = mergeBehaviorIntoRecall(base, { expandGraph: true });
     expect(merged.expandGraph).toBe(true);
     // All other fields stay at base
-    expect(merged.topN).toBe(5);
+    expect(merged.topN).toBe(8);
     expect(merged.scoreThreshold).toBe(0.5);
     expect(merged.searchMode).toBe("search");
     expect(merged.autoRecall).toBe(true);

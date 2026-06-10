@@ -36,11 +36,12 @@ export const BUILTIN_PROFILES: Record<string, ProfileConfigSchemaType> = {
   },
   "web-dev": {
     name: "web-dev",
-    description: "Desenvolvimento web — contexto focado",
+    description: "Desenvolvimento web — contexto focado, sem expansão de grafo",
     behavior: {
       topN: 3,
       scoreThreshold: 0.5,
       searchMode: "search",
+      expandGraph: false,
       autoRecall: true,
     },
   },

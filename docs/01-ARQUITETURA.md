@@ -180,9 +180,9 @@ Dois endpoints de busca OV:
 ```typescript
 interface KnowledgeBase {
   /** Simple semantic search, no session context. POST /api/v1/search/find */
-  find(query: FindQuery, signal?: AbortSignal): Promise<SearchResult>;
+  find(query: FindQuery, opts?: SearchOptions, signal?: AbortSignal): Promise<SearchResult>;
   /** Deep search with session + intent analysis. POST /api/v1/search/search */
-  search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResult>;
+  search(request: SearchRequest, opts?: SearchOptions, signal?: AbortSignal): Promise<SearchResult>;
   /** URI pattern discovery. POST /api/v1/search/glob */
   glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult>;
   /** Content regex search. POST /api/v1/search/grep */
@@ -431,11 +431,11 @@ Domain interfaces: `domain/common/profile-config.ts`.
 ### 5.1 Auto-Recall (visão completa — F5–F8)
 
 Diagrama mostra fluxo completo incluindo componentes futuros (profileManager em F7, expandGraph em F8).
-Em F5, apenas o caminho `before_agent_start → recall toggle → KB.find/search → curator → inject` existe.
+Auto-recall usa o hook `context` (por ADR-019), não `before_agent_start` (que é usado apenas para RepoContext).
 
 ```mermaid
 flowchart TD
-    A["before_agent_start"] --> B{"OV healthy?"}
+    A["context hook"] --> B{"OV healthy?"}
     B -->|"nao"| C["skip"]
     B -->|"sim"| D{"recall toggle on?"}
     D -->|"nao"| E["skip"]

@@ -120,7 +120,7 @@ describe("BUILTIN_PROFILES with behaviors", () => {
   it("each builtin has behavior with correct fields per spec", () => {
     const expected = {
       default: { topN: 3, scoreThreshold: 0.5, searchMode: "search", autoRecall: true },
-      "web-dev": { topN: 3, scoreThreshold: 0.5, searchMode: "search", autoRecall: true },
+      "web-dev": { topN: 3, scoreThreshold: 0.5, searchMode: "search", expandGraph: false, autoRecall: true },
       docs: { topN: 5, scoreThreshold: 0.3, searchMode: "search", autoRecall: true },
       learning: { topN: 8, scoreThreshold: 0.2, searchMode: "search", autoRecall: true },
     };
@@ -134,7 +134,11 @@ describe("BUILTIN_PROFILES with behaviors", () => {
       expect(profile.behavior.searchMode).toBe(exp.searchMode);
       expect(profile.behavior.autoRecall).toBe(exp.autoRecall);
       expect(profile.behavior.targetUri).toBeUndefined();
-      expect(profile.behavior.expandGraph).toBeUndefined();
+      if (name === "web-dev") {
+        expect(profile.behavior.expandGraph).toBe(false);
+      } else {
+        expect(profile.behavior.expandGraph).toBeUndefined();
+      }
     }
   });
 

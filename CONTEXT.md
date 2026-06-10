@@ -134,7 +134,7 @@ F7a: Profile merge happens in `init()` via `ProfileManager.resolve(activeProfile
 _Avoid_: merge, resolution chain
 
 **Profile**:
-A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Carries `name` + `description` + `behavior: ProfileBehavior` (optional, added in F7a). Schema: `ProfileConfigSchema` with `behavior: ProfileBehaviorSchema.default({})`. Built-in profiles carry behavioral overrides (topN, scoreThreshold, etc.) web-dev targetUri placeholder `{workspace}` resolved in F7b via AutoDetect.
+A named config preset. One is always active. Four built-in: `default`, `web-dev`, `docs`, `learning`. Carries `name` + `description` + `behavior: ProfileBehavior` (optional, added in F7a). Schema: `ProfileConfigSchema` with `behavior: ProfileBehaviorSchema.default({})`. Built-in profiles carry behavioral overrides (topN, scoreThreshold, searchMode, expandGraph, autoRecall). O `web-dev` profile tem `expandGraph: false` por padrão (contexto focado, sem expandir grafo). targetUri é definido por profile customizado via `.pi/settings.json`, não por placeholder.
 
 **ProfileBehavior**:
 6 optional behavioral fields that override `RecallConfig` when a profile is active. Fields are optional — profile só sobrescreve o que define. Canonical type in `domain/common/profile-config.ts` as `Partial<Pick<RecallConfig, 6 overridable fields>>`. Zod schema in `infrastructure/config/profile-schema.ts`:
@@ -174,7 +174,7 @@ _Avoid_: container, ioc
 
 **Lifecycle**:
 The `init()` (async, creates logger + container + wires everything) and `shutdown()` (sync, resets state, zero I/O) entry points for the Foundation layer.
-Single `init()` in `infrastructure/lifecycle.ts`. Registers 18 singletons: config, logger, adapter, knowledgeBase, fsStore, graphStore, sessionStore, resourceStore, skillStore, profileManager, graphExpander (conditional), recallCurator, sessionService, recallService, searchService, fsStoreService, resourceService, skillService. Scorers `[relevanceScorer, temporalScorer]` wired in F4. GraphExpander injected when `expandGraph` is enabled. 22 lifecycle smoke tests.
+Single `init()` in `infrastructure/lifecycle.ts`. Registers 17 singletons: config, logger, adapter, knowledgeBase, fsStore, graphStore, sessionStore, resourceStore, skillStore, profileManager, graphExpander (conditional), recallCurator, sessionService, recallService, searchService, fsStoreService, repoContext. Scorers `[relevanceScorer, temporalScorer]` wired in F4. GraphExpander injected when `expandGraph` is enabled. 27 lifecycle smoke tests.
 _Avoid_: bootstrap lifecycle, module lifecycle
 
 ### Core Domain (future phases)
@@ -269,7 +269,7 @@ _Avoid_: generic Error, exception
 
 ### Services
 
-**Recall Service** *(implemented — `domain/recall/recall-service.ts`)*:
+**RecallService** *(implemented — `domain/recall/recall-service.ts`)*:
 Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` call. Constructor takes `KnowledgeBase`, `RecallCurator`, `RecallConfig`, `Logger`, `enabled: boolean` (toggle state). Returns `RecallResult { items, tokens, formatted, total }`. 5 tests.
 
 **Interface**: `recall(prompt: string, sessionId?: SessionId): Promise<RecallResult>` — F6 `before_agent_start` handler calls this passing `sessionService.getActive()` as sessionId. SessionId is forwarded to `kb.search()` when `searchMode === "search"` (OV uses session context for intent analysis). Not passed to `kb.find()` — find() doesn't accept sessionId.
@@ -278,7 +278,7 @@ Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` 
 
 **Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. Also catches `DOMException`/`AbortError`/`TimeoutError` as defense-in-depth for signal abort paths that bypass the transport error-conversion layer. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
-**RecallConfig** (11 fields): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `expandGraphDepth` (literal 1) — fixo em 1 (apenas vizinhos diretos). Se depth variável for necessária, estender GraphExpander., `expandGraphMaxRatio` (number 0-1, default 0.2), `expandGraphMinSeedScore` (number 0-1, default 0.4), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `recallSearchTimeout` (number, default 5000), `autoRecall` (boolean, default true).
+**RecallConfig** (11 fields): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `expandGraphDepth` (literal 1) — fixo em 1 (apenas vizinhos diretos). Se depth variável for necessária, estender GraphExpander., `expandGraphMaxRatio` (number 0-1, default 0.2), `expandGraphMinSeedScore` (number 0-1, default 0.4), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `recallSearchTimeout` (number, default 10000), `autoRecall` (boolean, default true).
 Canonical interface in `domain/common/recall-config.ts`. Zod schema in `infrastructure/config/schema.ts` as `RecallConfigSchema` — inferred type exported as `RecallConfigSchemaType`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
 ProfileBehavior (6 fields) overrides RecallConfig via merge. Defined in `domain/common/profile-config.ts` as `Partial<Pick<RecallConfig, 6 overridable fields>>`.
@@ -292,22 +292,15 @@ Active session is instance-level private state. `createAndSet()` creates via por
 Bindings: `pi.on('session_start')` → `createAndSet()`.
 _Avoid_: session manager, session handler
 
-**WriteService** *(implemented — `domain/services/write-service.ts`)*:
-Thin service wrapping the `FsStore` port for content mutations. Three methods: `save(uri, content, mode?, signal?)` → `fsStore.write()`, `mkdir(uri, signal?)` → `fsStore.mkdir()`, `mv(from, to, signal?)` → `fsStore.mv()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. 4 tests. Born in F5.2 (issue #69).
-_Avoid_: write handler, persistence service
-
-**ReadService** *(implemented — `domain/services/read-service.ts`)*:
-Thin service wrapping the `FsStore` port for content reads. Single method: `read(uri, level?, offset?, limit?, signal?)` → `fsStore.read()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. 3 tests. Born in F5.2 (issue #69).
-_Avoid_: read handler, content reader
-
-**FsService** *(implemented — `domain/services/fs-service.ts`)*:
-Thin service wrapping the `FsStore` port for filesystem navigation and management. 5 methods: `list(uri, recursive?, signal?)` → `fsStore.list()`; `tree(uri, signal?)` → `fsStore.tree()`; `stat(uri, signal?)` → `fsStore.stat()`; `delete(uri, recursive?, signal?)` → `fsStore.delete()`; `reindex(uri, mode?, signal?)` → `fsStore.reindex()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. Following the same thin-service pattern as `ReadService`/`WriteService`. 12 tests.
+**FsStoreService** *(implemented — `domain/services/fs-store-service.ts`)*:
+Unified thin service wrapping the `FsStore` port for all content operations — reads, writes, filesystem navigation, and management. Merges the former WriteService, ReadService, and FsService into one class with 9 methods: `save(uri, content, mode?, signal?)` → `fsStore.write()`, `mkdir(uri, signal?)` → `fsStore.mkdir()`, `mv(from, to, signal?)` → `fsStore.mv()`, `read(uri, level?, offset?, limit?, signal?)` → `fsStore.read()`, `list(uri, recursive?, signal?)` → `fsStore.list()`, `tree(uri, signal?)` → `fsStore.tree()`, `stat(uri, signal?)` → `fsStore.stat()`, `delete(uri, recursive?, signal?)` → `fsStore.delete()`, `reindex(uri, mode?, signal?)` → `fsStore.reindex()`. Constructor takes `FsStore`. Accepts raw string URIs, wraps them in `Uri` value objects internally. 12 tests. Consolidation done in commit cbdbe5a. 
+_Avoid_: write handler, read handler, fs handler
 _Avoid_: fs handler, fs service
 
 **SearchService** *(implemented — `domain/services/search-service.ts`)*:
 Thin application service delegating to the `KnowledgeBase` port. Three methods: `search(params, signal?)` routes `mode` param (`fast` → `kb.find()`, `deep` → `kb.search()`, `auto` → `RecallConfig.searchMode`); `glob(pattern, uri?, limit?, signal?)` delegates directly; `grep(pattern, opts?, signal?)` delegates directly. Constructor takes `KnowledgeBase`, `RecallConfig`, `Logger`. 7 tests. Registered as singleton in lifecycle.
 
-**F4 scope (revised)**: Domain logic only (scorers, ~~IntentDetector~~, RecallCurator) + RecallService + SessionService + RecallConfig interface in domain/common/ + lifecycle wiring. IntentDetector eliminated — recall is a toggle command. Lifecycle wiring in `init()` creates and registers RecallCurator (with scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true), SearchService (wired to KB + config). WriteService born in F5.2 when ov_write tool needs it.
+**F4 scope (revised)**: Domain logic only (scorers, ~~IntentDetector~~, RecallCurator) + RecallService + SessionService + RecallConfig interface in domain/common/ + lifecycle wiring. IntentDetector eliminated — recall is a toggle command. Lifecycle wiring in `init()` creates and registers RecallCurator (with scorers), SessionService (wired to SessionStore), RecallService (wired to KB + curator, enabled=true), SearchService (wired to KB + config). FsStoreService born in F5.2 (as separate WriteService/ReadService/FsService), consolidated in cbdbe5a.
 
 ### Tools (F5.1 — first vertical slice)
 
@@ -323,25 +316,25 @@ Pi tool for content regex search. Schema: `{ pattern: string, uri?: string, case
 
 
 **ov_write** *(implemented — `adapters/driver/pi-tools/ov-write.ts`)*:
-Pi tool for content mutations. Single tool with `action` enum to minimize prompt surface area. TypeBox schema: `{ action: "save"|"mkdir"|"mv", uri: string, content?: string, targetUri?: string, mode?: "replace"|"append"|"create" }`. Handler routes action to `WriteService` method via `pipeline.execute()`. Returns JSON result or error. 6 unit tests + 3 integration tests. Born in F5.2 (issue #69).
+Pi tool for content mutations. Single tool with `action` enum to minimize prompt surface area. TypeBox schema: `{ action: "save"|"mkdir"|"mv", uri: string, content?: string, targetUri?: string, mode?: "replace"|"append"|"create" }`. Handler routes action to `FsStoreService` method via `pipeline.execute()`. Returns JSON result or error. 6 unit tests + 3 integration tests. Born in F5.2 (issue #69), refactored in cbdbe5a.
 
 **ov_read** *(implemented — `adapters/driver/pi-tools/ov-read.ts`)*:
-Pi tool for reading content at three depth levels. TypeBox schema: `{ uri: string, level?: "abstract"|"overview"|"read", offset?: number, limit?: number }`. Handler wraps `ReadService.read()` via pipeline. Returns raw `body` string (not JSON) for direct consumption. 4 unit tests + 1 integration test. Born in F5.2 (issue #69).
+Pi tool for reading content at three depth levels. TypeBox schema: `{ uri: string, level?: "abstract"|"overview"|"read", offset?: number, limit?: number }`. Handler wraps `FsStoreService.read()` via pipeline. Returns raw `body` string (not JSON) for direct consumption. 4 unit tests + 1 integration test. Born in F5.2 (issue #69), refactored in cbdbe5a.
 
 **ov_recall** *(implemented — `adapters/driver/pi-tools/ov-recall.ts`)*:
 Pi tool for explicit recall trigger. TypeBox schema: `{ prompt: string, limit?: number }`. Handler calls `pipeline.execute(() => recallService.recall(params.prompt), signal)`. Returns `RecallResult.formatted` text (items with URI + content). On empty result, returns informative message. Errors caught and reported. 4 unit tests + 1 integration test. Born in F5.3 (issue #70).
 
 **ov_list** *(implemented — `adapters/driver/pi-tools/ov-list.ts`)*:
-Pi tool for flat directory listing. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsService.list()` via pipeline. Returns JSON array of `FsEntry` (uri, type, size?, modTime?). No formatting — raw data for agent programmatic use.
+Pi tool for flat directory listing. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsStoreService.list()` via pipeline. Returns JSON array of `FsEntry` (uri, type, size?, modTime?). No formatting — raw data for agent programmatic use.
 
 **ov_tree** *(implemented — `adapters/driver/pi-tools/ov-tree.ts`)*:
-Pi tool for recursive tree listing. TypeBox schema: `{ uri: string }`. Handler wraps `FsService.tree()` via pipeline. Returns JSON array of `FsEntry` (uri, type). Raw data, no indentation — agent parses paths to infer hierarchy.
+Pi tool for recursive tree listing. TypeBox schema: `{ uri: string }`. Handler wraps `FsStoreService.tree()` via pipeline. Returns JSON array of `FsEntry` (uri, type). Raw data, no indentation — agent parses paths to infer hierarchy.
 
 **ov_stat** *(implemented — `adapters/driver/pi-tools/ov-stat.ts`)*:
-Pi tool for URI metadata. TypeBox schema: `{ uri: string }`. Handler wraps `FsService.stat()` via pipeline. Returns single `FsEntry` as JSON object (uri, type, size?, modTime?).
+Pi tool for URI metadata. TypeBox schema: `{ uri: string }`. Handler wraps `FsStoreService.stat()` via pipeline. Returns single `FsEntry` as JSON object (uri, type, size?, modTime?).
 
 **ov_delete** *(implemented — `adapters/driver/pi-tools/ov-delete.ts`)*:
-Pi tool for resource deletion. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsService.delete()` via pipeline. No confirmation — agent owns its tool calls. Returns success/error message. No glob support — agent composes with `ov_glob` for batch delete. Contrasts with `/ov-delete` command which shows `ctx.ui.confirm()`.
+Pi tool for resource deletion. TypeBox schema: `{ uri: string, recursive?: boolean }`. Handler wraps `FsStoreService.delete()` via pipeline. No confirmation — agent owns its tool calls. Returns success/error message. No glob support — agent composes with `ov_glob` for batch delete. Contrasts with `/ov-delete` command which shows `ctx.ui.confirm()`.
 _Avoid_: ov_delete with glob, delete with confirmation
 
 **ov_resource** *(implemented — `adapters/driver/pi-tools/ov-resource.ts`)*:
@@ -428,7 +421,7 @@ An `initialized` flag ensures `init()` runs once per process.
 - Guard runs `init()`, resolves services from DI container
 - Calls `registerAllTools()` and `registerAllCommands()`
 - Creates the shared `OVWidget`
-- Registers 4 F6 lifecycle hooks (`before_agent_start`, `message_end`, `session_shutdown`, `session_start` health check)
+- Registers 5 F6 lifecycle hooks (`context`, `before_agent_start`, `message_end`, `turn_end`, `session_shutdown`, `session_start` health check)
 
 **On every `session_start`** (including fork/resume/reload):
 - Widget attached to current UI context
@@ -463,7 +456,7 @@ Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `Age
 - **Uri** and **SessionId** live in a shared kernel (`domain/common/`), not inside any single bounded context. Every context imports from `common/`; no context imports from another context.
 - **"Logger"** can refer either to the **Logger Interface** in `domain/ports/` or the **File Logger** implementation in `adapters/driven/`. Prefer the qualified name.
 - **"Config"** without qualification refers to the plugin's configuration managed by the **Config Schema**. Not to be confused with Pi's own settings (`.pi/settings.json`) or OV's server configuration.
-- **"application/"** layer is empty and will remain empty. Application services live in `domain/services/` (SessionService, SearchService, WriteService, ReadService). Middleware pipeline lives in `domain/pipeline/`. Lifecycle hooks live in `index.ts`. No F6 tasks create an `application/` directory.
+- **"application/"** layer is empty and will remain empty. Application services live in `domain/services/` (SessionService, SearchService, FsStoreService). Middleware pipeline lives in `domain/pipeline/`. Lifecycle hooks live in `index.ts`. No F6 tasks create an `application/` directory.
 
 ## Example dialogue
 
