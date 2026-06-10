@@ -9,9 +9,7 @@ import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
 import { FsStoreService } from "../domain/services/fs-store-service";
-import { ResourceService } from "../domain/services/resource-service";
 import { ProfileManager } from "../domain/profile/service/ProfileManager";
-import { SkillService } from "../domain/services/skill-service";
 import { RepoContext } from "./repo-context";
 import type { Logger } from "../domain/ports/logger";
 import type { PiOVConfig } from "../infrastructure/config/schema";
@@ -89,11 +87,7 @@ export async function init(cwd: string): Promise<{
   const fsStoreService = new FsStoreService(adapter.fsStore);
   container.register("fsStoreService", () => fsStoreService, true);
 
-  const resourceService = new ResourceService(adapter.resourceStore);
-  container.register("resourceService", () => resourceService, true);
-
-  const skillService = new SkillService(adapter.skillStore);
-  container.register("skillService", () => skillService, true);
+  // SkillStore and ResourceStore are registered via adapter above — no pass-through service needed
 
   // RepoContext: lists viking://resources/ with TTL cache for system prompt injection
   const repoContext = new RepoContext(adapter.fsStore, logger);

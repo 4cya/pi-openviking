@@ -1,8 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
-import type { SkillService } from "../../../domain/services/skill-service";
-import type { AddSkillResult, SkillData } from "../../../domain/ports/skill-store";
+import type { SkillStore, AddSkillResult, SkillData } from "../../../domain/ports/skill-store";
 
 const SkillSchema = Type.Object({
   content: Type.String({ description: "Skill content (SKILL.md format with YAML frontmatter, or `content` field when using structured data)" }),
@@ -14,7 +13,7 @@ const SkillSchema = Type.Object({
 });
 
 export function createOvSkillTool(
-  svc: SkillService,
+  store: SkillStore,
   pipeline: Pipeline<AddSkillResult>,
 ): ToolDefinition<typeof SkillSchema> {
   return defineTool({
@@ -36,7 +35,7 @@ export function createOvSkillTool(
           : params.content!;
 
         const result = await pipeline.execute(
-          () => svc.addSkill(data, { wait: params.wait }, signal ?? undefined),
+          () => store.addSkill(data, { wait: params.wait }, signal ?? undefined),
           signal ?? undefined,
         );
         return {

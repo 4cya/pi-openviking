@@ -4,13 +4,13 @@ import type { SearchService } from "./domain/services/search-service";
 import type { FsStoreService } from "./domain/services/fs-store-service";
 import type { RecallService } from "./domain/recall/recall-service";
 import type { SessionService } from "./domain/services/session-service";
-import type { ResourceService } from "./domain/services/resource-service";
 import type { OVAdapter } from "./adapters/driven/openviking/adapter";
 import type { KnowledgeBase } from "./domain/ports/knowledge-base";
+import type { SkillStore } from "./domain/ports/skill-store";
+import type { ResourceStore } from "./domain/ports/resource-store";
 import type { ProfileManager } from "./domain/profile/service/ProfileManager";
 import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
-import { SkillService } from "./domain/services/skill-service";
 import { OVWidget } from "./adapters/driver/ov-widget";
 import { HealthCheck } from "./adapters/driven/openviking/health";
 import {
@@ -40,13 +40,13 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const knowledgeBase = container.resolve<KnowledgeBase>("knowledgeBase");
       const profileManager = container.resolve<ProfileManager>("profileManager");
       const adapter = container.resolve<OVAdapter>("adapter");
-      const resourceService = container.resolve<ResourceService>("resourceService");
 
       const healthCheck = new HealthCheck(config.ov.endpoint);
 
       // Register tools and commands (once per process)
-      const skillService = container.resolve<SkillService>("skillService");
-      registerAllTools(pi, { searchService, fsStoreService, recallService, resourceService, skillService, sessionService }, logger);
+      const skillStore = container.resolve<SkillStore>("skillStore");
+      const resourceStore = container.resolve<ResourceStore>("resourceStore");
+      registerAllTools(pi, { searchService, fsStoreService, recallService, resourceStore, skillStore, sessionService }, logger);
       registerAllCommands(pi, {
         recallService,
         sessionService,

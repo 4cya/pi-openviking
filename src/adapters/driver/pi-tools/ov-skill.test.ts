@@ -1,11 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createOvSkillTool } from "./ov-skill";
-import type { SkillService } from "../../../domain/services/skill-service";
-import type { AddSkillResult } from "../../../domain/ports/skill-store";
+import type { SkillStore, AddSkillResult } from "../../../domain/ports/skill-store";
 import { Pipeline } from "../../../domain/pipeline/pipeline";
 
-function makeSkillService(overrides?: Partial<SkillService>): SkillService {
+function makeSkillStore(overrides?: Partial<SkillStore>): SkillStore {
   return {
     addSkill: vi.fn().mockResolvedValue({
       rootUri: "viking://agent/default/skills/test-skill",
@@ -14,7 +13,7 @@ function makeSkillService(overrides?: Partial<SkillService>): SkillService {
       auxiliaryFiles: 0,
     } as AddSkillResult),
     ...overrides,
-  } as unknown as SkillService;
+  } as unknown as SkillStore;
 }
 
 function makePipeline() {
@@ -46,14 +45,14 @@ function getText(result: any): string {
 
 describe("ov_skill tool", () => {
   it("has correct name and schema", () => {
-    const tool = createOvSkillTool(makeSkillService(), makePipeline());
+    const tool = createOvSkillTool(makeSkillStore(), makePipeline());
     expect(tool.name).toBe("ov_skill");
     expect(tool.parameters).toBeDefined();
   });
 
-  it("calls SkillService.addSkill with content", async () => {
+  it("calls SkillStore.addSkill with content", async () => {
     const calls: unknown[] = [];
-    const svc = makeSkillService({
+    const svc = makeSkillStore({
       addSkill: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return {
@@ -79,7 +78,7 @@ describe("ov_skill tool", () => {
 
   it("accepts structured SkillData with name and description", async () => {
     const calls: unknown[] = [];
-    const svc = makeSkillService({
+    const svc = makeSkillStore({
       addSkill: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return {
@@ -114,7 +113,7 @@ describe("ov_skill tool", () => {
 
   it("passes wait option when provided", async () => {
     const calls: unknown[] = [];
-    const svc = makeSkillService({
+    const svc = makeSkillStore({
       addSkill: vi.fn().mockImplementation(async (...args: unknown[]) => {
         calls.push(args);
         return { rootUri: "", uri: "", name: "", auxiliaryFiles: 0 };
@@ -132,7 +131,7 @@ describe("ov_skill tool", () => {
   });
 
   it("returns error message on failure", async () => {
-    const svc = makeSkillService({
+    const svc = makeSkillStore({
       addSkill: vi.fn().mockRejectedValue(new Error("OV unavailable")),
     });
     const tool = createOvSkillTool(svc, makePipeline());

@@ -9,13 +9,14 @@ import { RecallService } from "../domain/recall/recall-service";
 import { SessionService } from "../domain/services/session-service";
 import { SearchService } from "../domain/services/search-service";
 import { FsStoreService } from "../domain/services/fs-store-service";
-import { ResourceService } from "../domain/services/resource-service";
 import { ProfileManager } from "../domain/profile/service/ProfileManager";
 import type { Logger } from "../domain/ports/logger";
 import type { KnowledgeBase } from "../domain/ports/knowledge-base";
 import type { FsStore } from "../domain/ports/fs-store";
 import type { GraphStore } from "../domain/ports/graph-store";
 import type { SessionStore } from "../domain/ports/session-store";
+import type { ResourceStore } from "../domain/ports/resource-store";
+import type { SkillStore } from "../domain/ports/skill-store";
 
 const OLD_ENV = process.env;
 
@@ -247,18 +248,18 @@ describe("init", () => {
     expect(s1).toBe(s2);
   });
 
-  it("container resolves resourceService with importUrl method", async () => {
+  it("container resolves resourceStore adapter", async () => {
     const { container } = await init(tmpDir);
-    const svc = container.resolve<ResourceService>("resourceService");
-    expect(svc).toBeDefined();
-    expect(typeof svc.importUrl).toBe("function");
+    const store = container.resolve<ResourceStore>("resourceStore");
+    expect(store).toBeDefined();
+    expect(typeof store.importUrl).toBe("function");
   });
 
-  it("resourceService is singleton", async () => {
+  it("container resolves skillStore adapter", async () => {
     const { container } = await init(tmpDir);
-    const s1 = container.resolve("resourceService");
-    const s2 = container.resolve("resourceService");
-    expect(s1).toBe(s2);
+    const store = container.resolve<SkillStore>("skillStore");
+    expect(store).toBeDefined();
+    expect(typeof store.addSkill).toBe("function");
   });
 });
 

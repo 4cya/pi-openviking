@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
-import type { ResourceService } from "../../../domain/services/resource-service";
+import type { ResourceStore, ResourceImportResult } from "../../../domain/ports/resource-store";
 
 const ImportSchema = Type.Object({
   url: Type.String({ description: "URL to import (e.g. https://example.com/doc.md)" }),
@@ -11,7 +11,7 @@ const ImportSchema = Type.Object({
 });
 
 export function createOvImportTool(
-  svc: ResourceService,
+  store: ResourceStore,
   pipeline: Pipeline<unknown>,
 ): ToolDefinition<typeof ImportSchema> {
   return defineTool({
@@ -23,7 +23,7 @@ export function createOvImportTool(
     async execute(_toolCallId, params, signal) {
       try {
         const result = await pipeline.execute(
-          () => svc.importUrl(
+          () => store.importUrl(
             params.url!,
             {
               targetUri: params.targetUri ?? undefined,

@@ -347,9 +347,6 @@ _Avoid_: ov_delete with glob, delete with confirmation
 **ov_resource** *(implemented — `adapters/driver/pi-tools/ov-resource.ts`)*:
 Pi tool for saving resources. Validates URI prefix `viking://resources/`, delegates to `FsStoreService.save()`. TypeBox schema: `{ uri: string, content: string, mode?: "replace"|"append"|"create" }`. Returns JSON result. 6 unit tests. Thin alias of `ov_write` with prefix validation — does not use dedicated OV endpoint. Decline to consolidate into `ov_write` per grill decision: agent discoverability via search benefits from having a named resource tool.
 
-**ov_skill** *(implemented — `adapters/driver/pi-tools/ov-skill.ts`)*:
-Pi tool for saving skills. Uses dedicated OV skills API `POST /api/v1/skills` via `SkillStoreAdapter` + `SkillService`. Accepts SKILL.md content or structured data. Supports optional `wait` parameter. OV auto-detects MCP tools, SKILL.md format, and stores at `viking://agent/{agent_id}/skills/{name}`. TypeBox schema: `{ content: string, wait?: boolean }`. Returns JSON with `rootUri`, `uri`, `name`. 4 unit tests.
-
 **ResourceStore** *(port — `domain/ports/resource-store.ts`)*:
 Port interface for importing external resources into OpenViking. Single method `importUrl(url, options?, signal?)` → `Promise<ResourceImportResult>`. Options: `targetUri` (custom `viking://` path), `reason` (import motivation), `wait` (block until server processing completes). Return type `ResourceImportResult` carries `status`, `rootUri`, `sourcePath`, optional `errors[]`.
 
@@ -362,20 +359,17 @@ Port interface for the OV skills API. Single method `addSkill(data: string | Ski
 **SkillStoreAdapter** *(driven adapter — `adapters/driven/openviking/skill-store.ts`)*:
 Implements `SkillStore` port. `addSkill()` sends `POST /api/v1/skills` with `{ data, wait?, timeout? }`. Response mapped via `toAddSkillResult()` in `mappers/skill-mapper.ts`.
 
-**SkillService** *(implemented — `domain/services/skill-service.ts`)*:
-Thin domain service wrapping `SkillStore` port. Single method `addSkill()`. Registered as singleton in DI.
-
 **ov_session** *(implemented — `adapters/driver/pi-tools/ov-session.ts`)*:
 Pi tool for querying OV session metadata. Uses `SessionService.getSession()` to return message count, commit count, memories extracted. Accepts optional `sessionId` (defaults to active session). TypeBox schema: `{ sessionId?: string }`.
 
-**ResourceService** *(implemented — `domain/services/resource-service.ts`)*:
-Thin domain service wrapping `ResourceStore` port. Single method `importUrl(url, options?, signal?)` delegates to store. 4 tests. Registered as singleton in DI.
+**ov_skill** *(implemented — `adapters/driver/pi-tools/ov-skill.ts`)*:
+Pi tool for saving skills. Calls `SkillStore.addSkill()` directly (no service — pass-through eliminated). Accepts SKILL.md content or structured SkillData. TypeBox schema with optional `wait`, `name`, `description`, `allowedTools`, `tags`. Returns JSON with `rootUri`, `uri`, `name`. 6 unit tests.
 
 **ov_import** *(implemented — `adapters/driver/pi-tools/ov-import.ts`)*:
-Pi tool for importing external URLs as OV resources. TypeBox schema: `{ url: string, targetUri?: string, reason?: string, wait?: boolean }`. Handler calls `ResourceService.importUrl()` via pipeline. Returns JSON with `status`, `rootUri`, `sourcePath`. OV server-side parses Markdown, PDF, HTML, Word, images, and more. 6 unit tests.
+Pi tool for importing external URLs as OV resources. Calls `ResourceStore.importUrl()` directly (no service — pass-through eliminated). TypeBox schema: `{ url: string, targetUri?: string, reason?: string, wait?: boolean }`. Returns JSON with `status`, `rootUri`, `sourcePath`. OV server-side parses Markdown, PDF, HTML, Word, images, and more. 6 unit tests.
 _Avoid_: add_resource, import tool
 
-**Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes both service and pipeline to each factory. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
+**Tool factory pattern**: Each tool is a `create*Tool(svc, pipeline)` function returning `ToolDefinition` via `defineTool()`. `index.ts` wires typed pipelines with `LoggingMiddleware` and passes service or port directly to each factory. Most tools receive a domain service; `ov_skill` and `ov_import` receive the port directly (`SkillStore`, `ResourceStore`) — their services were pass-through with no logic, eliminated per ADR-017 precedent. Write/Read tools follow same pattern — `Pipeline<unknown>` for writes (varied return types), `Pipeline<Content>` for reads.
 
 ### GraphExpander (F8.2)
 

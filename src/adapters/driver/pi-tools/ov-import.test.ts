@@ -2,10 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Pipeline } from "../../../domain/pipeline/pipeline";
 import { createOvImportTool } from "./ov-import";
-import type { ResourceService } from "../../../domain/services/resource-service";
-import type { ResourceImportResult } from "../../../domain/ports/resource-store";
+import type { ResourceStore, ResourceImportResult } from "../../../domain/ports/resource-store";
 
-function makeService(overrides?: Partial<ResourceService>): ResourceService {
+function makeStore(overrides?: Partial<ResourceStore>): ResourceStore {
   return {
     importUrl: vi.fn().mockResolvedValue({
       status: "success",
@@ -13,7 +12,7 @@ function makeService(overrides?: Partial<ResourceService>): ResourceService {
       sourcePath: "https://example.com/doc.md",
     }),
     ...overrides,
-  } as unknown as ResourceService;
+  } as unknown as ResourceStore;
 }
 
 function makePipeline() {
@@ -52,13 +51,13 @@ const TOOL_PARAMS = {
 
 describe("ov_import tool", () => {
   it("has correct name and schema", () => {
-    const tool = createOvImportTool(makeService(), makePipeline());
+    const tool = createOvImportTool(makeStore(), makePipeline());
     expect(tool.name).toBe("ov_import");
     expect(tool.parameters).toBeDefined();
   });
 
-  it("calls service.importUrl with url and options", async () => {
-    const svc = makeService();
+  it("calls store.importUrl with url and options", async () => {
+    const svc = makeStore();
     const tool = createOvImportTool(svc, makePipeline());
 
     await executeTool(tool, TOOL_PARAMS);
@@ -75,7 +74,7 @@ describe("ov_import tool", () => {
   });
 
   it("returns success result as JSON text", async () => {
-    const svc = makeService();
+    const svc = makeStore();
     const tool = createOvImportTool(svc, makePipeline());
 
     const result = await executeTool(tool, TOOL_PARAMS);
@@ -88,7 +87,7 @@ describe("ov_import tool", () => {
   });
 
   it("handles missing optional params gracefully", async () => {
-    const svc = makeService();
+    const svc = makeStore();
     const tool = createOvImportTool(svc, makePipeline());
 
     await executeTool(tool, { url: "https://example.com/doc.md" });
@@ -101,7 +100,7 @@ describe("ov_import tool", () => {
   });
 
   it("returns error message on failure", async () => {
-    const svc = makeService({ importUrl: vi.fn().mockRejectedValue(new Error("OV unreachable")) });
+    const svc = makeStore({ importUrl: vi.fn().mockRejectedValue(new Error("OV unreachable")) });
     const tool = createOvImportTool(svc, makePipeline());
 
     const result = await executeTool(tool, TOOL_PARAMS);
@@ -110,7 +109,7 @@ describe("ov_import tool", () => {
   });
 
   it("handles non-Error rejection", async () => {
-    const svc = makeService({ importUrl: vi.fn().mockRejectedValue("string error") });
+    const svc = makeStore({ importUrl: vi.fn().mockRejectedValue("string error") });
     const tool = createOvImportTool(svc, makePipeline());
 
     const result = await executeTool(tool, TOOL_PARAMS);
@@ -124,7 +123,7 @@ describe("ov_import tool", () => {
       rootUri: "viking://resources/guide.md",
       sourcePath: "https://example.com/guide.md",
     };
-    const svc = makeService({ importUrl: vi.fn().mockResolvedValue(importResult) });
+    const svc = makeStore({ importUrl: vi.fn().mockResolvedValue(importResult) });
     const tool = createOvImportTool(svc, makePipeline());
 
     const result = await executeTool(tool, { url: "https://example.com/guide.md" });

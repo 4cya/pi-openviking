@@ -20,11 +20,11 @@ import type { GlobResult, GrepResult } from "../../../domain/ports/knowledge-bas
 import type { Content, FsEntry } from "../../../domain/ports/fs-store";
 import type { RecallResult } from "../../../domain/recall/recall-service";
 import type { AddSkillResult } from "../../../domain/ports/skill-store";
+import type { ResourceStore, ResourceImportResult } from "../../../domain/ports/resource-store";
+import type { SkillStore } from "../../../domain/ports/skill-store";
 import type { SearchService } from "../../../domain/services/search-service";
 import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { RecallService } from "../../../domain/recall/recall-service";
-import type { ResourceService } from "../../../domain/services/resource-service";
-import type { SkillService } from "../../../domain/services/skill-service";
 import type { SessionService } from "../../../domain/services/session-service";
 import type { SessionInfo } from "../../../domain/ports/session-store";
 import type { Logger } from "../../../domain/ports/logger";
@@ -33,8 +33,8 @@ export interface ToolServices {
   searchService: SearchService;
   fsStoreService: FsStoreService;
   recallService: RecallService;
-  resourceService: ResourceService;
-  skillService: SkillService;
+  resourceStore: ResourceStore;
+  skillStore: SkillStore;
   sessionService: SessionService;
 }
 
@@ -85,11 +85,11 @@ export function registerAllTools(pi: ExtensionAPI, svcs: ToolServices, logger: L
 
   const skillPipeline = new Pipeline<AddSkillResult>();
   skillPipeline.use(loggingMiddleware("skill", logger));
-  pi.registerTool(createOvSkillTool(svcs.skillService, skillPipeline));
+  pi.registerTool(createOvSkillTool(svcs.skillStore, skillPipeline));
 
   const importPipeline = new Pipeline<unknown>();
   importPipeline.use(loggingMiddleware("import", logger));
-  pi.registerTool(createOvImportTool(svcs.resourceService, importPipeline));
+  pi.registerTool(createOvImportTool(svcs.resourceStore, importPipeline));
 
   const sessionPipeline = new Pipeline<SessionInfo>();
   sessionPipeline.use(loggingMiddleware("session", logger));
