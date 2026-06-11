@@ -3,7 +3,7 @@
  *
  * See OV 03-filesystem.md.
  */
-import type { Transport } from "./transport";
+import { Transport, sleepWithSignal } from "./transport";
 import { toContent } from "./mappers/ov-mappers";
 import { toWriteResult, toFsEntries, toFsEntry } from "./mappers/fs-mapper";
 import type { Uri } from "../../../domain/common/uri";
@@ -179,7 +179,7 @@ export class FsStoreAdapter implements FsStore {
       // P12: Retry on 409 Conflict (resource being processed, e.g. indexing)
       if (err instanceof ValidationError && err.message.includes("Conflict")) {
         for (let attempt = 1; attempt <= 2; attempt++) {
-          await new Promise((r) => setTimeout(r, 500));
+          await sleepWithSignal(500, signal);
           try {
             await this.transport.request<unknown>(
               "FsStore.delete",
