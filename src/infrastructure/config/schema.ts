@@ -2,7 +2,6 @@ import { LoggerConfigSchema } from "./logger-schema";
 import { ProfileSectionSchema } from "./profile-schema";
 import { z } from "zod";
 
-export type { LoggerConfig } from "./logger-schema";
 export { BUILTIN_PROFILES } from "./profile-schema";
 
 // ── Root config ──────────────────────────────────────────────────────────────
@@ -15,7 +14,7 @@ const CircuitBreakerConfigSchema = z.object({
   maxResetTimeoutMs: z.coerce.number().int().positive().default(300_000),
 });
 
-export const OVAdapterConfigSchema = z.object({
+const OVAdapterConfigSchema = z.object({
   endpoint: z.string().url().default("http://localhost:1933"),
   apiKey: z.string().default(""),
   account: z.string().default("default"),
@@ -33,7 +32,7 @@ export type OVAdapterConfig = z.infer<typeof OVAdapterConfigSchema>;
 
 // ── Recall config ────────────────────────────────────────────────────────────
 
-export const RecallConfigSchema = z.object({
+const RecallConfigSchema = z.object({
   targetUri: z.string().optional(),
   topN: z.number().int().positive().default(8),
   scoreThreshold: z.number().min(0).max(1).default(0.5),

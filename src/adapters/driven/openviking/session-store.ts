@@ -9,7 +9,15 @@ import type { SessionStore, CommitResult, CommitOptions, TaskStatus, TaskFilter,
 import type { SessionId } from "../../../domain/common/session-id";
 import type { Uri } from "../../../domain/common/uri";
 import type { Part } from "../../../domain/common/part";
-import type { OVCreateSessionResponse, OVCommitResponse, OVSessionInfo } from "./types/ov-session";
+import type {
+  OVCreateSessionResponse,
+  OVCommitResponse,
+  OVSessionInfo,
+  OVAddMessageResponse,
+  OVBatchAddMessagesResponse,
+  OVSessionUsedResponse,
+  OVDeleteSessionResponse,
+} from "./types/ov-session";
 import type { OVTaskResponse } from "./types/ov-task";
 
 export class SessionStoreAdapter implements SessionStore {
@@ -37,7 +45,7 @@ export class SessionStoreAdapter implements SessionStore {
       role,
       parts: serializeParts(content),
     });
-    await this.transport.request<unknown>(
+    await this.transport.request<OVAddMessageResponse>(
       "SessionStore.sendMessage",
       `/api/v1/sessions/${sessionId.value}/messages`,
       { method: "POST", body },
@@ -56,7 +64,7 @@ export class SessionStoreAdapter implements SessionStore {
         parts: serializeParts(msg.content),
       })),
     });
-    await this.transport.request<unknown>(
+    await this.transport.request<OVBatchAddMessagesResponse>(
       "SessionStore.sendMessages",
       `/api/v1/sessions/${sessionId.value}/messages/batch`,
       { method: "POST", body },
@@ -115,7 +123,7 @@ export class SessionStoreAdapter implements SessionStore {
     const body = JSON.stringify({
       contexts: contexts.map((u) => u.value),
     });
-    await this.transport.request<unknown>(
+    await this.transport.request<OVSessionUsedResponse>(
       "SessionStore.sessionUsed",
       `/api/v1/sessions/${sessionId.value}/used`,
       { method: "POST", body },
@@ -124,7 +132,7 @@ export class SessionStoreAdapter implements SessionStore {
   }
 
   async deleteSession(sessionId: SessionId, signal?: AbortSignal): Promise<void> {
-    await this.transport.request<unknown>(
+    await this.transport.request<OVDeleteSessionResponse>(
       "SessionStore.deleteSession",
       `/api/v1/sessions/${sessionId.value}`,
       { method: "DELETE" },
