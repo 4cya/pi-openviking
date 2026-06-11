@@ -88,11 +88,19 @@ export async function pollCommit(
     const result = await sessionService.commit(active);
     if (result.taskId) {
       // Fire-and-forget: poll task status in background
-      sessionService.waitForCommit(result.taskId).catch((err) => {
-        logger?.warn("pollCommit: commit task polling error", {
+      sessionService.waitForCommit(result.taskId).catch(async (err) => {
+        logger?.warn("pollCommit: commit task timed out, retrying commit", {
           taskId: result.taskId,
           error: (err as Error).message,
         });
+        // C5: On waitForCommit timeout, try a new commit as fallback
+        // OV doc confirms: "Rapid consecutive commits on same session are accepted; each gets own task_id."
+        try {
+          const retryResult = await sessionService.commit(active);
+          logger?.info("pollCommit: retry commit succeeded, new taskId: " + retryResult.taskId);
+        } catch (err2) {
+          logger?.error("pollCommit: retry commit also failed after waitForCommit timeout", { error: (err2 as Error).message });
+        }
       });
     }
     logger?.debug("pollCommit: committed successfully", { sessionId: active.toString() });
@@ -243,6 +251,12 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
   pi.on("message_end", async (event) => {
     if (event.message.role !== "user") return;
 
+    // C8: Guard — skip if circuit breaker is OPEN
+    if (adapter.circuitBreakerOpen) {
+      logger?.debug("message_end: circuit breaker open, skipping sync");
+      return;
+    }
+
     const parts = agentMessageToParts(event.message);
     if (parts.length === 0) return;
 
@@ -255,7 +269,14 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
     try {
       await sessionService.sendMessage(active, "user", parts);
     } catch (err) {
-      logger?.warn("message_end: failed to send user message", { error: (err as Error).message });
+      logger?.warn("message_end: failed to send user message, retrying in 500ms", { error: (err as Error).message });
+      // C4: Retry once with 500ms backoff on transient failures
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        await sessionService.sendMessage(active, "user", parts);
+      } catch (err2) {
+        logger?.warn("message_end: failed to send user message after retry", { error: (err2 as Error).message });
+      }
     }
   });
 
@@ -264,6 +285,12 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
     const active = sessionService.getActive();
     if (!active) {
       logger?.debug("turn_end: no active session, skipping");
+      return;
+    }
+
+    // C8: Guard — skip if circuit breaker is OPEN
+    if (adapter.circuitBreakerOpen) {
+      logger?.debug("turn_end: circuit breaker open, skipping sync");
       return;
     }
 
@@ -297,7 +324,13 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
     try {
       await sessionService.commit(active);
     } catch (err) {
-      logger?.warn("session_shutdown: failed to commit session", { error: (err as Error).message });
+      logger?.warn("session_shutdown: commit failed, retrying...", { error: (err as Error).message });
+      // C3: Retry once on shutdown commit failure to reduce data loss risk
+      try {
+        await sessionService.commit(active);
+      } catch (err2) {
+        logger?.error("session_shutdown: commit failed after retry — data may be lost", { error: (err2 as Error).message });
+      }
     }
 
     recallCache.clear();

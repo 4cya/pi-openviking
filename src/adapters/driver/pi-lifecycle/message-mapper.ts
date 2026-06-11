@@ -57,7 +57,7 @@ export function agentMessageToParts(msg: MessageInput): Part[] {
     return [];
   }
 
-  if (typeof msg.content === "string") {
+  if (msg.content != null && typeof msg.content === "string") {
     if (msg.content.trim().length > 0) {
       parts.push({ type: "text", text: msg.content });
     }

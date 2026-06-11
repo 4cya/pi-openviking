@@ -17,7 +17,7 @@ function createMockPi(): { pi: ExtensionAPI; handlers: Record<string, Function> 
 
 function createMockServices(overrides?: Partial<LifecycleServices>): LifecycleServices {
   return {
-    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() } as any,
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any,
     sessionService: {
       getActive: vi.fn(),
       sendMessage: vi.fn().mockResolvedValue(undefined),
@@ -451,7 +451,7 @@ describe("registerLifecycleHooks", () => {
       const commit = vi.fn().mockResolvedValue({ taskId: "task-456" });
       const getActive = vi.fn().mockReturnValue("session-1");
 
-      await pollCommit({ getActive, commit, waitForCommit } as any, { debug: vi.fn(), warn } as any);
+      await pollCommit({ getActive, commit, waitForCommit } as any, { debug: vi.fn(), warn, error: vi.fn() } as any);
 
       await new Promise((r) => setTimeout(r, 0));
       expect(warn).toHaveBeenCalled();

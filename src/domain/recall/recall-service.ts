@@ -105,6 +105,13 @@ export class RecallService {
         return { items: [], tokens: 0, formatted: '', total: 0, timedOut: isTimeout };
       }
 
+      // TypeError (e.g. .trim() on undefined, null propagation in pipeline)
+      // — protect against any unexpected null/type errors in recall pipeline
+      if (err instanceof TypeError) {
+        this.logger.warn(`recall: TypeError in pipeline — ${(err as Error).message}`, { error: (err as Error).stack });
+        return { items: [], tokens: 0, formatted: '', total: 0, timedOut: false };
+      }
+
       throw err;
     } finally {
       clearTimeout(timeoutId);

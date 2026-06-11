@@ -39,6 +39,11 @@ function extractMessage(body: OVErrorBody | Record<string, unknown> | null | und
   if (typeof body.message === "string") return body.message;
   const r = body as Record<string, unknown>;
   if (typeof r.error === "string") return r.error;
+  // OV error envelope: { error: { code: "NOT_FOUND", message: "..." } }
+  if (r.error && typeof r.error === "object") {
+    const errObj = r.error as Record<string, unknown>;
+    if (typeof errObj.message === "string") return errObj.message;
+  }
   if (typeof r.detail === "string") return r.detail;
   return "";
 }

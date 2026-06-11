@@ -313,6 +313,7 @@ export class Transport {
             await sleepWithSignal(Math.pow(2, attempt) * 1000, signal);
             continue;
           }
+          this.logger?.debug(`[${methodLabel}] Raw error: ${(err as Error).message}`, { stack: (err as Error).stack });
           throw new ConnectionError(`[${methodLabel}] Unexpected error — ${(err as Error).message}`);
         }
       }
