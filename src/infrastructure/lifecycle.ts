@@ -21,6 +21,12 @@ export async function init(cwd: string): Promise<{
   repoContext: RepoContext;
 }> {
   const config = loadConfig(cwd);
+
+  // P8: Under vitest, redirect log to /tmp/ unless OV_LOG_PATH explicitly set
+  if (process.env.VITEST === "true" && !process.env.OV_LOG_PATH) {
+    config.logger.path = "/tmp/test-pi-openviking.log";
+  }
+
   const logger = new FileLogger(config.logger);
   const container = new DIContainer();
 

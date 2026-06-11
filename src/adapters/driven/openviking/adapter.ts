@@ -37,7 +37,7 @@ export function createOVAdapter(config: OVAdapterConfig, logger?: Logger): OVAda
 
   return {
     knowledgeBase: new KnowledgeBaseAdapter(transport),
-    fsStore: new FsStoreAdapter(transport),
+    fsStore: new FsStoreAdapter(transport, logger),
     graphStore: new GraphStoreAdapter(transport),
     sessionStore: new SessionStoreAdapter(transport, config.commitTimeout),
     resourceStore: new ResourceStoreAdapter(transport),

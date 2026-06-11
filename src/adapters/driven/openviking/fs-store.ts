@@ -10,7 +10,8 @@ import type { Uri } from "../../../domain/common/uri";
 import type { ContentLevel } from "../../../domain/common/content-level";
 import type { WriteMode } from "../../../domain/common/write-mode";
 import type { Content, FsStore, FsEntry, WriteResult, ReindexMode } from "../../../domain/ports/fs-store";
-import { ValidationError } from "../../../domain/errors/domain-error";
+import { ConnectionError, ValidationError } from "../../../domain/errors/domain-error";
+import type { Logger } from "../../../domain/ports/logger";
 import type { OVWriteResponse, OVFsEntry } from "./types/ov-fs";
 import type { OVContentReadResponse } from "./types/ov-common";
 
@@ -59,7 +60,10 @@ function buildReadPath(
 }
 
 export class FsStoreAdapter implements FsStore {
-  constructor(private readonly transport: Transport) {}
+  constructor(
+    private readonly transport: Transport,
+    private readonly logger?: Logger,
+  ) {}
 
   async read(
     uri: Uri,
@@ -172,6 +176,32 @@ export class FsStoreAdapter implements FsStore {
         signal,
       );
     } catch (err: unknown) {
+      // P12: Retry on 409 Conflict (resource being processed, e.g. indexing)
+      if (err instanceof ValidationError && err.message.includes("Conflict")) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          await new Promise((r) => setTimeout(r, 500));
+          try {
+            await this.transport.request<unknown>(
+              "FsStore.delete",
+              `/api/v1/fs?${query}`,
+              { method: "DELETE" },
+              signal,
+            );
+            return;
+          } catch (retryErr: unknown) {
+            // Last attempt — log and throw
+            if (attempt === 2) {
+              this.logger?.error("FsStore.delete: conflict retry failed after 3 attempts", {
+                uri: uri.value,
+                error: (retryErr as Error).message,
+              });
+              throw retryErr;
+            }
+          }
+        }
+        return;
+      }
+
       // If recursive required and we haven't tried with recursive, retry
       if (
         !recursive &&
@@ -186,6 +216,12 @@ export class FsStoreAdapter implements FsStore {
         );
         return;
       }
+
+      // P11: Log raw error for server-side bugs (e.g. ENOTDIR)
+      this.logger?.error("FsStore.delete: unexpected error", {
+        uri: uri.value,
+        error: err instanceof Error ? err.message : String(err),
+      });
       throw err;
     }
   }

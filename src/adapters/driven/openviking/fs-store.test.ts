@@ -412,6 +412,46 @@ describe("FsStoreAdapter.delete", () => {
     await expect(fs.delete(uri, true)).rejects.toThrow();
     expect(mock).toHaveBeenCalledTimes(1);
   });
+
+  // P12: Conflict retry
+  it("retries on 409 Conflict with up to 3 attempts", async () => {
+    const transport = mockTransport();
+    const mock = transport.request as ReturnType<typeof vi.fn>;
+    const conflictErr = new ValidationError("Conflict — Resource is being processed");
+    // First call = original, next 2 = retries → 3 total
+    mock.mockRejectedValueOnce(conflictErr);   // original → retry 1
+    mock.mockRejectedValueOnce(conflictErr);   // retry 1  → retry 2
+    mock.mockResolvedValueOnce({});            // retry 2 → success
+
+    const fs = new FsStoreAdapter(transport);
+    await fs.delete(uri);
+
+    expect(mock).toHaveBeenCalledTimes(3);
+  });
+
+  it("throws after exhausting all conflict retries", async () => {
+    const transport = mockTransport();
+    const mock = transport.request as ReturnType<typeof vi.fn>;
+    const conflictErr = new ValidationError("Conflict — Resource is being processed");
+    mock.mockRejectedValue(conflictErr);
+
+    const fs = new FsStoreAdapter(transport);
+    await expect(fs.delete(uri)).rejects.toThrow(ValidationError);
+    // Original + 2 retries = 3 calls
+    expect(mock).toHaveBeenCalledTimes(3);
+  });
+
+  // P11: Raw error does not trigger retry — logged and thrown
+  it("logs unexpected errors without retry", async () => {
+    const transport = mockTransport();
+    const mock = transport.request as ReturnType<typeof vi.fn>;
+    const serverErr = new Error("Not a directory (os error 20)");
+    mock.mockRejectedValue(serverErr);
+
+    const fs = new FsStoreAdapter(transport);
+    await expect(fs.delete(uri)).rejects.toThrow();
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("FsStoreAdapter.reindex", () => {
