@@ -35,7 +35,7 @@
 | **File Logger** | Outputs JSON lines via `appendFileSync`. Rotates by size (10MB) and age (7 days), keeps up to 5 gzipped historical files | file logging, persistent logger |
 | **DI Container** | Manual dependency injection container (21 lines). Registers dependencies by `string` token; supports singleton and factory lifetime. Throws clear error on unregistered token. 17 registered singletons: config, logger, adapter, knowledgeBase, fsStore, graphStore, sessionStore, resourceStore, skillStore, profileManager, graphExpander (conditional), recallCurator, sessionService, recallService, searchService, fsStoreService, repoContext. 4 tests at `container.test.ts` | container, ioc |
 | **Lifecycle** | The `init()` (async, creates logger+container+wires everything) and `shutdown()` (sync, resets state) entry points for the Foundation layer. F4 wiring: creates RecallCurator (no scorers), SessionService (wired to SessionStore adapter), RecallService (wired to KB + curator, enabled=true). All registered as singletons. 16 smoke tests at `lifecycle.test.ts` | bootstrap lifecycle, module lifecycle |
-| **Bootstrap** | One-time startup that runs **Config Cascade**, creates **Logger**, instantiates **DI Container**, registers all dependencies (18 singletons across F1–F7b), and returns a ready extension handle | init, startup |
+| **Bootstrap** | One-time startup that runs **Config Cascade**, creates **Logger**, instantiates **DI Container**, registers all dependencies (17 singletons across F1–F7b), and returns a ready extension handle | init, startup |
 
 ## Relationships
 

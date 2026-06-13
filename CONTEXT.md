@@ -472,7 +472,7 @@ Items agreed to implement next — not abandoned.
 | **session_before_switch hook** | Commit OV + confirm user antes de /new ou /resume | Pequeno (~30min) |
 
 | ~~Peer ID tests + dead code~~ | ~~SearchOptions.peerId + adapter test~~ | ~~Pequeno (~15min)~~ |
-| **sessionUsed() hook test** | Teste unitário no register-lifecycle-hooks.test.ts | Pequeno (~10min) |
+| ~~sessionUsed() hook test~~ | ~~Teste unitário no register-lifecycle-hooks.test.ts~~ | ~~Pequeno (~10min)~~ |
 | **Resume re-hydrate** | SessionService.sendMessages() + ler Pi sessionManager | Médio (~2h) |
 | **system/status endpoint** | Novo adapter + integrar em /ov-status | Médio (~1.5h) |
 | **ov_search advanced params** | scoreThreshold, since, until, level no schema | Pequeno (~20min) |

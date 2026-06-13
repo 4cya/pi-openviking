@@ -13,7 +13,7 @@
 | **F1 Foundation** | ✅ Completo | ConfigSchema, Cascade, Loader, DI Container, Logger (interface + FileLogger + NullLogger), Lifecycle, PathResolver |
 | **F2 Domain + Ports** | ✅ Completo | `domain/common/` ✅ · `domain/errors/` ✅ · `domain/knowledge/model/` ✅ · `domain/recall/model/` ✅ · 8 port interfaces ✅ · `domain/recall/curate.ts` (curation) ✅ · Prototype deleted ✅ |
 | **F3 OV Adapter** | ✅ Completo | Transport + 6 mappers + 6 port implementations (FsStore, KnowledgeBase, SessionStore, GraphStore, ResourceStore, SkillStore) + adapter factory + DI wiring + smoke test. |
-| **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 18 singletons total no container. |
+| **F4 Operations** | ✅ Completo | RecallConfig schema + scorers + curate pipeline + RecallCurator + RecallService + SessionService + lifecycle wiring (3 F4 singletons) + smoke tests. 17 singletons total no container. |
 | **F5 Tools + Commands** | ✅ Completo (F5.1–F5.5 ✅) | F5.1 ✅: Pipeline + SearchService + 3 search tools. F5.2 ✅: FsStoreService (merged former WriteService + ReadService + FsService) + ov_write + ov_read. F5.3 ✅: ov_recall tool. F5.4 ✅: 9 slash commands. F5.5 ✅: Wiring (guard pattern + tool/command barrels) + OVWidget. 14 tools + 9 commands + widget operacionais. Pendente: status bar. |
 | **F6 Context Hook + Infra** | ✅ Completo | ADR-019: `context` hook replace `before_agent_start` p/ recall ✅ · Cache por query hash ✅ · SessionMapStore (port + FileSessionMapStore) ✅ · RepoContext (TTL cache + system prompt) ✅ · AutoCommit (`pollCommit()` + setInterval) ✅ · `autoCommitIntervalMs` config ✅ |
 
@@ -570,8 +570,8 @@ src/
 │   │   ├── loader.ts          # ✅ Leitor .pi/settings.json
 │   │   └── profile-schema.ts  # ✅ ProfileSchema + ProfileBehaviorSchema
 │   ├── di/
-│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 18 singletons)
-│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F7b (18 singletons)
+│   │   └── container.ts       # ✅ DI Container manual (21 linhas, 17 singletons)
+│   ├── lifecycle.ts           # ✅ init() + shutdown() — wires F1–F7b (17 singletons)
 │   ├── lifecycle.test.ts      # ✅ 22 smoke tests (F1–F3 adapters + F4 services + F5)
 │   └── path-resolver.ts       # ✅ PathResolver utilitário
 │
