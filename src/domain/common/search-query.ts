@@ -9,6 +9,7 @@ export interface FindQuery {
   query: string;
   limit?: number;
   targetUri?: Uri;
+  peerId?: string;
 }
 
 /**
@@ -20,6 +21,7 @@ export interface SearchRequest {
   limit?: number;
   sessionId?: SessionId;
   targetUri?: Uri;
+  peerId?: string;
 }
 
 /**
@@ -33,4 +35,5 @@ export interface SearchOptions {
   timeField?: string;
   level?: number;
   includeProvenance?: boolean;
+  peerId?: string;
 }

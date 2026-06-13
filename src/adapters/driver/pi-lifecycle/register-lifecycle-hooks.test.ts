@@ -675,6 +675,121 @@ describe("registerLifecycleHooks", () => {
       expect(result).toBeUndefined();
     });
 
+    it("updates widget with persisted stats on cache hit", async () => {
+      const { pi, handlers } = createMockPi();
+      const recall = vi.fn().mockResolvedValue({
+        formatted: "memories content",
+        timedOut: false,
+        items: [{ uri: "viking://mem/1" }, { uri: "viking://mem/2" }],
+        tokens: 142,
+      });
+      const widget = { update: vi.fn() };
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          sessionUsed: vi.fn().mockResolvedValue(undefined),
+        } as any,
+        widget,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+      const event = {
+        type: "context",
+        messages: [
+          { role: "user", content: "same query", timestamp: 1 },
+        ],
+      };
+
+      // Track lastRecall calls
+      const lastRecallCalls = () =>
+        widget.update.mock.calls.filter((c: any[]) => c[0] === "lastRecall");
+
+      // First call — recall runs, widget updated with computed stats
+      await handler(event);
+      expect(lastRecallCalls()).toHaveLength(1);
+      expect(lastRecallCalls()[0][1]).toBe("2it 142tk");
+
+      // Second call — cache hit, widget updated AGAIN with persisted stats
+      await handler(event);
+      expect(lastRecallCalls()).toHaveLength(2);
+      expect(lastRecallCalls()[1][1]).toBe("2it 142tk");
+    });
+
+    it("shows 0it 0tk when recall returns no results", async () => {
+      const { pi, handlers } = createMockPi();
+      const recall = vi.fn().mockResolvedValue({ formatted: null, timedOut: false, items: [], tokens: 0 });
+      const widget = { update: vi.fn() };
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+        } as any,
+        widget,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test", timestamp: 1 },
+        ],
+      });
+
+      expect(result).toBeUndefined();
+      expect(widget.update).toHaveBeenCalledWith("lastRecall", "0it 0tk");
+    });
+
+    it("clears lastRecall when circuit breaker open", async () => {
+      const { pi, handlers } = createMockPi();
+      const widget = { update: vi.fn() };
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true) } as any,
+        adapter: { circuitBreakerOpen: true } as any,
+        widget,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test", timestamp: 1 },
+        ],
+      });
+
+      expect(result).toBeUndefined();
+      expect(widget.update).toHaveBeenCalledWith("lastRecall", "");
+    });
+
+    it("clears lastRecall when recall disabled", async () => {
+      const { pi, handlers } = createMockPi();
+      const widget = { update: vi.fn() };
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(false) } as any,
+        widget,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      const result = await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "test", timestamp: 1 },
+        ],
+      });
+
+      expect(result).toBeUndefined();
+      expect(widget.update).toHaveBeenCalledWith("lastRecall", "");
+    });
+
     it("handles recall timeout gracefully", async () => {
       const { pi, handlers } = createMockPi();
       const recall = vi.fn().mockResolvedValue({ formatted: "memories", timedOut: true, items: [] });

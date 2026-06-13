@@ -19,6 +19,7 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
     const body: Record<string, unknown> = { query: query.query };
     if (query.limit !== undefined) body.node_limit = query.limit;
     if (query.targetUri) body.target_uri = query.targetUri.value;
+    if (query.peerId) body.peer_id = query.peerId;
     if (opts?.scoreThreshold !== undefined) body.score_threshold = opts.scoreThreshold;
     if (opts?.since !== undefined) body.since = opts.since;
     if (opts?.until !== undefined) body.until = opts.until;
@@ -41,6 +42,7 @@ export class KnowledgeBaseAdapter implements KnowledgeBase {
     if (request.limit !== undefined) body.node_limit = request.limit;
     if (request.sessionId) body.session_id = request.sessionId.value;
     if (request.targetUri) body.target_uri = request.targetUri.value;
+    if (request.peerId) body.peer_id = request.peerId;
     if (opts?.scoreThreshold !== undefined) body.score_threshold = opts.scoreThreshold;
     if (opts?.since !== undefined) body.since = opts.since;
     if (opts?.until !== undefined) body.until = opts.until;

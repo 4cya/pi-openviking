@@ -14,6 +14,7 @@ const SearchSchema = Type.Object({
   ),
   limit: Type.Optional(Type.Number({ description: "Maximum results" })),
   targetUri: Type.Optional(Type.String({ description: "Target URI scope" })),
+  peerId: Type.Optional(Type.String({ description: "Stable interaction peer ID. When set, search includes memories from this peer" })),
 });
 
 export function createOvSearchTool(
@@ -34,6 +35,7 @@ export function createOvSearchTool(
             mode: params.mode ?? "auto",
             limit: params.limit,
             targetUri: params.targetUri,
+            peerId: params.peerId,
           }, signal ?? undefined),
           signal ?? undefined,
         );

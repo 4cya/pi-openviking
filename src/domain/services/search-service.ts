@@ -9,6 +9,7 @@ interface SearchParams {
   mode: "auto" | "find" | "search";
   limit?: number;
   targetUri?: string;
+  peerId?: string;
 }
 
 export class SearchService {
@@ -23,9 +24,9 @@ export class SearchService {
     const targetUri = params.targetUri ? new Uri(params.targetUri) : undefined;
 
     if (mode === "find") {
-      return this.kb.find({ query: params.query, limit: params.limit, targetUri }, undefined, signal);
+      return this.kb.find({ query: params.query, limit: params.limit, targetUri, peerId: params.peerId }, undefined, signal);
     }
-    return this.kb.search({ query: params.query, limit: params.limit, targetUri, sessionId: undefined }, undefined, signal);
+    return this.kb.search({ query: params.query, limit: params.limit, targetUri, sessionId: undefined, peerId: params.peerId }, undefined, signal);
   }
 
   async glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult> {

@@ -458,6 +458,34 @@ Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `Age
 - **"Config"** without qualification refers to the plugin's configuration managed by the **Config Schema**. Not to be confused with Pi's own settings (`.pi/settings.json`) or OV's server configuration.
 - **"application/"** layer is empty and will remain empty. Application services live in `domain/services/` (SessionService, SearchService, FsStoreService). Middleware pipeline lives in `domain/pipeline/`. Lifecycle hooks live in `index.ts`. No F6 tasks create an `application/` directory.
 
+## Planned Implementation (2026-06-13 Grill)
+
+Items agreed to implement next — not abandoned.
+
+| Item | Target | Effort |
+|---|---|---|
+| **session_before_switch hook** | Commit OV + confirm user antes de /new ou /resume | Pequeno (~30min) |
+| **Widget recall stats bugs** | Cache hit, no results, recall off — 3 exit paths sem update | Pequeno (~15min) |
+| **Peer ID tests + dead code** | SearchOptions.peerId + adapter test | Pequeno (~15min) |
+| **sessionUsed() hook test** | Teste unitário no register-lifecycle-hooks.test.ts | Pequeno (~10min) |
+| **Resume re-hydrate** | SessionService.sendMessages() + ler Pi sessionManager | Médio (~2h) |
+| **system/status endpoint** | Novo adapter + integrar em /ov-status | Médio (~1.5h) |
+| **ov_search advanced params** | scoreThreshold, since, until, level no schema | Pequeno (~20min) |
+
+## Deferred (aguardando demanda)
+
+| Item | Target | Trigger |
+|---|---|---|
+| **privacy-configs API** | Port + adapter + tool | Skills precisarem de secrets |
+| **input hook** | Interceptar comandos direto do input | Usuários pedirem atalhos OV |
+| **registerShortcut** | Atalhos de teclado | Demanda UX |
+| **registerFlag** | `pi --ov-config` | Múltiplos profiles por projeto |
+| **resources_discover hook** | Skills OV via descoberta automática | Integração skills Pi + OV |
+| **model_select hook** | Ajustar maxTokens por modelo | Recall com modelos diferentes |
+| **Integration tests Docker** | globalSetup + FS/search/session tests | docker-compose.test.yml já existe, falta test |
+| **session_before_compact hook** | Commit OV antes de compactação Pi | Compaction não perde dados (message_end já sincronizou) |
+| **system/wait endpoint** | Block até processing async terminar | Pipeline write→search sem polling |
+
 ## Example dialogue
 
 > **Dev:** "How does Config Cascade work at startup?"

@@ -146,17 +146,20 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
   interface CacheEntry {
     block: string;
     queryHash: string;
+    stats?: string;
   }
   const recallCache = new Map<string, CacheEntry>();
 
   pi.on("context", async (event) => {
     // Guard 1: recall toggle
     if (!recallService.isEnabled()) {
+      widget.update("lastRecall", "");
       return; // No injection when recall off — guard becomes log-only per ADR-019
     }
 
     // Guard 2: circuit breaker OPEN
     if (adapter.circuitBreakerOpen) {
+      widget.update("lastRecall", "");
       logger?.debug("context: circuit breaker open, skipping recall");
       return;
     }
@@ -174,6 +177,7 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
     const cached = recallCache.get(queryHash);
     if (cached) {
       // Same query in same turn — inject cached block
+      widget.update("lastRecall", cached.stats ?? "");
       logger?.debug("context: recall cache hit", { queryHash });
       return {
         messages: [
@@ -216,6 +220,7 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
       return;
     }
     if (!result.formatted) {
+      widget.update("lastRecall", "0it 0tk");
       logger?.debug("context: no relevant memories found");
       return;
     }
@@ -229,8 +234,12 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
       });
     }
 
+    // Update widget with recall stats
+    const recallStats = `${usedItems.length}it ${result.tokens}tk`;
+    widget.update("lastRecall", recallStats);
+
     // Cache the result by query hash
-    recallCache.set(queryHash, { block: result.formatted, queryHash });
+    recallCache.set(queryHash, { block: result.formatted, queryHash, stats: recallStats });
 
     // Inject as a custom message appended after user messages
     return {
