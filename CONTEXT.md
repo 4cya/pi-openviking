@@ -408,9 +408,14 @@ Calls `fsStoreService.reindex(uriStr, mode, signal)`. Rebuilds vector embeddings
 ### OVWidget (F5.5)
 
 **OVWidget** *(implemented — `adapters/driver/ov-widget.ts`)*:
-A class that renders an OV status widget via `ctx.ui.setWidget("ov", ...)`. Compact 2-line format with icons:
-- Line 1: connection status (🟢/🔴), recall toggle (🔵/⚪ recall:on/off), target scope
-- Line 2: session ID
+A class that renders an OV status widget via `ctx.ui.setWidget("ov", ...)`. Single-line format:
+```
+⚡ OV | 🧠 recall | 💬 session-1 | 📊 2it 142tk
+```
+- `conn`: ⚡ connected / 💤 disconnected
+- `recall`: 🧠 on / 💤 off
+- `session`: session ID
+- `lastRecall`: stats string (`Nnit Ntk`) — atualizado pelo `context` hook em cada caminho (cache hit, no results, recall off/CB open)
 
 The widget exposes `attach(ui)` (binds to a UI context and renders immediately), `update(field, value)` (changes state and re-renders), and `render()` (returns string[]). Commands that modify state (`/ov-recall`, `/ov-commit`) call `widget.update()` via a `widgetUpdater` callback passed through `CommandServices`. 5 unit tests.
 
@@ -438,7 +443,7 @@ An `initialized` flag ensures `init()` runs once per process.
 **F6 hooks** (in `index.ts`, no `application/` layer):
 5 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
 
-- **`context`** → `RecallService.recall(prompt, sessionService.getActive())`. Injects as custom message `{ customType: "memory_context", display: false }` with `<relevant-memories>` XML block appended after the user message. Fires before each LLM call. Cache by query hash prevents redundant OV traffic on subsequent calls in same turn. Circuit breaker OPEN or recall disabled → skip silently (no message injection). Cache invalidated on new user message. See ADR-019.
+- **`context`** → `RecallService.recall(prompt, sessionService.getActive())`. Injects as custom message `{ customType: "memory_context", display: false }` with `<relevant-memories>` XML block appended after the user message. Fires before each LLM call. Cache by query hash prevents redundant OV traffic on subsequent calls in same turn; cache hit also calls `widget.update("lastRecall", cached.stats)`. Circuit breaker OPEN or recall disabled → clears `lastRecall` via `widget.update("lastRecall", "")`. Cache invalidated on new user message. See ADR-019.
 - **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Syncs `user` messages only (assistant goes via `turn_end`). Tool calls preserved structurally — not flattened to text.
 - **`session_shutdown`** → `SessionService.commit(activeSessionId)`. OV server extracts memories async (memory_diff.json).
 - **`session_start`** → health check via `HealthCheck.check()` + widget update.
@@ -465,7 +470,7 @@ Items agreed to implement next — not abandoned.
 | Item | Target | Effort |
 |---|---|---|
 | **session_before_switch hook** | Commit OV + confirm user antes de /new ou /resume | Pequeno (~30min) |
-| **Widget recall stats bugs** | Cache hit, no results, recall off — 3 exit paths sem update | Pequeno (~15min) |
+
 | **Peer ID tests + dead code** | SearchOptions.peerId + adapter test | Pequeno (~15min) |
 | **sessionUsed() hook test** | Teste unitário no register-lifecycle-hooks.test.ts | Pequeno (~10min) |
 | **Resume re-hydrate** | SessionService.sendMessages() + ler Pi sessionManager | Médio (~2h) |
