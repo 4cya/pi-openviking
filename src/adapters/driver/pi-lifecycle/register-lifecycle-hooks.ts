@@ -4,6 +4,8 @@ import type { RecallService } from "../../../domain/recall/recall-service";
 import type { SessionService } from "../../../domain/services/session-service";
 import type { OVAdapter } from "../../driven/openviking/adapter";
 import type { ProfileManager } from "../../../domain/profile/service/ProfileManager";
+import type { Part } from "../../../domain/common/part";
+import type { SessionId } from "../../../domain/common/session-id";
 import { Uri } from "../../../domain/common/uri";
 import { OVWidget } from "../ov-widget";
 import { HealthCheck } from "../../driven/openviking/health";
@@ -115,6 +117,13 @@ export async function pollCommit(
 }
 
 // ── Init-time: register Pi lifecycle hooks (runs once per process) ──
+
+/**
+ * Module-level flag: set by session_before_switch when it successfully commits.
+ * session_shutdown checks this flag to avoid double-commit on switch paths.
+ * Reset to false after session_shutdown consumes it (or after switch is cancelled).
+ */
+let skipShutdownCommit = false;
 
 export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices): void {
   const { logger, sessionService, recallService, adapter, widget, repoContext } = svcs;
@@ -315,6 +324,53 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
     }
   });
 
+  // session_before_switch: commit active session before switching to another
+  pi.on("session_before_switch", async (_event, ctx) => {
+    const active = sessionService.getActive();
+    if (!active) {
+      logger?.debug("session_before_switch: no active session, nothing to commit");
+      return;
+    }
+
+    // First attempt
+    let commitErr: Error | undefined;
+    try {
+      await sessionService.commit(active);
+    } catch (err) {
+      commitErr = err as Error;
+    }
+
+    // Retry once with backoff on failure
+    if (commitErr) {
+      logger?.warn("session_before_switch: commit failed, retrying...", { error: commitErr.message });
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        await sessionService.commit(active);
+        commitErr = undefined; // retry succeeded
+      } catch (err2) {
+        commitErr = err2 as Error;
+      }
+    }
+
+    if (commitErr) {
+      // Both attempts failed — prompt user
+      const proceed = await ctx.ui.confirm(
+        "OV Commit Failed",
+        `Failed to save session: ${commitErr.message}. Proceed with switch anyway?`,
+      );
+      if (!proceed) {
+        logger?.debug("session_before_switch: user cancelled switch after commit failure");
+        return { cancel: true };
+      }
+      // User chose to proceed — session_shutdown will try its own commit
+      return;
+    }
+
+    // Commit succeeded — skip duplicate commit in session_shutdown
+    skipShutdownCommit = true;
+    logger?.debug("session_before_switch: commit succeeded, skipShutdownCommit flag set");
+  });
+
   // session_shutdown: commit active session, clear auto-commit timer + recall cache
   pi.on("session_shutdown", async () => {
     // Stop auto-commit timer first
@@ -327,6 +383,13 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
     const active = sessionService.getActive();
     if (!active) {
       logger?.debug("session_shutdown: no active session, skipping commit");
+      return;
+    }
+
+    // C5: session_before_switch already committed — skip duplicate
+    if (skipShutdownCommit) {
+      skipShutdownCommit = false; // reset for next cycle
+      logger?.debug("session_shutdown: skipShutdownCommit flag set, skipping commit");
       return;
     }
 
@@ -348,9 +411,47 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
 
 // ── Per-session: run on every session_start (including fork/resume/reload) ──
 
+/**
+ * Minimum number of items for chunking when re-hydrating a session.
+ * OV batch endpoint accepts up to 100 messages per call; 50 is a safe conservative limit.
+ */
+const REHYDRATE_CHUNK_SIZE = 50;
+
+/**
+ * Map a Pi session entry to MessageInput for agentMessageToParts.
+ * getBranch() entries have shape { type: "message", message: { role, content, ... } }.
+ * message_end event passes { role, content } directly — both handled here.
+ */
+function entryToMessageInput(entry: {
+  type?: string;
+  message?: {
+    role: string;
+    content?: string | Array<{ type: string; text?: string; id?: string; name?: string; arguments?: Record<string, unknown> }>;
+    toolCallId?: string;
+    toolName?: string;
+    isError?: boolean;
+  };
+  // Direct role/content for message_end event shape fallback
+  role?: string;
+  content?: string | Array<{ type: string; text?: string; id?: string; name?: string; arguments?: Record<string, unknown> }>;
+}): { role: string; content?: string | Array<{ type: string; text?: string; id?: string; name?: string; arguments?: Record<string, unknown> }> } {
+  // getBranch() entries: { type: "message", message: { role, content } }
+  if (entry.type === "message" && entry.message) {
+    const m = entry.message;
+    return { role: m.role, content: m.content };
+  }
+  // Fallback for direct { role, content } shape
+  return { role: (entry as any).role ?? "", content: (entry as any).content };
+}
+
+export function resetModuleState(): void {
+  skipShutdownCommit = false;
+}
+
 export async function handleSessionStart(
-  ctx: { cwd: string; ui: any },
+  ctx: { cwd: string; ui: any; sessionManager?: { getBranch?: () => unknown[] } },
   svcs: LifecycleServices,
+  reason?: string,
 ): Promise<void> {
   const { healthCheck, widget, sessionService, recallService, logger, profileManager, autoDetectRules } = svcs;
 
@@ -375,7 +476,61 @@ export async function handleSessionStart(
     const active = sessionService.getActive();
     widget.update("session", active?.toString() ?? "-");
     widget.update("recall", recallService.isEnabled() ? "on" : "off");
+
+    // ── Re-hydrate on resume/fork — replay previous session history into OV ──
+    if ((reason === "resume" || reason === "fork") && active) {
+      await rehydrateSession(ctx, sessionService, active, logger);
+    }
   } catch {
     widget.update("session", "none");
   }
+}
+
+/**
+ * Re-hydrate a new OV session with recent entries from the previous Pi session.
+ * Reads last 50 entries from session history, filters to user/assistant,
+ * maps via agentMessageToParts(), and sends in batches.
+ */
+async function rehydrateSession(
+  ctx: { cwd: string; ui: any; sessionManager?: { getBranch?: () => unknown[] } },
+  sessionService: SessionService,
+  active: SessionId,
+  logger?: Logger,
+): Promise<void> {
+  const branch = ctx.sessionManager?.getBranch?.();
+  if (!branch || !Array.isArray(branch) || branch.length === 0) {
+    logger?.debug("rehydrate: no branch entries found, skipping");
+    return;
+  }
+
+  // Last 50 entries only
+  const entries = branch.slice(-REHYDRATE_CHUNK_SIZE);
+
+  // Filter to user and assistant, map to OV message batches
+  const messages: { role: string; content: Part[] }[] = [];
+
+  for (const entry of entries) {
+    const input = entryToMessageInput(entry as any);
+    if (input.role !== "user" && input.role !== "assistant") continue;
+
+    const parts = agentMessageToParts(input as any);
+    if (parts.length === 0) continue;
+
+    messages.push({ role: input.role, content: parts });
+  }
+
+  if (messages.length === 0) {
+    logger?.debug("rehydrate: no user/assistant messages found, skipping");
+    return;
+  }
+
+  logger?.info(`rehydrating ${messages.length} message(s) into OV session`);
+
+  // Send in chunks of REHYDRATE_CHUNK_SIZE (safe limit for OV batch endpoint)
+  for (let i = 0; i < messages.length; i += REHYDRATE_CHUNK_SIZE) {
+    const chunk = messages.slice(i, i + REHYDRATE_CHUNK_SIZE);
+    await sessionService.sendMessages(active, chunk);
+  }
+
+  logger?.debug(`rehydrate complete: ${messages.length} message(s) sent`);
 }

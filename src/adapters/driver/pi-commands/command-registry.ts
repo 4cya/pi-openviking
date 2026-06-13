@@ -7,6 +7,7 @@ import type { KnowledgeBase } from "../../../domain/ports/knowledge-base";
 import type { ProfileManager } from "../../../domain/profile/service/ProfileManager";
 import type { OVAdapterConfig } from "../../../infrastructure/config/schema";
 import type { RecallConfig } from "../../../domain/common/recall-config";
+import type { SystemStatusClient } from "../../driven/openviking/system-status";
 import { createOvRecallCommand } from "./ov-recall-command";
 import { createOvStatusCommand } from "./ov-status-command";
 import { createOvTreeCommand } from "./ov-tree-command";
@@ -29,11 +30,13 @@ export interface CommandServices {
   recallConfig: RecallConfig;
   /** Callback to update OVWidget when command changes state */
   widgetUpdater?: (field: string, value: string) => void;
+  /** Optional — injected when available, shows live server status in /ov-status */
+  systemStatus?: SystemStatusClient;
 }
 
 export function registerAllCommands(pi: ExtensionAPI, svcs: CommandServices): void {
   pi.registerCommand("ov-recall", createOvRecallCommand(svcs.recallService, svcs.widgetUpdater));
-  pi.registerCommand("ov-status", createOvStatusCommand(svcs.ovConfig, svcs.sessionService, svcs.recallService, svcs.recallConfig));
+  pi.registerCommand("ov-status", createOvStatusCommand(svcs.ovConfig, svcs.sessionService, svcs.recallService, svcs.recallConfig, svcs.systemStatus));
   pi.registerCommand("ov-tree", createOvTreeCommand(svcs.fsStoreService));
   pi.registerCommand("ov-commit", createOvCommitCommand(svcs.sessionService, svcs.widgetUpdater));
   pi.registerCommand("ov-search", createOvSearchCommand(svcs.searchService));

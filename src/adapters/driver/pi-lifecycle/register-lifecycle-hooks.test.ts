@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { registerLifecycleHooks, handleSessionStart, pollCommit, DEFAULT_AUTO_COMMIT_INTERVAL_MS } from "./register-lifecycle-hooks";
+import { registerLifecycleHooks, handleSessionStart, pollCommit, DEFAULT_AUTO_COMMIT_INTERVAL_MS, resetModuleState } from "./register-lifecycle-hooks";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { LifecycleServices } from "./register-lifecycle-hooks";
 
@@ -21,6 +21,7 @@ function createMockServices(overrides?: Partial<LifecycleServices>): LifecycleSe
     sessionService: {
       getActive: vi.fn(),
       sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessages: vi.fn().mockResolvedValue(undefined),
       createAndSet: vi.fn().mockResolvedValue({ value: "test-session", toString: () => "test-session" }),
       commit: vi.fn().mockResolvedValue({}),
     } as any,
@@ -37,12 +38,42 @@ function createMockServices(overrides?: Partial<LifecycleServices>): LifecycleSe
   } as LifecycleServices;
 }
 
-type Handler = (event: any) => Promise<any> | any;
+// Reset module-level state that could leak between tests
+beforeEach(() => {
+  resetModuleState();
+});
+
+function mockCtx() {
+  return {
+    ui: { confirm: vi.fn(), notify: vi.fn() } as any,
+    cwd: "/test",
+    hasUI: false,
+    sessionManager: {} as any,
+    modelRegistry: {} as any,
+    model: undefined,
+    isIdle: () => true,
+    signal: undefined as any,
+    abort: vi.fn(),
+    hasPendingMessages: () => false,
+    shutdown: vi.fn(),
+    getContextUsage: () => undefined,
+    compact: vi.fn(),
+    getSystemPrompt: () => "",
+    waitForIdle: vi.fn(),
+    newSession: vi.fn() as any,
+    fork: vi.fn() as any,
+    navigateTree: vi.fn() as any,
+    switchSession: vi.fn() as any,
+    reload: vi.fn() as any,
+  };
+}
+
+type Handler = (event: any, ctx?: any) => Promise<any> | any;
 
 // ── registerLifecycleHooks ──────────────────────────────────────────────────
 
 describe("registerLifecycleHooks", () => {
-  it("registers context, before_agent_start, message_end, turn_end, session_shutdown hooks", () => {
+  it("registers context, before_agent_start, message_end, turn_end, session_before_switch, session_shutdown hooks", () => {
     const { pi, handlers } = createMockPi();
     const svcs = createMockServices();
 
@@ -52,6 +83,7 @@ describe("registerLifecycleHooks", () => {
     expect(handlers["before_agent_start"]).toBeDefined();
     expect(handlers["message_end"]).toBeDefined();
     expect(handlers["turn_end"]).toBeDefined();
+    expect(handlers["session_before_switch"]).toBeDefined();
     expect(handlers["session_shutdown"]).toBeDefined();
   });
 
@@ -349,6 +381,164 @@ describe("registerLifecycleHooks", () => {
       // After shutdown, cache is cleared — next call re-fetches
       // (only testable via module state, we verify shutdown runs commit)
       expect(commit).toHaveBeenCalledWith("session-1");
+    });
+  });
+
+  describe("session_before_switch", () => {
+    it("commits active session on switch", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn().mockResolvedValue({ sessionId: "session-1" });
+      const svcs = createMockServices({
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          commit,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["session_before_switch"] as Handler;
+
+      const result = await handler({ reason: "resume" }, mockCtx());
+
+      expect(commit).toHaveBeenCalledWith("session-1");
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(result).toBeUndefined(); // no cancel
+    });
+
+    it("sets skipShutdownCommit flag on successful commit", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn().mockResolvedValue({ sessionId: "session-1" });
+      const svcs = createMockServices({
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          commit,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      // Fire session_before_switch successfully
+      const switchHandler = handlers["session_before_switch"] as Handler;
+      await switchHandler({ reason: "resume" }, mockCtx());
+
+      // Fire session_shutdown — should skip commit
+      const shutdownHandler = handlers["session_shutdown"] as Handler;
+      await shutdownHandler({ reason: "quit" });
+
+      // commit was only called once (by session_before_switch), not again by shutdown
+      expect(commit).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries once on commit failure, then prompts user", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn()
+        .mockRejectedValueOnce(new Error("network error"))
+        .mockRejectedValueOnce(new Error("network error"));
+      const ctx = mockCtx();
+      ctx.ui.confirm = vi.fn().mockResolvedValue(false); // user cancels
+
+      const svcs = createMockServices({
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          commit,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["session_before_switch"] as Handler;
+
+      const result = await handler({ reason: "resume" }, ctx);
+
+      expect(commit).toHaveBeenCalledTimes(2); // initial + retry
+      expect(ctx.ui.confirm).toHaveBeenCalledWith(
+        "OV Commit Failed",
+        expect.stringContaining("network error"),
+      );
+      expect(result).toEqual({ cancel: true });
+    });
+
+    it("returns cancel:true when user cancels after failed retry", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn().mockRejectedValue(new Error("timeout"));
+      const ctx = mockCtx();
+      ctx.ui.confirm = vi.fn().mockResolvedValue(false);
+
+      const svcs = createMockServices({
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          commit,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["session_before_switch"] as Handler;
+
+      const result = await handler({ reason: "resume" }, ctx);
+
+      expect(result).toEqual({ cancel: true });
+    });
+
+    it("proceeds with switch when user confirms after failed retry", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn().mockRejectedValue(new Error("timeout"));
+      const ctx = mockCtx();
+      ctx.ui.confirm = vi.fn().mockResolvedValue(true); // user proceeds
+
+      const svcs = createMockServices({
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          commit,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["session_before_switch"] as Handler;
+
+      const result = await handler({ reason: "resume" }, ctx);
+
+      expect(result).toBeUndefined(); // no cancel
+    });
+
+    it("retry succeeds after first failure", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn()
+        .mockRejectedValueOnce(new Error("temp failure"))
+        .mockResolvedValueOnce({ sessionId: "session-1" });
+      const ctx = mockCtx();
+      ctx.ui.confirm = vi.fn();
+
+      const svcs = createMockServices({
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          commit,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["session_before_switch"] as Handler;
+
+      const result = await handler({ reason: "resume" }, ctx);
+
+      expect(commit).toHaveBeenCalledTimes(2);
+      expect(ctx.ui.confirm).not.toHaveBeenCalled(); // retry succeeded, no prompt needed
+      expect(result).toBeUndefined();
+    });
+
+    it("is no-op when no active session", async () => {
+      const { pi, handlers } = createMockPi();
+      const commit = vi.fn();
+      const svcs = createMockServices({
+        sessionService: {
+          getActive: vi.fn().mockReturnValue(null),
+          commit,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["session_before_switch"] as Handler;
+
+      await handler({ reason: "resume" }, mockCtx());
+
+      expect(commit).not.toHaveBeenCalled();
     });
   });
 
@@ -683,7 +873,7 @@ describe("registerLifecycleHooks", () => {
         items: [{ uri: "viking://mem/1" }, { uri: "viking://mem/2" }],
         tokens: 142,
       });
-      const widget = { update: vi.fn() };
+      const widget = { update: vi.fn() } as any;
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
         adapter: { circuitBreakerOpen: false } as any,
@@ -721,7 +911,7 @@ describe("registerLifecycleHooks", () => {
     it("shows 0it 0tk when recall returns no results", async () => {
       const { pi, handlers } = createMockPi();
       const recall = vi.fn().mockResolvedValue({ formatted: null, timedOut: false, items: [], tokens: 0 });
-      const widget = { update: vi.fn() };
+      const widget = { update: vi.fn() } as any;
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
         adapter: { circuitBreakerOpen: false } as any,
@@ -747,7 +937,7 @@ describe("registerLifecycleHooks", () => {
 
     it("clears lastRecall when circuit breaker open", async () => {
       const { pi, handlers } = createMockPi();
-      const widget = { update: vi.fn() };
+      const widget = { update: vi.fn() } as any;
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(true) } as any,
         adapter: { circuitBreakerOpen: true } as any,
@@ -770,7 +960,7 @@ describe("registerLifecycleHooks", () => {
 
     it("clears lastRecall when recall disabled", async () => {
       const { pi, handlers } = createMockPi();
-      const widget = { update: vi.fn() };
+      const widget = { update: vi.fn() } as any;
       const svcs = createMockServices({
         recallService: { isEnabled: vi.fn().mockReturnValue(false) } as any,
         widget,
@@ -908,5 +1098,178 @@ describe("handleSessionStart", () => {
 
     expect(createAndSet).toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith("session", "sess-1");
+  });
+
+  describe("re-hydrate on resume/fork", () => {
+    it("skips re-hydration on startup (no reason)", async () => {
+      const sendMessages = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        widget: { update: vi.fn(), attach: vi.fn() } as any,
+        sessionService: {
+          createAndSet: vi.fn().mockResolvedValue({ value: "sess-1", toString: () => "sess-1" }),
+          getActive: vi.fn().mockReturnValue("sess-1"),
+          sendMessages,
+        } as any,
+        logger: { info: vi.fn(), debug: vi.fn() } as any,
+      });
+
+      await handleSessionStart(
+        { cwd: "/test", ui: {} as any, sessionManager: { getBranch: () => [{ role: "user", content: "hi", timestamp: 1 }] } },
+        svcs,
+      );
+
+      expect(sendMessages).not.toHaveBeenCalled();
+    });
+
+    it("skips re-hydration on reason=new", async () => {
+      const sendMessages = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        widget: { update: vi.fn(), attach: vi.fn() } as any,
+        sessionService: {
+          createAndSet: vi.fn().mockResolvedValue({ value: "sess-1", toString: () => "sess-1" }),
+          getActive: vi.fn().mockReturnValue("sess-1"),
+          sendMessages,
+        } as any,
+        logger: { info: vi.fn(), debug: vi.fn() } as any,
+      });
+
+      await handleSessionStart(
+        { cwd: "/test", ui: {} as any, sessionManager: { getBranch: () => [{ role: "user", content: "hi" }] } },
+        svcs,
+        "new",
+      );
+
+      expect(sendMessages).not.toHaveBeenCalled();
+    });
+
+    it("re-hydrates user/assistant messages on resume", async () => {
+      const sendMessages = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        widget: { update: vi.fn(), attach: vi.fn() } as any,
+        sessionService: {
+          createAndSet: vi.fn().mockResolvedValue({ value: "sess-1", toString: () => "sess-1" }),
+          getActive: vi.fn().mockReturnValue("sess-1"),
+          sendMessages,
+        } as any,
+        logger: { info: vi.fn(), debug: vi.fn() } as any,
+      });
+
+      // getBranch() returns { type, message } entries per Pi SDK
+      const branch = [
+        { type: "system", message: { role: "system", content: "You are helpful" }, timestamp: 1 },
+        { type: "message", message: { role: "user", content: "hello" }, timestamp: 2 },
+        { type: "message", message: { role: "assistant", content: "Hi there!" }, timestamp: 3 },
+        { type: "message", message: { role: "tool", content: "result" }, timestamp: 4 },
+        { type: "message", message: { role: "user", content: "how are you?" }, timestamp: 5 },
+      ];
+
+      await handleSessionStart(
+        { cwd: "/test", ui: {} as any, sessionManager: { getBranch: () => branch } },
+        svcs,
+        "resume",
+      );
+
+      // Should send 3 user/assistant messages (system and tool filtered out)
+      expect(sendMessages).toHaveBeenCalledTimes(1);
+      const sent = sendMessages.mock.calls[0][1] as Array<{ role: string }>;
+      expect(sent).toHaveLength(3);
+      expect(sent[0].role).toBe("user");
+      expect(sent[1].role).toBe("assistant");
+      expect(sent[2].role).toBe("user");
+    });
+
+    it("re-hydrates on fork", async () => {
+      const sendMessages = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        widget: { update: vi.fn(), attach: vi.fn() } as any,
+        sessionService: {
+          createAndSet: vi.fn().mockResolvedValue({ value: "sess-1", toString: () => "sess-1" }),
+          getActive: vi.fn().mockReturnValue("sess-1"),
+          sendMessages,
+        } as any,
+        logger: { info: vi.fn(), debug: vi.fn() } as any,
+      });
+
+      await handleSessionStart(
+        { cwd: "/test", ui: {} as any, sessionManager: { getBranch: () => [{ type: "message", message: { role: "user", content: "hello" }, timestamp: 1 }] } },
+        svcs,
+        "fork",
+      );
+
+      expect(sendMessages).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips when no branch entries exist", async () => {
+      const sendMessages = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        widget: { update: vi.fn(), attach: vi.fn() } as any,
+        sessionService: {
+          createAndSet: vi.fn().mockResolvedValue({ value: "sess-1", toString: () => "sess-1" }),
+          getActive: vi.fn().mockReturnValue("sess-1"),
+          sendMessages,
+        } as any,
+        logger: { info: vi.fn(), debug: vi.fn() } as any,
+      });
+
+      await handleSessionStart(
+        { cwd: "/test", ui: {} as any, sessionManager: { getBranch: () => [] } },
+        svcs,
+        "resume",
+      );
+
+      expect(sendMessages).not.toHaveBeenCalled();
+    });
+
+    it("skips when getBranch is undefined", async () => {
+      const sendMessages = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        widget: { update: vi.fn(), attach: vi.fn() } as any,
+        sessionService: {
+          createAndSet: vi.fn().mockResolvedValue({ value: "sess-1", toString: () => "sess-1" }),
+          getActive: vi.fn().mockReturnValue("sess-1"),
+          sendMessages,
+        } as any,
+        logger: { info: vi.fn(), debug: vi.fn() } as any,
+      });
+
+      await handleSessionStart(
+        { cwd: "/test", ui: {} as any, sessionManager: {} },
+        svcs,
+        "resume",
+      );
+
+      expect(sendMessages).not.toHaveBeenCalled();
+    });
+
+    it("chunks when more than 50 messages", async () => {
+      const sendMessages = vi.fn().mockResolvedValue(undefined);
+      const svcs = createMockServices({
+        widget: { update: vi.fn(), attach: vi.fn() } as any,
+        sessionService: {
+          createAndSet: vi.fn().mockResolvedValue({ value: "sess-1", toString: () => "sess-1" }),
+          getActive: vi.fn().mockReturnValue("sess-1"),
+          sendMessages,
+        } as any,
+        logger: { info: vi.fn(), debug: vi.fn() } as any,
+      });
+
+      // 75 user messages = 2 chunks (50 + 25), using real getBranch() shape
+      const branch = Array.from({ length: 75 }, (_, i) => ({
+        type: "message",
+        message: { role: "user", content: `message ${i + 1}` },
+        timestamp: i + 1,
+      }));
+
+      await handleSessionStart(
+        { cwd: "/test", ui: {} as any, sessionManager: { getBranch: () => branch } },
+        svcs,
+        "resume",
+      );
+
+      // Only the last 50 should be sent (slice(-50))
+      expect(sendMessages).toHaveBeenCalledTimes(1);
+      const sent = sendMessages.mock.calls[0][1] as Array<{ role: string }>;
+      expect(sent).toHaveLength(50);
+    });
   });
 });

@@ -30,6 +30,13 @@ export class SessionService {
     return this.store.sendMessage(sessionId, role, content);
   }
 
+  async sendMessages(
+    sessionId: SessionId,
+    messages: { role: string; content: Part[] }[],
+  ): Promise<void> {
+    return this.store.sendMessages(sessionId, messages);
+  }
+
   async getSession(sessionId: SessionId): Promise<SessionInfo> {
     return this.store.getSession(sessionId);
   }

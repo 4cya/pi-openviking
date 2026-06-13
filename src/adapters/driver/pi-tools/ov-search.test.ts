@@ -79,4 +79,71 @@ describe("ov_search tool", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ query: "test", mode: "auto" });
   });
+
+  it("passes scoreThreshold param through", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSearchService({
+      search: async (params) => { calls.push(params); return emptyResult; },
+    });
+    const tool = createOvSearchTool(svc, makePipeline());
+    await executeTool(tool, { query: "test", scoreThreshold: 0.8 });
+    expect(calls[0]).toMatchObject({ scoreThreshold: 0.8 });
+  });
+
+  it("passes since and until params through", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSearchService({
+      search: async (params) => { calls.push(params); return emptyResult; },
+    });
+    const tool = createOvSearchTool(svc, makePipeline());
+    await executeTool(tool, { query: "test", since: "2026-01-01", until: "2026-06-01" });
+    expect(calls[0]).toMatchObject({ since: "2026-01-01", until: "2026-06-01" });
+  });
+
+  it("passes timeField param through", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSearchService({
+      search: async (params) => { calls.push(params); return emptyResult; },
+    });
+    const tool = createOvSearchTool(svc, makePipeline());
+    await executeTool(tool, { query: "test", timeField: "created_at" });
+    expect(calls[0]).toMatchObject({ timeField: "created_at" });
+  });
+
+  it("passes level param through", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSearchService({
+      search: async (params) => { calls.push(params); return emptyResult; },
+    });
+    const tool = createOvSearchTool(svc, makePipeline());
+    await executeTool(tool, { query: "test", level: 2 });
+    expect(calls[0]).toMatchObject({ level: 2 });
+  });
+
+  it("passes includeProvenance param through", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSearchService({
+      search: async (params) => { calls.push(params); return emptyResult; },
+    });
+    const tool = createOvSearchTool(svc, makePipeline());
+    await executeTool(tool, { query: "test", includeProvenance: true });
+    expect(calls[0]).toMatchObject({ includeProvenance: true });
+  });
+
+  it("advanced params default to undefined when omitted", async () => {
+    const calls: unknown[] = [];
+    const svc = makeSearchService({
+      search: async (params) => { calls.push(params); return emptyResult; },
+    });
+    const tool = createOvSearchTool(svc, makePipeline());
+    await executeTool(tool, { query: "test" });
+    expect(calls[0]).toMatchObject({
+      scoreThreshold: undefined,
+      since: undefined,
+      until: undefined,
+      timeField: undefined,
+      level: undefined,
+      includeProvenance: undefined,
+    });
+  });
 });

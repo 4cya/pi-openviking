@@ -453,18 +453,41 @@ flowchart TD
 Evento `message_end` chega via `pi.on()` e chama SessionService direto.
 EventBus de domínio não transporta eventos de infra.
 
-```mermaid
-sequenceDiagram
-    participant Pi as Pi Agent
-    participant Index as index.ts
-    participant Svc as SessionService
-    participant OV as OpenViking
+**session_before_switch**: dispara antes de `/new` ou `/resume`. Commita sessão OV ativa.
+Em caso de falha, retenta uma vez (500ms). Se retry falhar, mostra confirm pro usuário:
+cancelar → `{ cancel: true }`, confirmar → switch prossegue.
+Sucesso → seta flag `skipShutdownCommit` para evitar double-commit no `session_shutdown`.
 
-    Pi->>Index: pi.on("message_end")
-    Index->>Svc: sessionService.sendMessage(sessionId, parts)
-    Svc->>OV: sendMessage(sessionId, parts)
-    OV-->>Svc: 200
-```
+**Resume/Fork re-hydrate**: quando `session_start` chega com `reason: "resume"` ou `"fork"`,
+o handler lê as últimas 50 entradas de `ctx.sessionManager.getBranch()`, filtra
+`user`/`assistant`, mapeia via `agentMessageToParts()` e envia em batch via
+`sessionService.sendMessages()`.
+
+### 5.3 system/status — Observability
+
+`GET /api/v1/system/status` retorna `{ initialized: boolean, user?: string }`.
+Chamado via `SystemStatusClient` (usa Transport com headers de autenticação).
+Usado pelo comando `/ov-status` para mostrar estado vivo do servidor.
+Nunca lança — em caso de erro retorna `{ initialized: false }`.
+
+### 5.4 ov_search — Advanced Search Params
+
+Além de `query`, `mode`, `limit`, `targetUri`, `peerId`, o tool schema agora expõe
+6 parâmetros avançados opcionais: `scoreThreshold`, `since`, `until`, `timeField`,
+`level`, `includeProvenance`. Eles são passados como `SearchOptions` para o adapter OV,
+que os serializa diretamente no body do POST `/api/v1/search/{find,search}`.
+
+### 5.5 Lifecycle Hook Resumo
+
+| Hook | Propósito |
+|------|-----------|
+| `session_start` | Health check + session creation + re-hydrate |
+| `session_before_switch` | Commit OV + confirm user |
+| `session_shutdown` | Commit (ou skip se flag set) + cleanup |
+| `message_end` | Sync user message → OV |
+| `turn_end` | Merge assistant + tool results → OV |
+| `context` | Auto-recall via RecallService |
+| `before_agent_start` | RepoContext injection |
 
 ---
 

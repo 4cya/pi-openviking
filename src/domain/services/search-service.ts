@@ -1,5 +1,6 @@
 import type { KnowledgeBase, GlobResult, GrepResult } from "../ports/knowledge-base";
 import type { SearchResult } from "../knowledge/model/search-result";
+import type { SearchOptions } from "../common/search-query";
 import type { RecallConfig } from "../common/recall-config";
 import type { Logger } from "../ports/logger";
 import { Uri } from "../common/uri";
@@ -10,6 +11,12 @@ interface SearchParams {
   limit?: number;
   targetUri?: string;
   peerId?: string;
+  scoreThreshold?: number;
+  since?: string;
+  until?: string;
+  timeField?: string;
+  level?: number;
+  includeProvenance?: boolean;
 }
 
 export class SearchService {
@@ -23,10 +30,19 @@ export class SearchService {
     const mode = params.mode === "auto" ? this.config.searchMode : params.mode;
     const targetUri = params.targetUri ? new Uri(params.targetUri) : undefined;
 
+    const opts: SearchOptions = {
+      scoreThreshold: params.scoreThreshold,
+      since: params.since,
+      until: params.until,
+      timeField: params.timeField,
+      level: params.level,
+      includeProvenance: params.includeProvenance,
+    };
+
     if (mode === "find") {
-      return this.kb.find({ query: params.query, limit: params.limit, targetUri, peerId: params.peerId }, undefined, signal);
+      return this.kb.find({ query: params.query, limit: params.limit, targetUri, peerId: params.peerId }, opts, signal);
     }
-    return this.kb.search({ query: params.query, limit: params.limit, targetUri, sessionId: undefined, peerId: params.peerId }, undefined, signal);
+    return this.kb.search({ query: params.query, limit: params.limit, targetUri, sessionId: undefined, peerId: params.peerId }, opts, signal);
   }
 
   async glob(pattern: string, uri?: string, limit?: number, signal?: AbortSignal): Promise<GlobResult> {

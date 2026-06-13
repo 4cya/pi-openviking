@@ -94,6 +94,70 @@ describe("SearchService", () => {
     expect((globCalls[0] as any[]).slice(0, 3)).toEqual(["viking://**/*.md", undefined, undefined]);
   });
 
+  it("search passes SearchOptions through to kb.find()", async () => {
+    let callOpts: unknown = undefined;
+    const kb = makeKB({
+      find: async (_q, opts) => { callOpts = opts; return emptyResult; },
+    });
+    const svc = new SearchService(kb, { searchMode: "find" } as RecallConfig, makeLogger());
+    await svc.search({
+      query: "test",
+      mode: "find",
+      scoreThreshold: 0.7,
+      since: "2026-01-01",
+      until: "2026-06-01",
+      timeField: "created_at",
+      level: 2,
+      includeProvenance: true,
+    });
+    expect(callOpts).toEqual({
+      scoreThreshold: 0.7,
+      since: "2026-01-01",
+      until: "2026-06-01",
+      timeField: "created_at",
+      level: 2,
+      includeProvenance: true,
+    });
+  });
+
+  it("search passes SearchOptions through to kb.search()", async () => {
+    let callOpts: unknown = undefined;
+    const kb = makeKB({
+      search: async (_r, opts) => { callOpts = opts; return emptyResult; },
+    });
+    const svc = new SearchService(kb, { searchMode: "search" } as RecallConfig, makeLogger());
+    await svc.search({
+      query: "test",
+      mode: "search",
+      scoreThreshold: 0.5,
+    });
+    expect(callOpts).toEqual({
+      scoreThreshold: 0.5,
+      since: undefined,
+      until: undefined,
+      timeField: undefined,
+      level: undefined,
+      includeProvenance: undefined,
+    });
+  });
+
+  it("search with no SearchOptions passes undefined opts", async () => {
+    let callOpts: unknown = "sentinel";
+    const kb = makeKB({
+      find: async (_q, opts) => { callOpts = opts; return emptyResult; },
+    });
+    const svc = new SearchService(kb, { searchMode: "find" } as RecallConfig, makeLogger());
+    await svc.search({ query: "test", mode: "find" });
+    expect(callOpts).toEqual({
+      scoreThreshold: undefined,
+      since: undefined,
+      until: undefined,
+      timeField: undefined,
+      level: undefined,
+      includeProvenance: undefined,
+    });
+  });
+
   it("grep delegates to kb.grep()", async () => {
     const grepCalls: unknown[] = [];
     const expected: GrepResult = { matches: [{ uri: "viking://a", line: "hello" }], total: 1 };

@@ -13,6 +13,7 @@ import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
 import { OVWidget } from "./adapters/driver/ov-widget";
 import { HealthCheck } from "./adapters/driven/openviking/health";
+import { SystemStatusClient } from "./adapters/driven/openviking/system-status";
 import {
   registerLifecycleHooks,
   handleSessionStart,
@@ -42,6 +43,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const adapter = container.resolve<OVAdapter>("adapter");
 
       const healthCheck = new HealthCheck(config.ov.endpoint);
+      const systemStatus = new SystemStatusClient(adapter.transport);
 
       // Register tools and commands (once per process)
       const skillStore = container.resolve<SkillStore>("skillStore");
@@ -58,6 +60,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         ovConfig: config.ov,
         recallConfig: config.recall,
         widgetUpdater: (field, value) => widget.update(field, value),
+        systemStatus,
       });
 
       // Register lifecycle hooks and store services for per-session handler
@@ -79,6 +82,6 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
     }
 
     // Per-session work (runs on every session_start including fork/resume)
-    await handleSessionStart(ctx, lifecycleServices);
+    await handleSessionStart(ctx, lifecycleServices, (_event as any).reason);
   });
 }

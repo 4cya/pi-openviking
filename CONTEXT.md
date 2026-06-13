@@ -286,7 +286,7 @@ ProfileBehavior (6 fields) overrides RecallConfig via merge. Defined in `domain/
 **SessionService** *(implemented — `domain/services/session-service.ts`)*:
 Stateful service that manages the OV session lifecycle. Owns the active session — callers get the current session via `getActive()` rather than tracking it externally. Depends on `SessionStore` port + `SessionServiceConfig { commitTimeout, pollInterval? }`.
 
-Methods: `createAndSet(): Promise<SessionId>`, `getActive(): SessionId | null`, `sendMessage(sessionId, role, parts)`, `commit(sessionId, options?): Promise<CommitResult>`, `waitForCommit(taskId, timeout?): Promise<TaskStatus>`, `deleteSession(sessionId)`.
+Methods: `createAndSet(): Promise<SessionId>`, `getActive(): SessionId | null`, `sendMessage(sessionId, role, parts)`, `sendMessages(sessionId, messages)` (batch — delegates to `POST /api/v1/sessions/{id}/messages/batch`, max 100 per call), `commit(sessionId, options?): Promise<CommitResult>`, `waitForCommit(taskId, timeout?): Promise<TaskStatus>`, `deleteSession(sessionId)`.`, `getSession(sessionId)`, `sessionUsed(sessionId, contexts)`.
 
 Active session is instance-level private state. `createAndSet()` creates via port and stores as active; subsequent calls replace the previous active. `commit()` returns `{ taskId }` immediately — no polling. `waitForCommit()` polls `getTaskStatus()` at `pollInterval` (default 1s) until `completed`/`failed` or timeout (defaults to `commitTimeout` from config, overridable per-call). Throws on timeout.
 Bindings: `pi.on('session_start')` → `createAndSet()`.
@@ -305,7 +305,7 @@ Thin application service delegating to the `KnowledgeBase` port. Three methods: 
 ### Tools (F5.1 — first vertical slice)
 
 **ov_search** *(implemented — `adapters/driver/pi-tools/ov-search.ts`)*:
-Pi tool registered via `pi.registerTool()`. TypeBox schema: `{ query: string, mode?: "auto"|"fast"|"deep", limit?: number, targetUri?: string }`. Handler calls `pipeline.execute(() => searchService.search(params), signal)`. Returns JSON-formatted `SearchResult`. Error message on failure. 3 unit tests + 2 integration tests.
+Pi tool registered via `pi.registerTool()`. TypeBox schema: `{ query: string, mode?: "auto"|"fast"|"deep", limit?: number, targetUri?: string, scoreThreshold?: number, since?: string, until?: string, timeField?: string, level?: number, includeProvenance?: boolean }`. Handler calls `pipeline.execute(() => searchService.search(params), signal)`. Advanced params are passed through as `SearchOptions` to the OV API. Returns JSON-formatted `SearchResult`. Error message on failure. 10 unit tests + 2 integration tests.
 
 **ov_glob** *(implemented — `adapters/driver/pi-tools/ov-glob.ts`)*:
 Pi tool for URI pattern discovery. Schema: `{ pattern: string, uri?: string, limit?: number }`. Handler wraps `searchService.glob()` via pipeline. Returns `GlobResult` as JSON. 2 unit tests + 1 integration test.
@@ -441,12 +441,14 @@ An `initialized` flag ensures `init()` runs once per process.
 ### F6 — Auto-Recall + Session Sync
 
 **F6 hooks** (in `index.ts`, no `application/` layer):
-5 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
+7 Pi lifecycle hooks that wire the domain services to the agent lifecycle:
 
 - **`context`** → `RecallService.recall(prompt, sessionService.getActive())`. Injects as custom message `{ customType: "memory_context", display: false }` with `<relevant-memories>` XML block appended after the user message. Fires before each LLM call. Cache by query hash prevents redundant OV traffic on subsequent calls in same turn; cache hit also calls `widget.update("lastRecall", cached.stats)`. Circuit breaker OPEN or recall disabled → clears `lastRecall` via `widget.update("lastRecall", "")`. Cache invalidated on new user message. See ADR-019.
+- **`session_before_switch`** → Commits active OV session before `/new` or `/resume`. Retries once on failure (500ms backoff). If retry also fails, prompts user via `ctx.ui.confirm()`. User cancel → returns `{ cancel: true }`. On success → sets module-level `skipShutdownCommit` flag so `session_shutdown` skips its own commit (no double-commit).
+- **`session_shutdown`** → Checks `skipShutdownCommit` flag first. If set, skips commit and resets flag. Otherwise commits active session with retry (C3). Clears auto-commit timer + recall cache.
 - **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Syncs `user` messages only (assistant goes via `turn_end`). Tool calls preserved structurally — not flattened to text.
-- **`session_shutdown`** → `SessionService.commit(activeSessionId)`. OV server extracts memories async (memory_diff.json).
-- **`session_start`** → health check via `HealthCheck.check()` + widget update.
+- **`turn_end`** → Merges assistant parts with tool results via `buildTurnParts()`, sends full turn via `sendMessage()`.
+- **`session_start`** → health check via `HealthCheck.check()` + widget update + session creation + re-hydration on resume/fork.
 - **`before_agent_start`** → `RepoContext.getSystemPromptSnippet()`. Injects resource index into `systemPrompt` with TTL cache. No output when no repos indexed.
 
 **MessageMapper** (`adapters/driver/pi-lifecycle/message-mapper.ts`):
@@ -463,19 +465,30 @@ Pure function `agentMessageToParts(msg: AgentMessage): Part[]`. Converts Pi `Age
 - **"Config"** without qualification refers to the plugin's configuration managed by the **Config Schema**. Not to be confused with Pi's own settings (`.pi/settings.json`) or OV's server configuration.
 - **"application/"** layer is empty and will remain empty. Application services live in `domain/services/` (SessionService, SearchService, FsStoreService). Middleware pipeline lives in `domain/pipeline/`. Lifecycle hooks live in `index.ts`. No F6 tasks create an `application/` directory.
 
-## Planned Implementation (2026-06-13 Grill)
+## Phase 2 Complete (v0.3.x)
 
-Items agreed to implement next — not abandoned.
+All Phase 2 items from PRD #80 are implemented:
 
-| Item | Target | Effort |
+| Item | Status | Tests |
 |---|---|---|
-| **session_before_switch hook** | Commit OV + confirm user antes de /new ou /resume | Pequeno (~30min) |
+| **session_before_switch hook** | ✅ Commit + retry + user confirm | 7 |
+| **Resume re-hydrate** | ✅ sendMessages() + session history replay | 7 |
+| **system/status adapter** | ✅ SystemStatusClient + /ov-status integrado | 4 |
+| **ov_search advanced params** | ✅ 6 params (scoreThreshold, since, until, timeField, level, includeProvenance) | 10 |
+| **Widget recall stats** | ✅ Cache hit stats, empty results, CB open/disabled | já existentes |
+| **Peer ID cleanup** | ✅ Removido de SearchOptions, adapter testado | 2 adapter tests |
+| **sessionUsed() hook test** | ✅ Coberto no lifecycle test | 1 |
 
-| ~~Peer ID tests + dead code~~ | ~~SearchOptions.peerId + adapter test~~ | ~~Pequeno (~15min)~~ |
-| ~~sessionUsed() hook test~~ | ~~Teste unitário no register-lifecycle-hooks.test.ts~~ | ~~Pequeno (~10min)~~ |
-| **Resume re-hydrate** | SessionService.sendMessages() + ler Pi sessionManager | Médio (~2h) |
-| **system/status endpoint** | Novo adapter + integrar em /ov-status | Médio (~1.5h) |
-| **ov_search advanced params** | scoreThreshold, since, until, level no schema | Pequeno (~20min) |
+### SystemStatusClient
+
+Adaptador em `adapters/driven/openviking/system-status.ts` que chama `GET /api/v1/system/status` via Transport.
+Método `getStatus(): Promise<SystemStatus>` → retorna `{ initialized: boolean, user?: string }`.
+Nunca lança exceção — em caso de erro retorna `{ initialized: false }`.
+Usado pelo comando `/ov-status` para mostrar status vivo do servidor OV ("live" ou "unavailable").
+
+### Re-hydrate em resume/fork
+
+Quando `session_start` é emitido com `reason: "resume"` ou `"fork"`, o handler lê as últimas 50 entradas de `ctx.sessionManager.getBranch()`, filtra `user`/`assistant`, mapeia via `agentMessageToParts()`, e envia em batch via `sessionService.sendMessages()`. Chunks de 50 em 50.
 
 ## Deferred (aguardando demanda)
 

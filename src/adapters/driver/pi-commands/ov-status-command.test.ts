@@ -38,9 +38,63 @@ const defaultOvConfig = {
   rateLimitPerSecond: 0,
 };
 
+function mockSystemStatus(initialized: boolean, user?: string) {
+  return {
+    getStatus: async () => ({ initialized, user }),
+  };
+}
+
 describe("ov-status command", () => {
   it("displays endpoint, session, recall state, target scope", async () => {
     const sessionService = { getActive: () => ({ toString: () => "sess-123" }) };
+    const recallService = { isEnabled: () => true };
+    const recallConfig = { targetUri: "viking://kb", searchMode: "find" };
+
+    const cmd = createOvStatusCommand(
+      defaultOvConfig as any,
+      sessionService as any,
+      recallService as any,
+      recallConfig as any,
+      mockSystemStatus(true, "alice") as any,
+    );
+    const ctx = mockCtx();
+    await cmd.handler("", ctx);
+
+    const msg = (ctx.ui.notify as any).mock.calls[0][0] as string;
+    expect(msg).toContain("http://localhost:1933");
+    expect(msg).toContain("sess-123");
+    expect(msg).toContain("Recall: on");
+    expect(msg).toContain("viking://kb");
+    expect(msg).toContain("find");
+    expect(msg).toContain("live");
+    expect(msg).toContain("alice");
+  });
+
+  it("shows 'none' when no active session and 'unavailable' when systemStatus fails", async () => {
+    const sessionService = { getActive: () => null };
+    const recallService = { isEnabled: () => false };
+    const recallConfig = { targetUri: undefined, searchMode: "search" };
+    const failedStatus = { getStatus: async () => ({ initialized: false }) };
+
+    const cmd = createOvStatusCommand(
+      defaultOvConfig as any,
+      sessionService as any,
+      recallService as any,
+      recallConfig as any,
+      failedStatus as any,
+    );
+    const ctx = mockCtx();
+    await cmd.handler("", ctx);
+
+    const msg = (ctx.ui.notify as any).mock.calls[0][0] as string;
+    expect(msg).toContain("none");
+    expect(msg).toContain("Recall: off");
+    expect(msg).toContain("(global)");
+    expect(msg).toContain("unavailable");
+  });
+
+  it("handles missing systemStatus gracefully", async () => {
+    const sessionService = { getActive: () => ({ toString: () => "sess-1" }) };
     const recallService = { isEnabled: () => true };
     const recallConfig = { targetUri: "viking://kb", searchMode: "find" };
 
@@ -54,30 +108,7 @@ describe("ov-status command", () => {
     await cmd.handler("", ctx);
 
     const msg = (ctx.ui.notify as any).mock.calls[0][0] as string;
-    expect(msg).toContain("http://localhost:1933");
-    expect(msg).toContain("sess-123");
-    expect(msg).toContain("Recall: on");
-    expect(msg).toContain("viking://kb");
-    expect(msg).toContain("find");
-  });
-
-  it("shows 'none' when no active session", async () => {
-    const sessionService = { getActive: () => null };
-    const recallService = { isEnabled: () => false };
-    const recallConfig = { targetUri: undefined, searchMode: "search" };
-
-    const cmd = createOvStatusCommand(
-      defaultOvConfig as any,
-      sessionService as any,
-      recallService as any,
-      recallConfig as any,
-    );
-    const ctx = mockCtx();
-    await cmd.handler("", ctx);
-
-    const msg = (ctx.ui.notify as any).mock.calls[0][0] as string;
-    expect(msg).toContain("none");
-    expect(msg).toContain("Recall: off");
-    expect(msg).toContain("(global)");
+    expect(msg).toContain("sess-1");
+    expect(msg).toContain("unavailable");
   });
 });

@@ -77,6 +77,32 @@ describe("SessionService", () => {
     });
   });
 
+  describe("sendMessages", () => {
+    it("delegates to store with correct params", async () => {
+      const store = createMockStore();
+      const service = new SessionService(store, { commitTimeout: 120_000 });
+      const sid = { value: "sess_1" } as SessionId;
+      const messages = [
+        { role: "user", content: [{ type: "text" as const, text: "hello" }] },
+        { role: "assistant", content: [{ type: "text" as const, text: "world" }] },
+      ];
+
+      await service.sendMessages(sid, messages);
+
+      expect(store.sendMessages).toHaveBeenCalledWith(sid, messages);
+    });
+
+    it("handles empty messages array", async () => {
+      const store = createMockStore();
+      const service = new SessionService(store, { commitTimeout: 120_000 });
+      const sid = { value: "sess_1" } as SessionId;
+
+      await service.sendMessages(sid, []);
+
+      expect(store.sendMessages).toHaveBeenCalledWith(sid, []);
+    });
+  });
+
   describe("commit", () => {
     it("returns result immediately without polling", async () => {
       const result: CommitResult = { sessionId: { value: "sess_1" } as SessionId, taskId: "task_1" };

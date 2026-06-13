@@ -15,6 +15,12 @@ const SearchSchema = Type.Object({
   limit: Type.Optional(Type.Number({ description: "Maximum results" })),
   targetUri: Type.Optional(Type.String({ description: "Target URI scope" })),
   peerId: Type.Optional(Type.String({ description: "Stable interaction peer ID. When set, search includes memories from this peer" })),
+  scoreThreshold: Type.Optional(Type.Number({ description: "Minimum relevance score threshold (0-1)" })),
+  since: Type.Optional(Type.String({ description: "Filter results after this date/time (ISO 8601)" })),
+  until: Type.Optional(Type.String({ description: "Filter results before this date/time (ISO 8601)" })),
+  timeField: Type.Optional(Type.String({ description: "Time field to filter on: 'updated_at' or 'created_at'" })),
+  level: Type.Optional(Type.Number({ description: "Content detail level for results" })),
+  includeProvenance: Type.Optional(Type.Boolean({ description: "Include provenance information in results" })),
 });
 
 export function createOvSearchTool(
@@ -25,7 +31,7 @@ export function createOvSearchTool(
     name: "ov_search",
     label: "Search Knowledge",
     description: "Primary knowledge base for project memories, decisions, and patterns. ALWAYS check here first before using generic search tools. Supports fast (semantic find) and deep (intent-aware search) modes.",
-    promptSnippet: "ov_search(query, mode?, limit?, targetUri?) — search knowledge base",
+    promptSnippet: "ov_search(query, mode?, limit?, targetUri?, scoreThreshold?, since?, until?, timeField?, level?, includeProvenance?) — search knowledge base",
     parameters: SearchSchema,
     async execute(_toolCallId, params, signal) {
       try {
@@ -36,6 +42,12 @@ export function createOvSearchTool(
             limit: params.limit,
             targetUri: params.targetUri,
             peerId: params.peerId,
+            scoreThreshold: params.scoreThreshold,
+            since: params.since,
+            until: params.until,
+            timeField: params.timeField,
+            level: params.level,
+            includeProvenance: params.includeProvenance,
           }, signal ?? undefined),
           signal ?? undefined,
         );

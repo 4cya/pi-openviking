@@ -30,6 +30,8 @@ export interface OVAdapter {
   skillStore: SkillStore;
   /** True when the circuit breaker is OPEN — fast fail for recall guard */
   readonly circuitBreakerOpen: boolean;
+  /** Underlying HTTP transport, shared by all adapters */
+  readonly transport: Transport;
 }
 
 export function createOVAdapter(config: OVAdapterConfig, logger?: Logger): OVAdapter {
@@ -43,5 +45,6 @@ export function createOVAdapter(config: OVAdapterConfig, logger?: Logger): OVAda
     resourceStore: new ResourceStoreAdapter(transport),
     skillStore: new SkillStoreAdapter(transport),
     get circuitBreakerOpen() { return transport.isCircuitBreakerOpen(); },
+    transport,
   };
 }
