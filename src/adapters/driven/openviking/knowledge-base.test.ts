@@ -47,6 +47,20 @@ describe("KnowledgeBaseAdapter.find", () => {
     expect(body.node_limit).toBe(5);
   });
 
+  it("includes peer_id when peerId provided", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      memories: [], resources: [], skills: [], total: 0,
+    });
+
+    const kb = new KnowledgeBaseAdapter(transport);
+    await kb.find({ query: "test", peerId: "peer-456" });
+
+    const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(opts.body);
+    expect(body.peer_id).toBe("peer-456");
+  });
+
   it("includes target_uri when targetUri provided", async () => {
     const transport = mockTransport();
     (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -154,6 +168,20 @@ describe("KnowledgeBaseAdapter.search", () => {
     const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.session_id).toBe("sess-123");
+  });
+
+  it("includes peer_id when peerId provided", async () => {
+    const transport = mockTransport();
+    (transport.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      memories: [], resources: [], skills: [], total: 0,
+    });
+
+    const kb = new KnowledgeBaseAdapter(transport);
+    await kb.search({ query: "test", peerId: "peer-789" });
+
+    const [, , opts] = (transport.request as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(opts.body);
+    expect(body.peer_id).toBe("peer-789");
   });
 
   it("includes target_uri and limit when provided", async () => {

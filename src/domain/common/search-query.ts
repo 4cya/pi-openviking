@@ -27,6 +27,9 @@ export interface SearchRequest {
 /**
  * SearchOptions: advanced search parameters for filtering and provenance.
  * Passed alongside FindQuery or SearchRequest.
+ *
+ * peerId is NOT here — it belongs on FindQuery / SearchRequest (request-level param,
+ * matching OV's POST /api/v1/search/{find,search} API contract).
  */
 export interface SearchOptions {
   scoreThreshold?: number;
@@ -35,5 +38,4 @@ export interface SearchOptions {
   timeField?: string;
   level?: number;
   includeProvenance?: boolean;
-  peerId?: string;
 }
