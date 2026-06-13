@@ -149,7 +149,7 @@ describe("mergeBehaviorIntoRecall", () => {
     expandGraphMaxRatio: 0.2,
     expandGraphMinSeedScore: 0.4,
     searchMode: "search" as const,
-    recallSearchTimeout: 10000,
+    recallSearchTimeout: 60000,
     autoRecall: true as const,
   };
 

@@ -12,7 +12,6 @@ import type { ProfileManager } from "./domain/profile/service/ProfileManager";
 import { registerAllTools } from "./adapters/driver/pi-tools/tool-registry";
 import { registerAllCommands } from "./adapters/driver/pi-commands/command-registry";
 import { OVWidget } from "./adapters/driver/ov-widget";
-import { HealthCheck } from "./adapters/driven/openviking/health";
 import { SystemStatusClient } from "./adapters/driven/openviking/system-status";
 import {
   registerLifecycleHooks,
@@ -42,7 +41,6 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
       const profileManager = container.resolve<ProfileManager>("profileManager");
       const adapter = container.resolve<OVAdapter>("adapter");
 
-      const healthCheck = new HealthCheck(config.ov.endpoint);
       const systemStatus = new SystemStatusClient(adapter.transport);
 
       // Register tools and commands (once per process)
@@ -70,7 +68,6 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         recallService,
         adapter,
         widget,
-        healthCheck,
         profileManager,
         repoContext,
         autoCommitIntervalMs: config.ov.autoCommitIntervalMs,

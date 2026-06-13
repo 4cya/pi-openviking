@@ -21,7 +21,7 @@ const OVAdapterConfigSchema = z.object({
   user: z.string().default("default"),
   agentId: z.string().default("pi"),
   timeout: z.number().positive().default(30_000),
-  commitTimeout: z.number().positive().default(120_000),
+  commitTimeout: z.number().positive().default(15_000),
   maxRetries: z.number().int().min(0).default(3),
   rateLimitPerSecond: z.number().min(0).default(0),
   autoCommitIntervalMs: z.number().min(0).default(300_000),
@@ -42,7 +42,7 @@ const RecallConfigSchema = z.object({
   expandGraphMaxRatio: z.number().min(0).max(1).default(0.2),
   expandGraphMinSeedScore: z.number().min(0).max(1).default(0.4),
   searchMode: z.enum(["find", "search"]).default("search"),
-  recallSearchTimeout: z.number().positive().default(10000),
+  recallSearchTimeout: z.number().positive().default(60_000),
   autoRecall: z.boolean().default(true),
 });
 

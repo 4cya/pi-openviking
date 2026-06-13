@@ -62,7 +62,7 @@ A decorator wrapper inside `Transport` that protects against OV unavailability. 
 _Avoid_: cb, breaker, fault tolerance
 
 **HealthCheck**:
-An adapter (`adapters/driven/openviking/health.ts`) that probes OV availability via `GET /ready` (no auth required). Method `check(): Promise<HealthStatus>` returns `{ ok: boolean, latencyMs?: number, error?: string }`. Uses direct `fetch()` — does NOT go through the CircuitBreaker-decorated Transport. Results feed `OVWidget.update("conn", ...)`. Called on `session_start` and on-demand. Does NOT drive the CircuitBreaker — the breaker is driven by real request failures. No polling by default. 4 tests.
+An adapter (`adapters/driven/openviking/health.ts`) that probes OV availability. Constructor accepts optional `apiKey`. When apiKey is provided, `check()` hits `GET /api/v1/sessions` with auth headers (fast, ~77ms) instead of `/ready` (which is known broken — always returns 503 after 10s). Without apiKey, falls back to `/ready` with 3s timeout. Method `check(timeoutMs?): Promise<HealthStatus>` returns `{ ok: boolean, latencyMs?: number, error?: string }`. Uses direct `fetch()` — does NOT go through the CircuitBreaker-decorated Transport. Health check is NOT called during normal operation — circuit breaker drives health detection via real request failures. Removed from `handleSessionStart` (no delay on session start).
 _Avoid_: health probe, ping, liveness
 
 **ErrorMapper**:
@@ -252,7 +252,7 @@ by the adapter with a default timeout. Domain operates on the concept of "write 
 **Lifecycle Hook Module**:
 The extracted lifecycle hook registration and per-session handler in `adapters/driver/pi-lifecycle/register-lifecycle-hooks.ts`. Two exports:
 - `registerLifecycleHooks(pi, svcs)` — registers `message_end`, `session_shutdown`, `before_agent_start` hooks. Called once per process.
-- `handleSessionStart(ctx, svcs)` — runs on every `session_start`: auto-detect profile, health check, widget attach/update, session creation.
+- `handleSessionStart(ctx, svcs)` — runs on every `session_start`: auto-detect profile, widget attach/update, session creation.
 Dependencies passed explicitly via `LifecycleServices` interface — no module-level `let` closure.
 
 **Uri** (class — value object):
@@ -278,7 +278,7 @@ Orchestrator tying KnowledgeBase + RecallCurator into a single `recall(prompt)` 
 
 **Graceful degradation**: Catches `ConnectionError` from KB → logs warn ("OV unavailable, skipping recall") → returns empty result. Also catches `DOMException`/`AbortError`/`TimeoutError` as defense-in-depth for signal abort paths that bypass the transport error-conversion layer. All other errors (ValidationError, etc.) propagate — those indicate bugs, not transient failures.
 
-**RecallConfig** (11 fields): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `expandGraphDepth` (literal 1) — fixo em 1 (apenas vizinhos diretos). Se depth variável for necessária, estender GraphExpander., `expandGraphMaxRatio` (number 0-1, default 0.2), `expandGraphMinSeedScore` (number 0-1, default 0.4), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `recallSearchTimeout` (number, default 10000), `autoRecall` (boolean, default true).
+**RecallConfig** (11 fields): `targetUri` (optional string, undefined=global), `topN` (number, default 8), `scoreThreshold` (number 0-1, default 0.5), `maxTokens` (int, default 4000), `expandGraph` (boolean, default true), `expandGraphDepth` (literal 1) — fixo em 1 (apenas vizinhos diretos). Se depth variável for necessária, estender GraphExpander., `expandGraphMaxRatio` (number 0-1, default 0.2), `expandGraphMinSeedScore` (number 0-1, default 0.4), `searchMode` (literal `'find'` | `'search'`, default `'search'`), `recallSearchTimeout` (number, default 60000), `autoRecall` (boolean, default true).
 Canonical interface in `domain/common/recall-config.ts`. Zod schema in `infrastructure/config/schema.ts` as `RecallConfigSchema` — inferred type exported as `RecallConfigSchemaType`.
 Env vars: `OV_TOP_N`, `OV_SCORE_THRESHOLD`, `OV_TARGET_URI`, `OV_EXPAND_GRAPH`, `OV_SEARCH_MODE`.
 ProfileBehavior (6 fields) overrides RecallConfig via merge. Defined in `domain/common/profile-config.ts` as `Partial<Pick<RecallConfig, 6 overridable fields>>`.
@@ -426,11 +426,11 @@ An `initialized` flag ensures `init()` runs once per process.
 - Guard runs `init()`, resolves services from DI container
 - Calls `registerAllTools()` and `registerAllCommands()`
 - Creates the shared `OVWidget`
-- Registers 5 F6 lifecycle hooks (`context`, `before_agent_start`, `message_end`, `turn_end`, `session_shutdown`, `session_start` health check)
+- Registers 5 F6 lifecycle hooks (`context`, `before_agent_start`, `message_end`, `turn_end`, `session_shutdown`, `session_start`)
 
 **On every `session_start`** (including fork/resume/reload):
 - Widget attached to current UI context
-- Health check via `GET /ready` → updates widget connection status
+- Health check removed — circuit breaker detects failures via real requests
 - OV session created via `SessionService.createAndSet()`
 - If OV is unavailable, widget shows `🔴 disconnected`, operation continues gracefully
 
@@ -448,7 +448,7 @@ An `initialized` flag ensures `init()` runs once per process.
 - **`session_shutdown`** → Checks `skipShutdownCommit` flag first. If set, skips commit and resets flag. Otherwise commits active session with retry (C3). Clears auto-commit timer + recall cache.
 - **`message_end`** → `SessionService.sendMessage(sessionId, role, parts)` via MessageMapper. Syncs `user` messages only (assistant goes via `turn_end`). Tool calls preserved structurally — not flattened to text.
 - **`turn_end`** → Merges assistant parts with tool results via `buildTurnParts()`, sends full turn via `sendMessage()`.
-- **`session_start`** → health check via `HealthCheck.check()` + widget update + session creation + re-hydration on resume/fork.
+- **`session_start`** → widget attach/update + session creation + re-hydration on resume/fork.
 - **`before_agent_start`** → `RepoContext.getSystemPromptSnippet()`. Injects resource index into `systemPrompt` with TTL cache. No output when no repos indexed.
 
 **MessageMapper** (`adapters/driver/pi-lifecycle/message-mapper.ts`):

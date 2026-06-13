@@ -9,7 +9,7 @@
  * All fields except targetUri are required — defaults are applied
  * by the Zod schema before the config reaches domain code.
  *
- * recallSearchTimeout: Max wait for OV search (ms). Default 10000 (10s).
+ * recallSearchTimeout: Max wait for OV search (ms). Default 60000 (60s).
  * After a timeout, RecallService enters a 3-turn cooldown to avoid
  * hammering a saturated OV server.
  */

@@ -8,7 +8,6 @@ import type { Part } from "../../../domain/common/part";
 import type { SessionId } from "../../../domain/common/session-id";
 import { Uri } from "../../../domain/common/uri";
 import { OVWidget } from "../ov-widget";
-import { HealthCheck } from "../../driven/openviking/health";
 import { RepoContext } from "../../../infrastructure/repo-context";
 import { agentMessageToParts } from "./message-mapper";
 import { buildTurnParts } from "./build-turn-parts";
@@ -23,7 +22,6 @@ export interface LifecycleServices {
   recallService: RecallService;
   adapter: OVAdapter;
   widget: OVWidget;
-  healthCheck: HealthCheck;
   profileManager: ProfileManager;
   repoContext?: RepoContext;
   autoDetectRules?: Record<string, string>;
@@ -90,7 +88,9 @@ export async function pollCommit(
     const result = await sessionService.commit(active);
     if (result.taskId) {
       // Fire-and-forget: poll task status in background
-      sessionService.waitForCommit(result.taskId).catch(async (err) => {
+      sessionService.waitForCommit(result.taskId).then(() => {
+        pendingBackgroundTask = false;
+      }).catch(async (err) => {
         logger?.warn("pollCommit: commit task timed out, retrying commit", {
           taskId: result.taskId,
           error: (err as Error).message,
@@ -105,6 +105,7 @@ export async function pollCommit(
         }
       });
     }
+    dirtySinceLastCommit = false;
     logger?.debug("pollCommit: committed successfully", { sessionId: active.toString() });
     return { committed: true };
   } catch (err) {
@@ -124,6 +125,10 @@ export async function pollCommit(
  * Reset to false after session_shutdown consumes it (or after switch is cancelled).
  */
 let skipShutdownCommit = false;
+let dirtySinceLastCommit = false;
+let pendingBackgroundTask = false;
+let pendingBackgroundTaskSince = 0;
+const PENDING_BACKGROUND_TASK_TIMEOUT = 60_000; // 60s
 
 export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices): void {
   const { logger, sessionService, recallService, adapter, widget, repoContext } = svcs;
@@ -134,7 +139,29 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
 
   if (autoCommitInterval > 0) {
     autoCommitTimer = setInterval(async () => {
+      // Skip commit when CB open or no dirty data — avoid stuck tasks
+      if (adapter.circuitBreakerOpen) {
+        logger?.debug("auto-commit: CB open, skipping cycle");
+        return;
+      }
+      if (!dirtySinceLastCommit) {
+        logger?.debug("auto-commit: clean, skipping cycle");
+        return;
+      }
+      // Skip if background task still pending (with 60s timeout guard)
+      if (pendingBackgroundTask) {
+        const elapsed = Date.now() - pendingBackgroundTaskSince;
+        if (elapsed < PENDING_BACKGROUND_TASK_TIMEOUT) {
+          logger?.debug(`auto-commit: background task pending (${elapsed}ms), skipping`);
+          return;
+        }
+        logger?.warn(`auto-commit: background task timed out (${elapsed}ms), allowing retry`);
+        pendingBackgroundTask = false;
+      }
+      pendingBackgroundTask = true;
+      pendingBackgroundTaskSince = Date.now();
       await pollCommit(sessionService, logger);
+      pendingBackgroundTask = false;
     }, autoCommitInterval);
     logger?.debug("auto-commit timer started", { intervalMs: autoCommitInterval });
   }
@@ -286,12 +313,14 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
 
     try {
       await sessionService.sendMessage(active, "user", parts);
+      dirtySinceLastCommit = true;
     } catch (err) {
       logger?.warn("message_end: failed to send user message, retrying in 500ms", { error: (err as Error).message });
       // C4: Retry once with 500ms backoff on transient failures
       await new Promise((r) => setTimeout(r, 500));
       try {
         await sessionService.sendMessage(active, "user", parts);
+        dirtySinceLastCommit = true;
       } catch (err2) {
         logger?.warn("message_end: failed to send user message after retry", { error: (err2 as Error).message });
       }
@@ -319,6 +348,7 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
 
     try {
       await sessionService.sendMessage(active, "assistant", merged);
+      dirtySinceLastCommit = true;
     } catch (err) {
       logger?.warn("turn_end: failed to send message", { error: (err as Error).message });
     }
@@ -329,6 +359,12 @@ export function registerLifecycleHooks(pi: ExtensionAPI, svcs: LifecycleServices
     const active = sessionService.getActive();
     if (!active) {
       logger?.debug("session_before_switch: no active session, nothing to commit");
+      return;
+    }
+
+    // CB open — skip commit, don't block switch
+    if (adapter.circuitBreakerOpen) {
+      logger?.warn("session_before_switch: CB open, skipping commit");
       return;
     }
 
@@ -446,6 +482,9 @@ function entryToMessageInput(entry: {
 
 export function resetModuleState(): void {
   skipShutdownCommit = false;
+  dirtySinceLastCommit = false;
+  pendingBackgroundTask = false;
+  pendingBackgroundTaskSince = 0;
 }
 
 export async function handleSessionStart(
@@ -453,7 +492,7 @@ export async function handleSessionStart(
   svcs: LifecycleServices,
   reason?: string,
 ): Promise<void> {
-  const { healthCheck, widget, sessionService, recallService, logger, profileManager, autoDetectRules } = svcs;
+  const { widget, sessionService, recallService, logger, profileManager, autoDetectRules } = svcs;
 
   // F7b: Auto-detect profile from workspace path
   if (profileManager && autoDetectRules) {
@@ -465,11 +504,7 @@ export async function handleSessionStart(
     }
   }
 
-  // Health check FIRST — widget is attached with correct state from the start
-  const health = await healthCheck.check();
-
   widget.attach(ctx.ui);
-  widget.update("conn", health.ok ? "connected" : "disconnected");
 
   try {
     await sessionService.createAndSet();
