@@ -844,6 +844,47 @@ describe("registerLifecycleHooks", () => {
 
       expect(recall).toHaveBeenCalledWith("analyze this code", "session-1");
     });
+
+    it("records used contexts via sessionService.sessionUsed after recall with items", async () => {
+      const { pi, handlers } = createMockPi();
+      const sessionUsed = vi.fn().mockResolvedValue(undefined);
+      const recall = vi.fn().mockResolvedValue({
+        formatted: "relevant memories",
+        timedOut: false,
+        items: [
+          { uri: "viking://resources/doc1.md" },
+          { uri: "viking://resources/doc2.md" },
+        ],
+        tokens: 80,
+      });
+      const svcs = createMockServices({
+        recallService: { isEnabled: vi.fn().mockReturnValue(true), recall } as any,
+        adapter: { circuitBreakerOpen: false } as any,
+        sessionService: {
+          getActive: vi.fn().mockReturnValue("session-1"),
+          sessionUsed,
+        } as any,
+      });
+
+      registerLifecycleHooks(pi, svcs);
+      const handler = handlers["context"] as Handler;
+
+      await handler({
+        type: "context",
+        messages: [
+          { role: "user", content: "find me docs", timestamp: 1 },
+        ],
+      });
+
+      expect(sessionUsed).toHaveBeenCalledTimes(1);
+      // First arg: session ID
+      expect(sessionUsed.mock.calls[0][0]).toBe("session-1");
+      // Second arg: array of Uri objects
+      const uris = sessionUsed.mock.calls[0][1];
+      expect(uris).toHaveLength(2);
+      expect(uris[0].toString()).toBe("viking://resources/doc1.md");
+      expect(uris[1].toString()).toBe("viking://resources/doc2.md");
+    });
   });
 });
 
