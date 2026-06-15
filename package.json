@@ -14,16 +14,18 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
   "peerDependencies": {
+    "@earendil-works/pi-agent-core": "^0.75.5",
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-agent-core": "^0.75.5",
     "@earendil-works/pi-tui": "*",
     "@sinclair/typebox": "*"
   }

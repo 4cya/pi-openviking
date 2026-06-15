@@ -1,24 +1,12 @@
-# Logging file-based (Reformulado para Foundation)
+# ADR-002: File-based logging with Logger interface + FileLogger rotation
 
-Status: accepted (carried forward from legacy)
+Declare Logger as a port interface in `domain/ports/logger.ts` so domain code never depends on a concrete logging library. Implement it as FileLogger in `adapters/driven/logger/` using `appendFileSync` with rotation (10MB size, 7-day age, up to 5 gzipped historical files).
 
-## Context
+**Considered Options:**
 
-O plugin precisa de logging persistente e estruturado. O legado usava `appendFileSync` direto — sem interface, sem rotação, sem schema. A Fase 1 do Reborn introduz uma interface `Logger` no domínio e uma implementação `FileLogger` no adapter, mantendo a estratégia de escrita síncrona.
+- **Console-only logging** — loses persistence for post-mortem debugging.
+- **Winston / Bunyan** — heavy external dependency that couples domain to infra.
+- **Rotating-file-stream** — single-purpose dep that still needs a wrapping adapter.
+- **appendFileSync + manual rotation (chosen)** — pure Node.js, zero deps, trivially testable. FileLogger is the adapter; the Logger interface keeps domain code clean.
 
-## Decision
-
-- `Logger` interface em `domain/ports/logger.ts` com métodos `info`, `warn`, `error`, `debug` e parâmetro `ctx` opcional para dados estruturados
-- `FileLogger` em `adapters/driven/logger/file-logger.ts` escreve JSON lines via `appendFileSync`
-- Cada linha é um JSON object: `{"ts":"ISO","level":"info","msg":"...","ctx":{...}}`
-- Rotação por tamanho (10MB) e idade (7 dias), até 5 arquivos de histórico (.log.1.gz, .log.2.gz, etc.)
-- Nível configurável via `ConfigSchema.logger.level` (enum: debug, info, warn, error)
-- Path configurável via `ConfigSchema.logger.path` (default: `~/.pi/agent/pi-openviking.log`)
-- Nenhum `console.*` em `src/` — a interface `Logger` é o único meio de emitir logs
-
-## Consequences
-
-- Positivo: domínio não depende de implementação concreta — qualquer adapter que implemente `Logger` pode ser injetado
-- Positivo: rotação evita consumo ilimitado de disco
-- Positivo: JSON lines permitem parse por LLMs, grep e agregadores
-- Negativo: `appendFileSync` é síncrono — bloqueia o event loop em cada escrita. Aceitável para logging de baixa frequência
+**Consequences:** File I/O is synchronous (appendFileSync). Acceptable because logging is fire-and-forget and never on the hot path. If throughput becomes an issue, swap the implementation behind the Logger interface.

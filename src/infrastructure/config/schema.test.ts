@@ -47,6 +47,16 @@ describe("DEFAULT_CONFIG", () => {
   it("contains all required sections", () => {
     expect(DEFAULT_CONFIG.logger).toBeDefined();
     expect(DEFAULT_CONFIG.profile).toBeDefined();
+    expect(DEFAULT_CONFIG.recall).toBeDefined();
+  });
+
+  it("recall defaults match expected values", () => {
+    expect(DEFAULT_CONFIG.recall.targetUri).toBeUndefined();
+    expect(DEFAULT_CONFIG.recall.topN).toBe(8);
+    expect(DEFAULT_CONFIG.recall.scoreThreshold).toBe(0.5);
+    expect(DEFAULT_CONFIG.recall.expandGraph).toBe(true);
+    expect(DEFAULT_CONFIG.recall.searchMode).toBe("search");
+    expect(DEFAULT_CONFIG.recall.autoRecall).toBe(true);
   });
 
   it("logger defaults match expected values", () => {
@@ -56,6 +66,58 @@ describe("DEFAULT_CONFIG", () => {
 
   it("profile defaults to 'default'", () => {
     expect(DEFAULT_CONFIG.profile.activeProfile).toBe("default");
+  });
+});
+
+describe("RecallConfigSchema", () => {
+  it("invalid topN (zero) throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { topN: 0 } })).toThrow(ZodError);
+  });
+
+  it("invalid scoreThreshold (above 1) throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { scoreThreshold: 1.5 } })).toThrow(ZodError);
+  });
+
+  it("invalid scoreThreshold (negative) throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { scoreThreshold: -0.1 } })).toThrow(ZodError);
+  });
+
+  it("invalid searchMode throws ZodError", () => {
+    expect(() => ConfigSchema.parse({ recall: { searchMode: "invalid" } })).toThrow(ZodError);
+  });
+
+  it("valid targetUri string accepted", () => {
+    const config = ConfigSchema.parse({ recall: { targetUri: "viking://docs" } });
+    expect(config.recall.targetUri).toBe("viking://docs");
+  });
+
+  it("autoRecall defaults to true in RecallConfigSchema", () => {
+    const config = ConfigSchema.parse({});
+    expect(config.recall.autoRecall).toBe(true);
+  });
+
+  it("autoRecall can be overridden to false", () => {
+    const config = ConfigSchema.parse({ recall: { autoRecall: false } });
+    expect(config.recall.autoRecall).toBe(false);
+  });
+
+  it("autoRecall can be explicitly set to true", () => {
+    const config = ConfigSchema.parse({ recall: { autoRecall: true } });
+    expect(config.recall.autoRecall).toBe(true);
+  });
+
+  it("autoRecall rejects non-boolean", () => {
+    expect(() => ConfigSchema.parse({ recall: { autoRecall: "yes" } })).toThrow();
+  });
+
+  it("partial recall override keeps other defaults", () => {
+    const config = ConfigSchema.parse({ recall: { topN: 10 } });
+    expect(config.recall.topN).toBe(10);
+    expect(config.recall.scoreThreshold).toBe(0.5);
+    expect(config.recall.expandGraph).toBe(true);
+    expect(config.recall.searchMode).toBe("search");
+    expect(config.recall.targetUri).toBeUndefined();
+    expect(config.recall.autoRecall).toBe(true);
   });
 });
 
@@ -79,6 +141,54 @@ describe("TypeScript type inference", () => {
   it("PiOVConfig compiles from ConfigSchema.parse", () => {
     const config: PiOVConfig = ConfigSchema.parse({});
     expect(config).toBeDefined();
+  });
+});
+
+describe("CircuitBreaker config", () => {
+  it("defaults to undefined (no circuit breaker)", () => {
+    const config = ConfigSchema.parse({});
+    expect(config.ov.circuitBreaker).toBeUndefined();
+  });
+
+  it("accepts circuitBreaker config with defaults", () => {
+    const config = ConfigSchema.parse({
+      ov: { circuitBreaker: { threshold: 5, resetTimeoutMs: 60_000 } },
+    });
+    expect(config.ov.circuitBreaker?.threshold).toBe(5);
+    expect(config.ov.circuitBreaker?.resetTimeoutMs).toBe(60_000);
+  });
+
+  it("rejects invalid threshold (< 1)", () => {
+    expect(() =>
+      ConfigSchema.parse({ ov: { circuitBreaker: { threshold: 0 } } }),
+    ).toThrow();
+  });
+
+  it("rejects invalid resetTimeoutMs (negative)", () => {
+    expect(() =>
+      ConfigSchema.parse({ ov: { circuitBreaker: { resetTimeoutMs: -1 } } }),
+    ).toThrow();
+  });
+});
+
+describe("OV adapter config", () => {
+  it("autoCommitIntervalMs defaults to 300000", () => {
+    const config = ConfigSchema.parse({});
+    expect(config.ov.autoCommitIntervalMs).toBe(300_000);
+  });
+
+  it("autoCommitIntervalMs can be overridden", () => {
+    const config = ConfigSchema.parse({ ov: { autoCommitIntervalMs: 60000 } });
+    expect(config.ov.autoCommitIntervalMs).toBe(60_000);
+  });
+
+  it("autoCommitIntervalMs 0 disables auto-commit", () => {
+    const config = ConfigSchema.parse({ ov: { autoCommitIntervalMs: 0 } });
+    expect(config.ov.autoCommitIntervalMs).toBe(0);
+  });
+
+  it("autoCommitIntervalMs rejects negative", () => {
+    expect(() => ConfigSchema.parse({ ov: { autoCommitIntervalMs: -1 } })).toThrow();
   });
 });
 
