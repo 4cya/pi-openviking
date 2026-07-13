@@ -27,6 +27,7 @@ export interface LifecycleServices {
   autoDetectRules?: Record<string, string>;
   autoCommitIntervalMs?: number;
 }
+  showWidget?: boolean;
 
 // ── Simple string hash for cache keys ──
 
@@ -504,7 +505,9 @@ export async function handleSessionStart(
     }
   }
 
-  widget.attach(ctx.ui);
+  if (svcs.showWidget !== false) {
+    widget.attach(ctx.ui);
+  }
 
   try {
     await sessionService.createAndSet();

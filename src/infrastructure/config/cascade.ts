@@ -6,24 +6,25 @@ export function loadConfig(cwd: string): PiOVConfig {
   // 1. Start with defaults
   const config: Record<string, unknown> = structuredClone(DEFAULT_CONFIG) as unknown as Record<string, unknown>;
 
-  // 2. Overlay env vars — tabela declarativa
+  // 2. Overlay env vars — declarative table
   const ENV_TO_PATH: Record<string, { path: string; parse?: (v: string) => unknown }> = {
-    OV_LOG_PATH:       { path: "logger.path" },
-    OV_LOG_LEVEL:      { path: "logger.level" },
-    OV_LOG_MAX_SIZE:   { path: "logger.maxSize", parse: Number },
-    OV_LOG_MAX_FILES:  { path: "logger.maxFiles", parse: Number },
-    OV_LOG_MAX_AGE:    { path: "logger.maxAge", parse: Number },
+    OV_LOG_PATH:    { path: "logger.path" },
+    OV_LOG_LEVEL:   { path: "logger.level" },
+    OV_LOG_MAX_SIZE:  { path: "logger.maxSize", parse: Number },
+    OV_LOG_MAX_FILES: { path: "logger.maxFiles", parse: Number },
+    OV_LOG_MAX_AGE:   { path: "logger.maxAge", parse: Number },
     OV_ACTIVE_PROFILE: { path: "profile.activeProfile" },
-    OV_TOP_N:          { path: "recall.topN", parse: Number },
-    OV_SCORE_THRESHOLD:{ path: "recall.scoreThreshold", parse: Number },
-    OV_TARGET_URI:     { path: "recall.targetUri" },
-    OV_EXPAND_GRAPH:   { path: "recall.expandGraph", parse: (v) => v === "true" },
-    OV_SEARCH_MODE:    { path: "recall.searchMode" },
-    OV_API_KEY:                    { path: "ov.apiKey" },
-    OV_RATE_LIMIT:                 { path: "ov.rateLimitPerSecond", parse: Number },
-    OV_CIRCUIT_BREAKER_THRESHOLD: { path: "ov.circuitBreaker.threshold", parse: Number },
+    OV_TOP_N:       { path: "recall.topN", parse: Number },
+    OV_SCORE_THRESHOLD: { path: "recall.scoreThreshold", parse: Number },
+    OV_TARGET_URI:  { path: "recall.targetUri" },
+    OV_EXPAND_GRAPH: { path: "recall.expandGraph", parse: (v) => v === "true" },
+    OV_SEARCH_MODE: { path: "recall.searchMode" },
+    OV_API_KEY:     { path: "ov.apiKey" },
+    OV_RATE_LIMIT:  { path: "ov.rateLimitPerSecond", parse: Number },
+    OV_CIRCUIT_BREAKER_THRESHOLD:  { path: "ov.circuitBreaker.threshold", parse: Number },
     OV_CIRCUIT_BREAKER_RESET_TIMEOUT: { path: "ov.circuitBreaker.resetTimeoutMs", parse: Number },
     OV_AUTO_COMMIT_INTERVAL: { path: "ov.autoCommitIntervalMs", parse: Number },
+    OV_WIDGET:      { path: "ui.showWidget", parse: (v) => v === "true" || v === "1" },
   };
 
   for (const [envKey, { path, parse }] of Object.entries(ENV_TO_PATH)) {
@@ -33,7 +34,7 @@ export function loadConfig(cwd: string): PiOVConfig {
     }
   }
 
-  // 3. Overlay file settings (pi-openviking namespace only)
+  // 3. Overlay file settings (pi-openviking namespace) from settings.json
   const fileSettings = readSettings(cwd, "pi-openviking");
   mergeShallow(config, fileSettings);
 
@@ -78,13 +79,11 @@ export function mergeBehaviorIntoRecall(
   behavior: import("./profile-schema").ProfileBehaviorSchemaType,
 ): import("./schema").RecallConfigSchemaType {
   const merged = { ...base };
-
   if (behavior.targetUri !== undefined) merged.targetUri = behavior.targetUri;
   if (behavior.topN !== undefined) merged.topN = behavior.topN;
   if (behavior.scoreThreshold !== undefined) merged.scoreThreshold = behavior.scoreThreshold;
   if (behavior.searchMode !== undefined) merged.searchMode = behavior.searchMode;
   if (behavior.expandGraph !== undefined) merged.expandGraph = behavior.expandGraph;
   if (behavior.autoRecall !== undefined) merged.autoRecall = behavior.autoRecall;
-
   return merged;
 }

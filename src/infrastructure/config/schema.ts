@@ -4,7 +4,13 @@ import { z } from "zod";
 
 export { BUILTIN_PROFILES } from "./profile-schema";
 
-// ── Root config ──────────────────────────────────────────────────────────────
+// ── UI config ────────────────────────────────────────────────────────────────
+
+const UIConfigSchema = z.object({
+  showWidget: z.boolean().default(true),
+});
+
+export type UIConfig = z.infer<typeof UIConfigSchema>;
 
 // ── OV Adapter config ─────────────────────────────────────────────────────────
 
@@ -49,6 +55,7 @@ const RecallConfigSchema = z.object({
 export type RecallConfigSchemaType = z.infer<typeof RecallConfigSchema>;
 
 export const ConfigSchema = z.object({
+  ui: UIConfigSchema.default(() => UIConfigSchema.parse({})),
   logger: LoggerConfigSchema.default(() => LoggerConfigSchema.parse({})),
   profile: ProfileSectionSchema.default(() => ProfileSectionSchema.parse({})),
   ov: OVAdapterConfigSchema.default(() => OVAdapterConfigSchema.parse({})),

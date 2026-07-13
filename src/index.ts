@@ -55,6 +55,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         knowledgeBase,
         profileManager,
         autoDetectRules: config.profile.autoDetectRules,
+        showWidget: config.ui.showWidget,
         ovConfig: config.ov,
         recallConfig: config.recall,
         widgetUpdater: (field, value) => widget.update(field, value),
@@ -72,6 +73,7 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         repoContext,
         autoCommitIntervalMs: config.ov.autoCommitIntervalMs,
         autoDetectRules: config.profile.autoDetectRules,
+        showWidget: config.ui.showWidget,
       };
       registerLifecycleHooks(pi, lifecycleServices);
 
