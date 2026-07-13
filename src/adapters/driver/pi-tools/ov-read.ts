@@ -34,7 +34,7 @@ export function createOvReadTool(
         );
         return {
           content: [{ type: "text" as const, text: result.body }],
-          details: { fullLength: result.body.length, lineCount: result.body.split("\n").length },
+          details: undefined,
         };
       } catch (err) {
         return {
@@ -42,27 +42,6 @@ export function createOvReadTool(
           details: undefined,
         };
       }
-    },
-    renderResult: (result, _options, _theme, _context) => {
-      const text = result.content?.[0]?.text ?? "";
-      const lines = text.split("\n");
-      const lineCount = result.details?.lineCount ?? lines.length;
-      const MAX_PREVIEW = 15;
-
-      if (lines.length <= MAX_PREVIEW) {
-        // Short enough — show all
-        return {
-          type: "text",
-          text: text,
-        } as any;
-      }
-
-      // Long — show preview + stats
-      const preview = lines.slice(0, MAX_PREVIEW).join("\n");
-      return {
-        type: "text",
-        text: `${preview}\n\n┌─────────────────────────────────────────────┐\n│ 预览模式 — 显示前 ${MAX_PREVIEW} 行，共 ${lineCount} 行           │\n│ LLM 已获取完整内容                              │\n│ 使用 ov_read(uri, limit:N) 分页查看更多          │\n└─────────────────────────────────────────────┘`,
-      } as any;
     },
   });
 }
