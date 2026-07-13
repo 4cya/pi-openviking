@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
-import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { defineTool, type ToolDefinition, type ToolRenderResultOptions } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import type { Pipeline } from "../../../domain/pipeline/pipeline";
 import type { FsStoreService } from "../../../domain/services/fs-store-service";
 import type { Content } from "../../../domain/ports/fs-store";
@@ -15,6 +16,8 @@ const ReadSchema = Type.Object({
   offset: Type.Optional(Type.Number({ description: "Line offset for L2 pagination" })),
   limit: Type.Optional(Type.Number({ description: "Max lines for L2 pagination" })),
 });
+
+const PREVIEW_LINES = 10;
 
 export function createOvReadTool(
   svc: FsStoreService,
@@ -34,7 +37,7 @@ export function createOvReadTool(
         );
         return {
           content: [{ type: "text" as const, text: result.body }],
-          details: { fullLength: result.body.length, lineCount: result.body.split("\n").length, uri: params.uri },
+          details: { lineCount: result.body.split("\n").length, uri: params.uri },
         };
       } catch (err) {
         return {
@@ -43,43 +46,23 @@ export function createOvReadTool(
         };
       }
     },
-    renderResult: (result, _options, _theme, _context) => {
-      const text = result.content?.[0]?.text ?? "";
-      const lines = text.split("\n");
+    renderResult(result, options: ToolRenderResultOptions, _theme, context) {
+      const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+      const output = result.content?.[0]?.text ?? "";
+      const lines = output.split("\n");
       const lineCount = result.details?.lineCount ?? lines.length;
-      const MAX_PREVIEW = 15;
 
-      const render = (width: number): string[] => {
-        if (lines.length <= MAX_PREVIEW) {
-          return lines.flatMap((l) => wrapLine(l, width));
-        }
-        const preview = lines.slice(0, MAX_PREVIEW);
-        const output: string[] = [];
-        for (const l of preview) {
-          output.push(...wrapLine(l, width));
-        }
-        output.push("");
-        output.push(`\x1b[2m┌─────────────────────────────────────────────┐\x1b[0m`);
-        output.push(`\x1b[2m│ 预览模式 — 显示前 ${MAX_PREVIEW} 行，共 ${lineCount} 行\x1b[0m`.padEnd(width));
-        output.push(`\x1b[2m│ LLM 已获取完整内容\x1b[0m`.padEnd(width));
-        output.push(`\x1b[2m│ 使用 ov_read(uri, limit:N) 分页查看更多\x1b[0m`.padEnd(width));
-        output.push(`\x1b[2m└─────────────────────────────────────────────┘\x1b[0m`);
-        return output;
-      };
+      const maxLines = options.expanded ? lines.length : PREVIEW_LINES;
+      const displayLines = lines.slice(0, maxLines);
+      const remaining = lines.length - maxLines;
 
-      return { render };
+      let display = displayLines.join("\n");
+      if (remaining > 0) {
+        display += `\n\n... (${remaining} more lines, Ctrl+O to expand) — LLM received full ${lineCount} lines`;
+      }
+
+      text.setText(display);
+      return text;
     },
   });
-}
-
-function wrapLine(line: string, width: number): string[] {
-  if (!line || width <= 0) return [line];
-  const result: string[] = [];
-  let remaining = line;
-  while (remaining.length > width) {
-    result.push(remaining.slice(0, width));
-    remaining = remaining.slice(width);
-  }
-  if (remaining.length > 0) result.push(remaining);
-  return result;
 }
