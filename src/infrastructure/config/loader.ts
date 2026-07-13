@@ -1,9 +1,19 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
 export function readSettings(cwd: string, namespace?: string): Record<string, unknown> {
-  // Try cwd first, then fall back to home directory
+  // Standalone config file ~/.pi/agent/pi-openviking.json (highest priority)
+  const standalonePath = join(homedir(), ".pi", "agent", "pi-openviking.json");
+  if (existsSync(standalonePath)) {
+    try {
+      return JSON.parse(readFileSync(standalonePath, "utf-8")) as Record<string, unknown>;
+    } catch {
+      // Parse error — fall through to next candidates
+    }
+  }
+
+  // Try cwd first, then fall back to home directory .pi/settings.json
   const candidates = [
     join(cwd, ".pi", "settings.json"),
     join(homedir(), ".pi", "settings.json"),
