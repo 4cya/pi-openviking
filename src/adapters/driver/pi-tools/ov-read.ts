@@ -34,7 +34,7 @@ export function createOvReadTool(
         );
         return {
           content: [{ type: "text" as const, text: result.body }],
-          details: { fullLength: result.body.length, lineCount: result.body.split("\n").length },
+          details: { fullLength: result.body.length, lineCount: result.body.split("\n").length, uri: params.uri },
         };
       } catch (err) {
         return {
@@ -49,20 +49,37 @@ export function createOvReadTool(
       const lineCount = result.details?.lineCount ?? lines.length;
       const MAX_PREVIEW = 15;
 
-      if (lines.length <= MAX_PREVIEW) {
-        // Short enough — show all
-        return {
-          type: "text",
-          text: text,
-        } as any;
-      }
+      const render = (width: number): string[] => {
+        if (lines.length <= MAX_PREVIEW) {
+          return lines.flatMap((l) => wrapLine(l, width));
+        }
+        const preview = lines.slice(0, MAX_PREVIEW);
+        const output: string[] = [];
+        for (const l of preview) {
+          output.push(...wrapLine(l, width));
+        }
+        output.push("");
+        output.push(`\x1b[2m┌─────────────────────────────────────────────┐\x1b[0m`);
+        output.push(`\x1b[2m│ 预览模式 — 显示前 ${MAX_PREVIEW} 行，共 ${lineCount} 行\x1b[0m`.padEnd(width));
+        output.push(`\x1b[2m│ LLM 已获取完整内容\x1b[0m`.padEnd(width));
+        output.push(`\x1b[2m│ 使用 ov_read(uri, limit:N) 分页查看更多\x1b[0m`.padEnd(width));
+        output.push(`\x1b[2m└─────────────────────────────────────────────┘\x1b[0m`);
+        return output;
+      };
 
-      // Long — show preview + stats
-      const preview = lines.slice(0, MAX_PREVIEW).join("\n");
-      return {
-        type: "text",
-        text: `${preview}\n\n┌─────────────────────────────────────────────┐\n│ 预览模式 — 显示前 ${MAX_PREVIEW} 行，共 ${lineCount} 行           │\n│ LLM 已获取完整内容                              │\n│ 使用 ov_read(uri, limit:N) 分页查看更多          │\n└─────────────────────────────────────────────┘`,
-      } as any;
+      return { render };
     },
   });
+}
+
+function wrapLine(line: string, width: number): string[] {
+  if (!line || width <= 0) return [line];
+  const result: string[] = [];
+  let remaining = line;
+  while (remaining.length > width) {
+    result.push(remaining.slice(0, width));
+    remaining = remaining.slice(width);
+  }
+  if (remaining.length > 0) result.push(remaining);
+  return result;
 }
