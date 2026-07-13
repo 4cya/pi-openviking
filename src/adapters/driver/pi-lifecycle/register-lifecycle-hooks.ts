@@ -26,8 +26,8 @@ export interface LifecycleServices {
   repoContext?: RepoContext;
   autoDetectRules?: Record<string, string>;
   autoCommitIntervalMs?: number;
-}
   showWidget?: boolean;
+}
 
 // ── Simple string hash for cache keys ──
 

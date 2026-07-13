@@ -103,6 +103,7 @@ Create `~/.pi/agent/pi-openviking.json`. Only specify what you need to override 
 | `OV_SEARCH_MODE` | `recall.searchMode` | `"search"` | `"find"` or `"search"` |
 | `OV_ACTIVE_PROFILE` | `profile.activeProfile` | `"default"` | Active profile |
 | `OV_LOG_LEVEL` | `logger.level` | `"info"` | Log level |
+| `OV_WIDGET` | `ui.showWidget` | `true` | Show OV status bar above input |
 
 > **Note:** The standalone config file is NOT auto-created. You create it manually when you want to override defaults. This prevents accidental overwrites and keeps the installation clean.
 
