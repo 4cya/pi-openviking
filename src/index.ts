@@ -60,6 +60,12 @@ export default async function openVikingExtension(pi: ExtensionAPI): Promise<voi
         recallConfig: config.recall,
         widgetUpdater: (field, value) => widget.update(field, value),
         systemStatus,
+        widgetControl: {
+          widgetHide: () => widget.hide(),
+          widgetShow: () => widget.show(),
+          widgetToggle: () => widget.toggle(),
+          widgetVisible: () => widget.isVisible(),
+        },
       });
 
       // Register lifecycle hooks and store services for per-session handler

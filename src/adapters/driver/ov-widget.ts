@@ -9,6 +9,7 @@ export class OVWidget {
   };
 
   private ui: ExtensionUIContext | null = null;
+  private hidden = false;
 
   attach(ui: ExtensionUIContext): void {
     this.ui = ui;
@@ -20,9 +21,33 @@ export class OVWidget {
     this.refresh();
   }
 
+  /** Hide the widget immediately. */
+  hide(): void {
+    this.hidden = true;
+    this.refresh();
+  }
+
+  /** Show the widget immediately. */
+  show(): void {
+    this.hidden = false;
+    this.refresh();
+  }
+
+  /** Toggle visibility. Returns new visible state (true = visible). */
+  toggle(): boolean {
+    this.hidden = !this.hidden;
+    this.refresh();
+    return !this.hidden;
+  }
+
+  /** Whether the widget is currently visible. */
+  isVisible(): boolean {
+    return !this.hidden;
+  }
+
   private refresh(): void {
     if (this.ui) {
-      this.ui.setWidget("ov", this.render());
+      this.ui.setWidget("ov", this.hidden ? [] : this.render());
     }
   }
 

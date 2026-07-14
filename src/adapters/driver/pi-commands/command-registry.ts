@@ -17,6 +17,7 @@ import { createOvDeleteCommand } from "./ov-delete-command";
 import { createOvProfileCommand } from "./ov-profile-command";
 import { createOvStartCommand } from "./ov-start-command";
 import { createOvReindexCommand } from "./ov-reindex-command";
+import { createOvWidgetCommand, type WidgetToggleServices } from "./ov-widget-command";
 
 export interface CommandServices {
   recallService: RecallService;
@@ -32,6 +33,8 @@ export interface CommandServices {
   widgetUpdater?: (field: string, value: string) => void;
   /** Optional — injected when available, shows live server status in /ov-status */
   systemStatus?: SystemStatusClient;
+  /** Widget visibility control, used by /ov-widget command */
+  widgetControl?: WidgetToggleServices;
 }
 
 export function registerAllCommands(pi: ExtensionAPI, svcs: CommandServices): void {
@@ -47,4 +50,7 @@ export function registerAllCommands(pi: ExtensionAPI, svcs: CommandServices): vo
   ));
   pi.registerCommand("ov-start", createOvStartCommand(svcs.sessionService, svcs.widgetUpdater));
   pi.registerCommand("ov-reindex", createOvReindexCommand(svcs.fsStoreService));
+  if (svcs.widgetControl) {
+    pi.registerCommand("ov-widget", createOvWidgetCommand(svcs.widgetControl));
+  }
 }
