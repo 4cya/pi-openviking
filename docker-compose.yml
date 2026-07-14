@@ -9,7 +9,7 @@ services:
       - OPENVIKING_CONFIG_FILE=/app/.openviking/ov.conf
     volumes:
       - ${HOME}/.openviking/ov.conf:/app/.openviking/ov.conf
-      - ${HOME}/.openviking/data:/app/data
+      - /srv/openviking/data:/app/.openviking/data
     network_mode: host
     restart: unless-stopped
 

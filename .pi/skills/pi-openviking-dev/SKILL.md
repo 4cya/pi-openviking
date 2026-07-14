@@ -12,8 +12,7 @@ Develop features and improve code for the pi-openviking plugin, following projec
 Before writing ANY code, always do this in order:
 
 0. **Verify OV docs exist** — Check `viking://resources/pi-openviking/docs-ov/version.md` exists via `ov_stat`. If absent, OV docs not imported yet:
-   - Suggest user run `ov-update` skill first (imports OV docs from GitHub)
-   - Or fetch directly from GitHub raw as fallback:
+   - Fetch directly from GitHub raw:
      `firecrawl_scrape url="https://raw.githubusercontent.com/volcengine/OpenViking/{DOC_SOURCE}/docs/en/api/05-sessions.md"`
      where `{DOC_SOURCE}` is `main` or latest release tag
    - If docs present but `ov_search` times out, skip search — use direct `ov_read` instead
